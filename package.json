@@ -1,0 +1,59 @@
+{
+  "name": "opening-bell",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "preview": "vite preview",
+    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:browser": "node scripts/qa-runner.mjs desk",
+    "test:data": "node --test tests/briefing.test.mjs tests/sentiment.test.mjs tests/sentiment-connection.test.mjs tests/news-images.test.mjs tests/market-session.test.mjs tests/market-data.test.mjs tests/extended-market.test.mjs tests/indicators.test.mjs tests/zone-roles.test.mjs tests/retests.test.mjs tests/company-data.test.mjs",
+    "test:interaction": "node scripts/qa-runner.mjs interaction",
+    "test:briefing": "node scripts/qa-runner.mjs briefing",
+    "test:market-groups": "node --test tests/market-context.test.mjs && node scripts/market-groups-qa.mjs",
+    "test:context": "node scripts/qa-runner.mjs context",
+    "test:indicators": "node scripts/qa-runner.mjs indicators",
+    "test:market": "node scripts/qa-runner.mjs market",
+    "test:clock": "node scripts/qa-runner.mjs clock",
+    "start": "node server/index.mjs",
+    "test:watchlist": "node --test tests/watchlist.test.mjs && node scripts/qa-runner.mjs watchlist",
+    "test:level-history": "node --test tests/level-history.test.mjs && node scripts/level-history-qa.mjs",
+    "test:level-cards": "node --test tests/level-listings.test.mjs && node scripts/level-cards-qa.mjs",
+    "test:levels": "node --test tests/level-import.test.mjs && node scripts/level-import-qa.mjs",
+    "test:workspace": "node --test tests/workspace.test.mjs",
+    "test:workspace:browser": "node scripts/workspace-qa.mjs",
+    "test:hot": "node scripts/qa-runner.mjs hot",
+    "test:company": "node scripts/qa-runner.mjs company",
+    "test:drawings": "node --test tests/drawings.test.mjs && node scripts/qa-runner.mjs drawings",
+    "test:chart-settings": "node --test tests/chart-settings.test.mjs && node scripts/qa-runner.mjs chart-settings",
+    "test:earnings": "node --test tests/earnings.test.mjs && node scripts/earnings-qa.mjs",
+    "test:responsive": "node --test tests/feed-cache.test.mjs && node scripts/responsive-qa.mjs",
+    "auth:setup": "node scripts/owner-access.mjs",
+    "auth:recover": "node scripts/owner-access.mjs --recover",
+    "test:auth": "node --test tests/auth.test.mjs && node scripts/auth-qa.mjs && node scripts/auth-vite-qa.mjs",
+    "test:settings": "node scripts/settings-qa.mjs",
+    "test:journal": "node --test tests/journal.test.mjs && node scripts/journal-qa.mjs",
+    "test:journal-chart": "node --test tests/journal-chart.test.mjs && node scripts/journal-chart-qa.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "echarts": "^6.1.0",
+    "fast-xml-parser": "^5.11.2",
+    "otpauth": "9.5.2",
+    "qrcode": "1.5.4",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@vitejs/plugin-react": "5.0.4",
+    "sharp": "^0.35.5",
+    "vite": "6.4.5"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

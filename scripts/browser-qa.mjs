@@ -1,0 +1,174 @@
+import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
+if (!process.env.OPENING_BELL_TEST_URL) throw new Error('Run this check through its npm script to use an isolated workspace.');
+import {mockMarket} from '../tests/fixtures/market.mjs';
+import { chromium, expect } from '@playwright/test';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+const localBrowser = '/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome';
+const localLibs = '/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu';
+const launch = { headless: true };
+if (process.env.OPENING_BELL_BROWSER) launch.executablePath = process.env.OPENING_BELL_BROWSER;
+else if (existsSync(localBrowser)) launch.executablePath = localBrowser;
+if (existsSync(localLibs)) launch.env = { ...process.env, LD_LIBRARY_PATH: [localLibs, process.env.LD_LIBRARY_PATH].filter(Boolean).join(':') };
+mkdirSync('docs/qa', { recursive: true });
+const browser = await chromium.launch(launch);
+const page = await browser.newPage({ viewport: { width: 1488, height: 1058 }, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+const errors = [], checks = [];
+page.on('pageerror', error => errors.push(error.message));
+page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+const mark = name => { checks.push(name); console.log('PASS ' + name); };
+const nav = name => page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name, exact: true });
+const snapshot = async name => { await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0,0); }); await page.screenshot({ path: `docs/qa/${name}.png`, fullPage: true }); };
+const assertNoOverflow = async () => { expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy(); };
+const originalLevels = readFileSync('server/seed/levels.txt', 'utf8');
+const originalWatchlist = readFileSync('server/seed/watchlist.txt', 'utf8');
+try {
+  await mockMarket(page);
+  await page.goto(process.env.OPENING_BELL_TEST_URL);
+  await expect(page.getByRole('heading', { name: 'Your session, in focus.' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /QQQ/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('img', { name: /QQQ Yahoo Finance 4h/ })).toBeVisible();
+  await assertNoOverflow();
+  await snapshot('desktop-final');
+  mark('Desktop overview, fonts and rendered chart');
+
+  await page.getByRole('tab', { name: /SPY/ }).click();
+  await expect(page.getByRole('button', { name: 'Review SPY plan' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /SPY Yahoo Finance 4h/ })).toBeVisible();
+  await page.getByRole('button', { name: '15m', exact: true }).click();
+  await expect(page.getByRole('img', { name: /SPY Yahoo Finance 15m/ })).toBeVisible();
+  await snapshot('spy-overview');
+  for (const interval of ['2m','5m','15m','30m','1h','4h','D','W','M']) {
+    await page.getByRole('button',{name:interval,exact:true}).click();
+    await expect(page.getByRole('button',{name:interval,exact:true})).toHaveAttribute('aria-pressed','true');
+    await expect(page.getByRole('img',{name:new RegExp('SPY Yahoo Finance '+interval+' candlestick')})).toBeVisible();
+  }
+  await snapshot('monthly-chart');
+  await page.getByRole('button',{name:'4h',exact:true}).click();
+  if(await page.getByRole('button',{name:'Levels',exact:true}).getAttribute('aria-expanded')!=='true')await page.getByRole('button',{name:'Levels',exact:true}).click();await page.getByRole('button',{name:'gunner’s lvls',exact:true}).click();
+  await expect(page.getByRole('link',{name:'Open gunner’s lvls'})).toHaveAttribute('href','https://www.tradingview.com/script/seVxGaLs-gunner-s-lvls/');
+  await expect(page.getByRole('link',{name:/Open SPY chart/})).toHaveAttribute('href',/symbol=AMEX%3ASPY&interval=240/);
+  await expect(page.getByLabel('Current level sheet')).toHaveValue(originalLevels);
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  await page.getByRole('button',{name:'Copy level sheet'}).click();
+  await expect(page.getByRole('button',{name:'Copied level sheet'})).toBeVisible();
+  expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe(originalLevels);
+  await snapshot('tradingview-toolkit');
+  await page.keyboard.press('Escape');
+  mark('All nine chart intervals, 4h default, TradingView links and copied level sheet');
+
+  await page.getByRole('tab', { name: /QQQ/ }).click();
+  await page.getByRole('button', { name: 'Review QQQ plan' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByLabel('Option structure').selectOption('Long put');
+  await page.getByLabel('Planned expiration').fill('2026-10-30');
+  await page.getByLabel('Premium loss budget · optional ($)').fill('150');
+  await page.getByLabel('Your thesis').fill('Wait for a rejection below 707.23. Reassess if price accepts above supply.');
+  await expect(page.getByText('Ready for contract data')).toBeVisible();
+  await snapshot('plan-dialog');
+  await page.getByRole('button', { name: 'Save draft plan' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('navigation').getByRole('button', { name: /Session review/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bearish break & retest' })).toBeVisible();
+  await expect(page.getByText('$150.00', { exact: true })).toBeVisible();
+  await page.getByLabel('Review notes').fill('Sample review note. No actual trade taken.');
+  await snapshot('session-review');
+  mark('Options plan draft, budget, session review and notes');
+
+  await nav('Watchlist').click();
+  await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
+  await page.getByRole('textbox', { name: 'Search watchlist' }).fill('NVDA');
+  await expect(page.locator('.watch-table tbody tr')).toHaveCount(1);
+  await page.getByRole('button', { name: 'NVDA', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('211.26–212.71');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Search watchlist' }).fill('');
+  await page.getByRole('combobox', { name: 'Filter status' }).selectOption('Testing demand');
+  await expect(page.locator('.watch-table tbody tr')).toHaveCount(3);
+  await page.getByRole('combobox', { name: 'Filter asset group' }).selectOption('CRYPTO');
+  await expect(page.getByRole('heading', { name: 'No symbols match' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reset filters' }).click();
+  await page.getByRole('combobox', { name: 'Sort watchlist' }).selectOption('Biggest move');
+  await expect(page.locator('.watch-table tbody tr').first()).toContainText('NVDA');
+  await page.getByRole('textbox', { name: 'Search watchlist' }).fill('BTC');
+  await page.getByRole('button', { name: 'BTCUSD', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Your exchange’s spot crypto quote is not connected');
+  await page.keyboard.press('Escape');
+  await page.getByRole('textbox', { name: 'Search watchlist' }).fill('');
+  await snapshot('watchlist');
+  mark('All 52 symbols, search, filters, sorting, empty state, details and spot/futures distinction');
+
+  await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
+  await page.getByLabel('Watchlist export').fill('###FUND,NASDAQ:QQQ,NASDAQ:QQQ,AMEX:SPY');
+  await page.getByRole('dialog').getByRole('button', { name: 'Import watchlist', exact: true }).click();
+  await expect(page.locator('.watch-table tbody tr')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
+  await page.getByLabel('Watchlist export').fill(originalWatchlist);
+  await page.getByRole('dialog').getByRole('button', { name: 'Import watchlist', exact: true }).click();
+  await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
+  mark('Watchlist import, deduplication and restore');
+
+  await nav('Key levels').click();
+  await expect(page.getByText(/40 instruments · 141 zones/)).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search levels' }).fill('NOW');
+  await expect(page.getByText('Gap', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search levels' }).fill('');
+  await snapshot('levels');
+  await page.getByRole('button', { name: 'Import levels', exact: true }).first().click();
+  await page.getByLabel('Level sheet').fill('LVLS 2026-02-30\nQQQ|30min|S 708-707');
+  await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('valid date');
+  await page.getByLabel('Level sheet').fill('LVLS 2026-10-26\nQQQ|30min|S 708.14-707.23|D 702.7-700');
+  await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
+  await nav('Overview').click();
+  await expect(page.getByRole('img', { name: /QQQ Yahoo Finance 4h/ })).toBeVisible();
+  await expect(page.locator('.notice')).toContainText('zone comparisons are paused');
+  await expect(page.getByRole('button', { name: 'Review QQQ plan' })).toBeDisabled();
+  await snapshot('date-mismatch');
+  await page.getByRole('button', { name: 'Import levels', exact: true }).click();
+  await page.getByLabel('Level sheet').fill(originalLevels);
+  await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('older than your saved');
+  await page.getByRole('button',{name:'Close dialog',exact:true}).click();
+  await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();
+  // Restore the baseline only in this isolated QA database for the remaining layout checks.
+  const saved=await(await fetch(process.env.OPENING_BELL_TEST_URL+'/api/workspace')).json();
+  const restored=await fetch(process.env.OPENING_BELL_TEST_URL+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web',Origin:process.env.OPENING_BELL_TEST_URL},body:JSON.stringify({revision:saved.revision,data:{...saved.data,levelText:originalLevels,levelSourceDates:undefined,levelHistory:[]}})});
+  expect(restored.status).toBe(200);await page.reload();
+  await expect(page.getByRole('button', { name: 'Review QQQ plan' })).toBeEnabled();
+  mark('Level library, gap G, invalid/older date rejection, mismatched-date guard and isolated fixture restore');
+
+  await page.getByRole('button', { name: '5m', exact: true }).click();
+  for (const width of [1440, 1024, 800, 390, 360]) {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 1024 });
+    await assertNoOverflow();
+    await expect(page.getByRole('button', { name: 'Review QQQ plan' })).toBeVisible();
+    if (width === 390) {
+      if (await page.getByRole('button', { name: 'Dismiss notification' }).count()) await page.getByRole('button', { name: 'Dismiss notification' }).click();
+      await expect(page.locator('.sidebar')).toHaveCSS('visibility', 'hidden');
+      await snapshot('mobile-web');
+      await page.getByRole('button', { name: 'Open navigation' }).click();
+      await nav('Watchlist').click();
+      await assertNoOverflow();
+      await expect(page.getByRole('heading', { name: 'Watchlist radar' })).toBeVisible();
+      await snapshot('mobile-watchlist');
+      await page.getByRole('button', { name: 'Open navigation' }).click();
+      await nav('Overview').click();
+      await page.getByRole('button', { name: 'Review QQQ plan' }).click();
+      await snapshot('mobile-plan');
+      await page.keyboard.press('Escape');
+    }
+    mark(`Responsive viewport ${width}px`);
+  }
+  await page.setViewportSize({width:1488,height:1058});
+  await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();await page.reload();
+  await expect(page.getByRole('heading',{name:'Your session, in focus.'})).toBeVisible();
+  await snapshot('desktop-final');
+  expect(errors).toEqual([]);
+  mark('Zero browser console errors and uncaught exceptions');
+  writeFileSync('docs/qa/browser-checks.json',JSON.stringify({result:'passed',checks,consoleErrors:errors},null,2)+'\n');
+} catch (error) {
+  await page.screenshot({path:'docs/qa/failure.png',fullPage:true});
+  writeFileSync('docs/qa/browser-checks.json',JSON.stringify({result:'failed',checks,consoleErrors:errors,error:error.message},null,2)+'\n');
+  throw error;
+} finally {await browser.close();}

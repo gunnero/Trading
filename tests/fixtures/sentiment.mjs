@@ -1,0 +1,3 @@
+export const SENTIMENT_NOW=Date.parse('2026-10-26T14:15:00Z');
+export const hourlySentiment=()=>({updated:'2026-10-26T14:10:00Z',asOf:'2026-10-23',sources:{cnn:{ok:true},crypto:{ok:true}},headline:{'cnn-fng':{value:99,date:'2026-10-26'}},crypto:{value:99},cnn:{value:21.37,rating:'extreme fear',timestamp:'2026-10-26T14:05:00Z',previousClose:20.98,previous1Week:20.8,previous1Month:36.94}});
+export const dailySentiment=()=>({fear_and_greed:{score:20.9809523809524,rating:'extreme fear',timestamp:'2026-10-23T23:59:44Z',previous_close:19.8131868131868,previous_1_week:22.0732142857143,previous_1_month:32.5428571428571}});

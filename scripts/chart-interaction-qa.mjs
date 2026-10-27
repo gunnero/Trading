@@ -1,0 +1,70 @@
+import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
+if(!process.env.OPENING_BELL_TEST_URL)throw new Error('Use the isolated QA runner.');
+import {chromium,expect} from '@playwright/test';
+import {existsSync,writeFileSync} from 'node:fs';
+import {mockMarket,indicatorFixture} from '../tests/fixtures/market.mjs';
+const launch={headless:true},exe='/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',libs='/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu';
+if(existsSync(exe))launch.executablePath=exe;if(existsSync(libs))launch.env={...process.env,LD_LIBRARY_PATH:libs};
+const browser=await chromium.launch(launch),page=await browser.newPage({viewport:{width:1488,height:1100},reducedMotion:'reduce'}),base=process.env.OPENING_BELL_TEST_URL;
+const before=await(await fetch(base+'/api/workspace')).json(),errors=[],checks=[],requests=[];let writes=0,mode='flipped';
+page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='PUT')writes++;});const mark=s=>{checks.push(s);console.log('PASS '+s);};
+const priceRange=async chart=>({min:+await chart.getAttribute('data-price-min'),max:+await chart.getAttribute('data-price-max')});
+const view=async chart=>({start:+await chart.getAttribute('data-view-start'),end:+await chart.getAttribute('data-view-end')});
+async function openPanel(region,name){const button=region.getByRole('button',{name,exact:true});if(await button.getAttribute('aria-expanded')!=='true')await button.click();}
+try{
+ await mockMarket(page);const fixtures=new Map();
+ await page.route('**/api/market/chart?*',route=>{const u=new URL(route.request().url()),symbol=u.searchParams.get('symbol'),frame=u.searchParams.get('interval');if(symbol==='US2Y')return route.fallback();const key=symbol+':'+frame;if(!fixtures.has(key))fixtures.set(key,indicatorFixture(symbol,frame));return route.fulfill({json:fixtures.get(key)});});
+ await page.route('**/api/market/level-history?*',route=>{
+  const u=new URL(route.request().url()),symbol=u.searchParams.get('symbol'),timeframe=u.searchParams.get('interval'),from=u.searchParams.get('from');requests.push({symbol,timeframe,from});
+  if(mode==='unavailable')return route.fulfill({json:{status:'unavailable'}});
+  const end=Date.parse('2026-10-23T15:00:00Z')/1000,close={QQQ:708.15,SPY:766,NQ:29280,ES:7718}[symbol];
+  const bars=[{close,end,closed:true}];if(mode==='reversed')bars.push({close:{QQQ:707,SPY:760,NQ:29214,ES:7709}[symbol],end:end+1800,closed:true});
+  return route.fulfill({json:{status:'ok',symbol,timeframe,from,bars,through:bars.at(-1).end}});
+ });
+ await page.goto(base);const main=page.getByRole('region',{name:'QQQ chart',exact:true}),chart=main.locator('.price-chart');
+ await openPanel(main,'Levels');await expect(main).toContainText('Auto-flip · 30 min closes');await expect(page.getByRole('tab',{name:/QQQ/})).toContainText('Testing demand');
+ await main.locator('.zone-role-status summary').click();await expect(main.locator('.zone-role-status')).toContainText('Supply → Demand');await expect(main.locator('.zone-role-status')).toContainText('close 708.15');expect((await chart.boundingBox()).height).toBeGreaterThanOrEqual(320);
+ await main.locator('.zone-role-status summary').click();mark('Confirmed supply becomes demand in the chart details and primary quote tab');
+ await chart.scrollIntoViewIfNeeded();const originalPrice=await priceRange(chart),axisBox=await chart.boundingBox(),axisX=axisBox.x+axisBox.width-30,axisY=axisBox.y+axisBox.height*.4;
+ await page.mouse.move(axisX,axisY);await page.mouse.down();await page.mouse.move(axisX,axisY-45,{steps:10});await page.mouse.up();await expect(chart).toHaveAttribute('data-price-scale','manual');
+ let scaled=await priceRange(chart);expect(scaled.max-scaled.min).toBeLessThan(originalPrice.max-originalPrice.min);expect(await view(chart)).toEqual({start:0,end:100});
+ await page.mouse.dblclick(axisX,axisY);await expect(chart).toHaveAttribute('data-price-scale','auto');expect(await priceRange(chart)).toEqual(originalPrice);
+ await page.mouse.move(axisBox.x+axisBox.width*.45,axisY);await page.mouse.down();await page.mouse.move(axisBox.x+axisBox.width*.45,axisY+40,{steps:10});await page.mouse.up();await expect(chart).toHaveAttribute('data-price-scale','manual');
+ scaled=await priceRange(chart);expect(scaled.min).toBeGreaterThan(originalPrice.min);expect(scaled.max-scaled.min).toBeCloseTo(originalPrice.max-originalPrice.min,6);
+ await main.getByRole('button',{name:'Reset view',exact:true}).click();await expect(chart).toHaveAttribute('data-price-scale','auto');
+ await chart.focus();await page.keyboard.press('Shift++');await expect(chart).toHaveAttribute('data-price-scale','manual');await page.keyboard.press('a');await expect(chart).toHaveAttribute('data-price-scale','auto');
+ mark('Dragging the price axis scales vertically without changing time; chart dragging pans vertically; double-click, keyboard and Reset restore auto');
+ await openPanel(main,'Chart navigation');await main.getByRole('button',{name:'Zoom in',exact:true}).click();await expect.poll(async()=>(await view(chart)).start).toBeGreaterThan(0);
+ const zoomed=await view(chart);expect(zoomed.end-zoomed.start).toBeCloseTo(65,1);await openPanel(main,'Chart navigation');await main.getByRole('button',{name:'Pan earlier',exact:true}).click();await expect.poll(async()=>(await view(chart)).start).toBeLessThan(zoomed.start);
+ await chart.focus();await page.keyboard.press('+');const keyboard=await view(chart);expect(keyboard.end-keyboard.start).toBeLessThan(65);await page.keyboard.press('Home');await expect(chart).toHaveAttribute('data-view-start','0.00');await expect(chart).toHaveAttribute('data-view-end','100.00');
+ await chart.scrollIntoViewIfNeeded();let box=await chart.boundingBox();await page.mouse.move(box.x+box.width*.55,box.y+box.height*.4);await page.mouse.wheel(0,-480);await expect.poll(async()=>(await view(chart)).end-(await view(chart)).start).toBeLessThan(100);
+ const wheel=await view(chart);await page.mouse.move(box.x+box.width*.5,box.y+box.height*.4);await page.mouse.down();await page.mouse.move(box.x+box.width*.65,box.y+box.height*.4,{steps:12});await page.mouse.up();await expect.poll(async()=>(await view(chart)).start).toBeLessThan(wheel.start);
+ await main.getByRole('button',{name:'Reset view',exact:true}).click();await expect(chart).toHaveAttribute('data-view-end','100.00');
+ box=await chart.locator('canvas').first().boundingBox();await page.mouse.move(box.x+16,box.y+box.height-16);await page.mouse.down();await page.mouse.move(box.x+box.width*.25,box.y+box.height-16,{steps:12});await page.mouse.up();await expect.poll(async()=>(await view(chart)).start).toBeGreaterThan(5);
+ mark('Zoom buttons, keyboard shortcuts, mouse wheel, chart drag and range-slider handles change the visible range');
+ await chart.focus();await page.keyboard.press('ArrowUp');const preservedPrice=await priceRange(chart);
+ const preserved=await view(chart);await main.getByRole('button',{name:'Indicators',exact:true}).click();await main.getByRole('checkbox',{name:/9 \/ 21 EMA ribbon/}).uncheck();expect(await view(chart)).toEqual(preserved);await main.getByRole('checkbox',{name:/9 \/ 21 EMA ribbon/}).check();await main.getByRole('button',{name:'Indicators',exact:true}).click();
+ mode='reversed';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(page.getByRole('tab',{name:/QQQ/})).toContainText('Testing supply');expect(await view(chart)).toEqual(preserved);expect(await priceRange(chart)).toEqual(preservedPrice);
+ mode='unavailable';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await openPanel(main,'Levels');await expect(main).toContainText('cached confirmation');await expect(page.getByRole('tab',{name:/QQQ/})).toContainText('Checking level roles');expect(await view(chart)).toEqual(preserved);
+ mode='flipped';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await openPanel(main,'Levels');await expect(main).toContainText('Auto-flip · 30 min closes');await page.screenshot({path:'docs/qa/chart-interactive-overview.png',fullPage:true});
+ mark('Zoom survives indicator toggles and refreshes; reverse flips update roles, and outages retain explicitly cached roles');
+ await page.getByRole('button',{name:'Open NQ chart',exact:true}).click();const dialog=page.getByRole('dialog'),macro=dialog.locator('.price-chart');await openPanel(dialog,'Levels');await expect(dialog).toContainText('Auto-flip · 30 min closes');
+ await dialog.locator('.zone-role-status summary').click();await expect(dialog.locator('.zone-role-status')).toContainText('close 29,280.00');await dialog.locator('.zone-role-status summary').click();
+ await openPanel(dialog,'Chart navigation');await dialog.getByRole('button',{name:'Zoom in',exact:true}).click();await expect.poll(async()=>(await view(macro)).start).toBeGreaterThan(0);await macro.focus();await page.keyboard.press('ArrowUp');await expect(macro).toHaveAttribute('data-price-scale','manual');await dialog.getByRole('button',{name:'D',exact:true}).click();await expect(macro).toHaveAttribute('data-price-scale','auto');await expect(macro).toHaveAttribute('aria-label',/NQ Yahoo Finance D/);await expect(macro).toHaveAttribute('data-view-start','0.00');
+ expect(requests.filter(r=>r.symbol==='NQ').every(r=>r.timeframe==='30m')).toBe(true);await openPanel(dialog,'Levels');await expect(dialog).toContainText('Auto-flip · 30 min closes');
+ await dialog.getByRole('button',{name:'ES',exact:true}).click();await expect(macro).toHaveAttribute('aria-label',/ES Yahoo/);await openPanel(dialog,'Levels');await expect(dialog).toContainText('Auto-flip · 30 min closes');
+ await dialog.getByRole('button',{name:'US 2Y',exact:true}).click();await expect(macro).toHaveAttribute('aria-label',/Treasury daily yield/);await expect(dialog.locator('.zone-role-status')).toHaveCount(0);await openPanel(dialog,'Chart navigation');await expect(dialog.getByRole('button',{name:'Zoom in',exact:true})).toBeVisible();const yieldRange=await priceRange(macro);await macro.focus();await page.keyboard.press('ArrowDown');expect((await priceRange(macro)).min).toBeGreaterThan(yieldRange.min);await openPanel(dialog,'Chart navigation');await dialog.getByRole('button',{name:'Auto price',exact:true}).click();expect(await priceRange(macro)).toEqual(yieldRange);await page.keyboard.press('Escape');
+ mark('Context charts share navigation, reset on interval changes, and confirm NQ roles on 30-minute candles even while displaying daily candles');
+ for(const width of [390,360]){
+  await page.setViewportSize({width,height:844});await page.getByRole('button',{name:'Open NQ chart',exact:true}).click();await openPanel(dialog,'Levels');await expect(dialog).toContainText('Auto-flip · 30 min closes');await openPanel(dialog,'Chart navigation');await dialog.getByRole('button',{name:'Zoom in',exact:true}).click();await expect.poll(async()=>(await view(macro)).start).toBeGreaterThan(0);
+  await dialog.screenshot({path:`docs/qa/chart-interactive-${width}.png`});expect(await dialog.evaluate(d=>({overflow:d.scrollWidth>d.clientWidth+1,outside:d.getBoundingClientRect().right>innerWidth}))).toEqual({overflow:false,outside:false});await page.keyboard.press('Escape');
+ }
+ await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');const mobileContext=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),mobile=await mobileContext.newPage();mobile.on('pageerror',e=>errors.push(e.message));mobile.on('request',r=>{if(r.method()==='PUT')writes++;});await mockMarket(mobile);await mobile.goto(base);
+ await mobile.getByRole('button',{name:'Open NQ chart',exact:true}).click();const mobileDialog=mobile.getByRole('dialog'),mobileChart=mobileDialog.locator('.price-chart');await expect(mobileChart).toBeVisible();await mobileChart.scrollIntoViewIfNeeded();
+ const touchBox=await mobileChart.boundingBox(),touchX=touchBox.x+touchBox.width-30,touchY=touchBox.y+90,beforeTouch=await priceRange(mobileChart),cdp=await mobileContext.newCDPSession(mobile);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchX,y:touchY,id:0}]});for(let dy=5;dy<=50;dy+=5)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchX,y:touchY+dy,id:0}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect(mobileChart).toHaveAttribute('data-price-scale','manual');const afterTouch=await priceRange(mobileChart);expect(afterTouch.max-afterTouch.min).toBeGreaterThan(beforeTouch.max-beforeTouch.min);await mobile.screenshot({path:'docs/qa/price-axis-mobile.png'});
+ await openPanel(mobileDialog,'Chart navigation');await mobileDialog.getByRole('button',{name:'Auto price',exact:true}).click();await expect(mobileChart).toHaveAttribute('data-price-scale','auto');await expect(mobile.locator('.workspace-save-status')).toContainText('Workspace saved');await mobileContext.close();mark('Touch dragging the right-hand price scale works on mobile and Auto price restores it');
+ expect(errors).toEqual([]);expect(writes).toBeGreaterThan(0);const after=await(await fetch(base+'/api/workspace')).json();expect(after.data.levelText).toEqual(before.data.levelText);expect(after.data.watchText).toEqual(before.data.watchText);expect(after.data.plans).toEqual(before.data.plans);expect(after.data.chartSettings).toBeTruthy();mark('Mobile charts fit at 360/390px; view preferences save without browser errors or changes to imported levels or plans');
+ writeFileSync('docs/qa/chart-interaction-checks.json',JSON.stringify({result:'passed',checks,errors,writes,confirmationRequests:requests},null,2)+'\n');
+}catch(error){await page.screenshot({path:'docs/qa/chart-interaction-failure.png',fullPage:true});throw error;}finally{await browser.close();}

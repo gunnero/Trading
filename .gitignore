@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.vite/
+.env*
+!.env.example
+*.log
+
+.cache/
+
+.data/
+
+# Local account/workspace artifacts and QA captures are not source assets.
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.key
+*.pem
+*.p12
+*.pfx
+/AGENTS.md
+/design-qa.md
+/docs/qa/
+/test-results/
+/playwright-report/
+.DS_Store
