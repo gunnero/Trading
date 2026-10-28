@@ -22,7 +22,7 @@ export function executionMarkers(trade,candles,observedThrough){
   });
 }
 export function tradeViewport(trade,candles,frame){
-  const padding=Number.parseInt(frame)*60000*12;
+  const padding=Number.parseInt(frame)*60000*6;
   const first=candles[0].timestamp*1000,last=candles.at(-1).end*1000;
   const start=Math.max(first,Date.parse(trade.entryAt)-padding),end=Math.min(last,Date.parse(trade.exitAt||trade.entryAt)+padding);
   return start<end?[start,end]:[first,last];

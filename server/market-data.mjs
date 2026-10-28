@@ -262,7 +262,11 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
       const cutoff=Math.min(now(),Date.parse(raw.fetchedAt),meta.regularMarketTime*1000);
       const candles=parseCandles(raw.payload,asset,frame,cutoff,{full:true}).filter(c=>c.sessionDate>=from&&c.sessionDate<=to&&c.timestamp*1000<=cutoff);
       if(!candles.length)throw Error();
-      return {status:raw.status,message:raw.message,provider:'Yahoo Finance',symbol,timeframe:frame,from,to,currency:'USD',fetchedAt:raw.fetchedAt,observedThrough:cutoff/1000,candles};
+      const dailyRaw=await get(`history:${asset.symbol}:1d:5y`,3600000,async()=>({payload:JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=1d&range=5y&includePrePost=false`))}));
+      let dailyRows=[],dailyStatus=dailyRaw.status;
+      try{dailyRows=parseCandles(dailyRaw.payload,asset,'D',cutoff,{full:true});}catch{dailyStatus='unavailable';}
+      const indicators=chartIndicators({rows:candles,dailyRows,frame,now:cutoff,dailyStatus,dailyFetchedAt:dailyRaw.fetchedAt,kind:'equity'});
+      return {status:raw.status,message:raw.message,provider:'Yahoo Finance',symbol,timeframe:frame,from,to,currency:'USD',fetchedAt:raw.fetchedAt,observedThrough:cutoff/1000,candles,indicators};
     }catch{return {...unavailable('No valid historical candles cover these trade dates.'),symbol,timeframe:frame,from,to};}
   }
   return {quote,chart,levelHistory,setupHistory,tradeHistory};

@@ -71,3 +71,29 @@
 @media(max-width:760px){.modal.journal-chart-modal{width:100%;max-width:100%}.journal-execution-summary{grid-template-columns:1fr 1fr;gap:8px}.journal-execution-summary article{padding:12px}.journal-execution-summary article:last-child{grid-column:1/-1}.journal-execution-summary strong{font-size:20px}.journal-execution-summary strong small{display:block;margin-top:3px}.journal-execution-summary time{font-size:10px}.journal-execution-heading{align-items:flex-start;flex-direction:column}.journal-detail-tabs button,.journal-execution-heading button{min-height:44px}.journal-trade-canvas{height:340px}.journal-trade-chart-tools{padding:10px}.journal-trade-chart-tools>div{gap:8px}.journal-trade-chart-tools button,.journal-execution-foot button{min-height:44px}}
 
 .journal-trade-canvas[data-interact=false],.journal-trade-canvas[data-interact=false] *{pointer-events:none!important;touch-action:pan-y}
+.journal-option-fills{border:1px solid var(--border);border-radius:5px;background:#0d191e;padding:14px 16px;margin:0 0 24px}
+.journal-option-fills header{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;font-size:13px}
+.journal-option-fills header span,.journal-option-fills p{font-size:11px;color:var(--muted);line-height:1.6}
+.journal-option-fills svg{display:block;width:100%;max-width:640px;max-height:158px;margin:auto;overflow:visible;font-family:Inter,sans-serif;font-size:13px}
+.journal-option-fills p{margin:0}
+.journal-chart-overlays{display:flex;align-items:center;flex-wrap:wrap;gap:14px;padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}
+.journal-chart-overlays label{display:flex;align-items:center;gap:7px;min-height:28px;color:var(--text)}
+.journal-chart-overlays input{accent-color:var(--green)}
+.journal-chart-overlays>span{margin-left:auto}
+.journal-indicator-legend{display:flex;flex-wrap:wrap;gap:9px 15px;padding:10px 14px 14px;color:var(--muted);font-size:10px;border-top:1px solid var(--border)}
+.journal-indicator-legend span{display:flex;align-items:center;gap:5px}.journal-indicator-legend i{width:7px;height:7px;border-radius:50%;flex:none}
+.journal-auto-review{border:1px solid var(--border);border-radius:6px;background:#102027;margin:24px 0;padding:20px;min-width:0}
+.journal-auto-review>header{display:flex;justify-content:space-between;gap:15px;align-items:center}
+.journal-auto-review h3{font-size:21px;margin:9px 0}.journal-auto-review header p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
+.journal-rule-score{font-size:32px;color:var(--text);white-space:nowrap}.journal-rule-score small{font-size:12px;color:var(--muted);margin-left:6px;font-weight:400}
+.journal-rule-counts{display:flex;flex-wrap:wrap;gap:15px;font-size:12px;margin:18px 0}
+.journal-auto-checks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.journal-auto-checks article{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--border);border-radius:5px;padding:14px;background:#0c191f;min-width:0}
+.journal-auto-checks article>svg{flex:none;color:var(--amber);margin-top:1px}
+.journal-auto-checks article[data-result=met]>svg{color:var(--green)}.journal-auto-checks article[data-result=not-met]>svg{color:var(--red)}
+.journal-auto-checks article>div{min-width:0;flex:1}.journal-auto-checks strong{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;font-size:12px}.journal-auto-checks strong small{font-size:10px;color:var(--muted);font-weight:400;white-space:nowrap}
+.journal-auto-checks p{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.7;overflow-wrap:anywhere}
+.journal-pattern-times{display:flex;flex-wrap:wrap;gap:18px;padding-top:16px;font-size:10px;color:var(--muted)}.journal-pattern-times strong{display:block;font-weight:500;color:var(--text);font-size:12px;margin-top:5px}
+.journal-auto-review footer{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;border-top:1px solid var(--border);padding-top:14px;font-size:10px;color:var(--muted)}.journal-auto-review footer button{font-size:11px}
+.journal-auto-review .journal-help{margin:14px 0 0}.journal-auto-review footer{margin-top:16px}
+@media(max-width:760px){.journal-auto-review{padding:14px}.journal-auto-review>header{align-items:flex-start}.journal-auto-review h3{font-size:18px}.journal-auto-checks{grid-template-columns:1fr}.journal-rule-score{font-size:25px}.journal-rule-score small{display:block;margin-left:0;font-size:10px}.journal-option-fills{padding:12px}.journal-option-fills header{gap:5px}.journal-option-fills svg{font-size:14px;min-height:125px}.journal-chart-overlays>span{margin-left:0;flex-basis:100%}.journal-chart-overlays label{min-height:32px}.journal-auto-review footer button{min-height:44px}.journal-trade-chart-tools>div{flex-wrap:wrap}}

@@ -26,19 +26,26 @@ test('Markers retain exact execution seconds, stay distinct in one candle and ne
 test('Historical service requests the actual session, preserves full bars and reuses cache without current-quote staleness',async()=>{
   const urls=[],service=createMarketService({now:()=>now,fetcher:async url=>{urls.push(new URL(url));return Response.json(payload());}});
   const result=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');
-  assert.equal(result.status,'ok');assert.equal(result.candles.length,195);assert.equal(result.candles[0].timestamp,start);assert.equal(result.candles.at(-1).end,start+23400);
-  await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');assert.equal(urls.length,1);
+  assert.equal(result.status,'ok');assert.equal(result.candles.length,195);assert.equal(result.candles[0].timestamp,start);assert.equal(result.candles.at(-1).end,start+23400);assert.ok(result.indicators.series.ema9.at(-1));assert.ok(result.indicators.series.vwap.at(-1));
+  await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');assert.equal(urls.length,2);
   assert.equal(urls[0].searchParams.get('range'),null);assert.equal(urls[0].searchParams.get('includePrePost'),'false');assert.equal(+urls[0].searchParams.get('period1'),Date.parse('2026-10-26T04:00Z')/1000);assert.equal(+urls[0].searchParams.get('period2'),Date.parse('2026-10-27T04:00Z')/1000);
-  assert.equal((await service.tradeHistory('NASDAQ:AMD','2m','2026-10-28','2026-10-28')).status,'unavailable');assert.equal(urls.length,1);
+  assert.equal((await service.tradeHistory('NASDAQ:AMD','2m','2026-10-28','2026-10-28')).status,'unavailable');assert.equal(urls.length,2);
 });
 test('Wrong symbol or range, unavailable history and provider backoff never substitute another chart',async()=>{
   let time=now,fail=false,calls=0;
   const service=createMarketService({now:()=>time,fetcher:async()=>{calls++;return fail?new Response('',{status:429}):Response.json(payload());}});
   const good=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');time+=3600001;fail=true;
   const cached=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');assert.equal(cached.status,'stale');assert.equal(cached.fetchedAt,good.fetchedAt);
-  const missing=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-23','2026-10-23');assert.equal(missing.status,'unavailable');assert.equal(missing.candles,undefined);assert.equal(calls,2);
+  const missing=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-23','2026-10-23');assert.equal(missing.status,'unavailable');assert.equal(missing.candles,undefined);assert.equal(calls,3);
   const wrong=createMarketService({now:()=>now,fetcher:async()=>Response.json(yahooPayload('SPY',{start,step:2}))});assert.equal((await wrong.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26')).status,'unavailable');
   const outOfRange=createMarketService({now:()=>now,fetcher:async()=>Response.json(payload())});assert.equal((await outOfRange.tradeHistory('NASDAQ:AMD','2m','2026-10-23','2026-10-23')).status,'unavailable');
+});
+test('Unavailable daily context does not hide execution candles, EMAs or session VWAP',async()=>{
+  const service=createMarketService({now:()=>now,fetcher:async url=>new URL(url).searchParams.get('interval')==='1d'?new Response('',{status:503}):Response.json(payload())});
+  const result=await service.tradeHistory('NASDAQ:AMD','2m','2026-10-26','2026-10-26');
+  assert.equal(result.status,'ok');assert.equal(result.candles.length,195);
+  assert.ok(result.indicators.series.ema21.at(-1));assert.ok(result.indicators.series.vwap.at(-1));
+  assert.ok(result.indicators.series.sma200.every(value=>value===null));
 });
 test('History route rejects unsupported identifiers and malformed dates before requesting a provider',async()=>{
   let called=false;const middleware=marketDataMiddleware({tradeHistory:async()=>{called=true;return {status:'ok'};}});
