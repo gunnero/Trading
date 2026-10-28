@@ -1,5 +1,7 @@
 import {chromium,expect} from '@playwright/test';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {TOTP,Secret} from 'otpauth';
 import {openAuthStore} from '../server/auth.mjs';
 import {testRuntime} from './qa-runtime.mjs';
@@ -7,7 +9,8 @@ import {mockMarket} from '../tests/fixtures/market.mjs';
 import {mockBriefing} from '../tests/fixtures/briefing.mjs';
 
 const runtime=await testRuntime({authenticated:false}),store=openAuthStore({directory:runtime.directory});
-const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}});
+const launch={headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}};
+const browser=await chromium.launch(launch),profile=mkdtempSync(join(tmpdir(),'opening-bell-remember-browser-'));let remembered;
 const password='Isolated browser authentication passphrase 2026!',checks=[],errors=[];
 const dir='docs/qa/auth';mkdirSync(dir,{recursive:true});
 const mark=message=>{checks.push(message);console.log('PASS '+message);};
@@ -51,5 +54,24 @@ try{
   await login(page,codes[2]);await expect(page.locator('main')).toBeVisible();await page.getByRole('button',{name:'Account and security'}).click();
   for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});expect(await account.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await account.evaluate(el=>{el.scrollTop=1200;});await expect(account.getByRole('button',{name:'Close account settings'})).toBeInViewport();}
   mark('Login and security settings fit 320px, phone, tablet and desktop widths; close remains accessible');
+  await expect(account).toContainText('Stay signed in for 30 days');
+  // Real persistent browser profile: no cookie injection or saved storage-state restoration.
+  remembered=await chromium.launchPersistentContext(profile,launch);
+  let reopened=remembered.pages()[0];await prepare(reopened);await reopened.goto(runtime.url+'/#levels');
+  await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
+  await login(reopened,codes[3]);await expect(reopened.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  const savedCookie=(await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session');
+  expect(savedCookie.httpOnly).toBe(true);expect(savedCookie.sameSite).toBe('Strict');
+  expect(savedCookie.expires-Date.now()/1000).toBeGreaterThan(29*24*60*60);
+  await remembered.close();remembered=null;
+  remembered=await chromium.launchPersistentContext(profile,launch);
+  reopened=remembered.pages()[0];await prepare(reopened);await reopened.goto(runtime.url+'/#levels');
+  await expect(reopened.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session').value).toBe(savedCookie.value);
+  await reopened.getByRole('button',{name:'Account and security'}).click();
+  await reopened.getByRole('dialog',{name:'Account & security'}).getByRole('button',{name:'Sign out',exact:true}).click();
+  await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
+  expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session')).toBeUndefined();
+  mark('A 30-day HttpOnly cookie survives closing and relaunching the browser; explicit sign-out removes it');
   expect(errors).toEqual([]);writeFileSync(`${dir}/checks.json`,JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
-}finally{await browser.close();store.close();await runtime.close();}
+}finally{await remembered?.close();await browser.close();rmSync(profile,{recursive:true,force:true});store.close();await runtime.close();}

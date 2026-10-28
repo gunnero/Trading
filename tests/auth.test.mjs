@@ -88,16 +88,44 @@ test('sessions rotate on login, are stored as hashes, persist across restart and
   assert.ok(!readFileSync(join(a.directory,'auth.sqlite')).includes(Buffer.from(token)));
   const reopened=openAuthStore({directory:a.directory,now:a.now});assert.ok(reopened.session(token));reopened.close();
   await a.login();assert.notEqual(a.cookie,first);assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:first}})).status,401);
-  const active=a.cookie;await a.post('logout');assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:active}})).status,401);
+  const active=a.cookie,loggedOut=await a.post('logout');assert.match(loggedOut.response.headers.get('set-cookie'),/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT$/);assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:active}})).status,401);
   await a.login();const another=a.auth.newSession().token;await a.post('logout-all');assert.equal(a.auth.session(another),null);
 });
 
-test('idle and absolute expiry are enforced on the server; automatic GET polling does not extend idle time',async t=>{
-  const a=await app(t);await a.login();a.advance(AUTH_IDLE_MS-1000);
-  assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:a.cookie}})).status,200);a.advance(1001);
+test('persistent sessions last 30 days including a week away; polling and interaction never extend the deadline',async t=>{
+  const a=await app(t),signedIn=await a.login(),day=24*60*60_000,expires=signedIn.body.expiresAt;
+  assert.equal(AUTH_MAX_MS,30*day);assert.equal(AUTH_IDLE_MS,AUTH_MAX_MS);
+  assert.equal(expires,a.now()+30*day);
+  const cookie=signedIn.response.headers.get('set-cookie');
+  assert.match(cookie,/; Max-Age=2592000;/);
+  assert.ok(cookie.endsWith('; Expires='+new Date(expires).toUTCString()));
+  a.advance(7*day+1);
+  assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:a.cookie}})).status,200);
+  const restored=openAuthStore({directory:a.directory,now:a.now});
+  assert.equal(restored.session(a.cookie.split('=')[1]).expires,expires);restored.close();
+  a.advance(22*day);
+  const activity=await a.post('activity');assert.equal(activity.response.status,200);assert.equal(activity.body.expiresAt,expires);
+  assert.equal(activity.response.headers.get('set-cookie'),null);
+  a.advance(expires-a.now()-1);
+  assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:a.cookie}})).status,200);
+  a.advance(1);
+  assert.equal((await a.post('activity')).response.status,401);
   assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:a.cookie}})).status,401);
-  await a.login();for(let i=0;i<15;i++){a.advance(29*60000);assert.equal((await a.post('activity')).response.status,200);}
-  a.advance(AUTH_MAX_MS-15*29*60000);assert.equal((await a.post('activity')).response.status,401);
+  assert.equal(a.auth.db.prepare('SELECT count(*) n FROM sessions').get().n,0);
+});
+
+test('old eight-hour sessions keep their original idle and absolute deadlines and expired sessions are not revived',async t=>{
+  const a=await app(t);await a.login();
+  a.auth.db.prepare('UPDATE sessions SET expires=created+?').run(8*60*60_000);
+  const expires=a.now()+8*60*60_000;
+  a.advance(29*60_000);
+  const active=await a.post('activity');assert.equal(active.response.status,200);assert.equal(active.body.expiresAt,expires);
+  assert.equal(active.body.idleExpiresAt,a.now()+30*60_000);
+  a.advance(30*60_000);
+  assert.equal((await fetch(a.url+'/api/workspace',{headers:{Cookie:a.cookie}})).status,401);
+  await a.login();a.auth.db.prepare('UPDATE sessions SET expires=created+?').run(8*60*60_000);
+  for(let i=0;i<16;i++){a.advance(29*60_000);assert.equal((await a.post('activity')).response.status,200);}
+  a.advance(16*60_000);assert.equal((await a.post('activity')).response.status,401);
 });
 
 test('password change requires current credentials, revokes other sessions and preserves the trading workspace',async t=>{
@@ -113,6 +141,7 @@ test('TOTP enrollment verifies ownership, encrypts the secret, blocks code repla
   assert.ok(!a.auth.owner().pending_totp.includes(enrolled.body.secret));assert.match(enrolled.body.qr,/^data:image\/png;base64,/);
   const totp=new TOTP({secret:Secret.fromBase32(enrolled.body.secret)}),code=()=>totp.generate({timestamp:a.now()});
   const confirmed=await a.post('totp/confirm',{code:code()});assert.equal(confirmed.response.status,200);assert.equal(confirmed.body.user.mfaEnabled,true);assert.equal(confirmed.body.recoveryCodes.length,10);
+  assert.match(confirmed.response.headers.get('set-cookie'),/; Max-Age=2592000;/);
   assert.equal((await a.login({code:code()})).response.status,401);a.advance(30000);assert.equal((await a.login({code:code()})).response.status,200);
   assert.equal((await a.login({code:code()})).response.status,401);
   const recovery=confirmed.body.recoveryCodes[0];assert.equal((await a.login({code:recovery})).response.status,200);assert.equal((await a.login({code:recovery})).response.status,401);
@@ -130,7 +159,7 @@ test('public configuration requires HTTPS, secure host cookies and MFA before th
   const config=authConfig({OPENING_BELL_ORIGIN:'https://desk.example'}),a=await app(t,{config});
   assert.equal((await a.login()).response.status,503);
   const secret=new Secret({size:20});a.auth.db.prepare('UPDATE owner SET totp=? WHERE id=1').run(a.auth.encrypt(secret.base32));
-  const login=await a.login({code:new TOTP({secret}).generate({timestamp:a.now()})});assert.match(login.response.headers.get('set-cookie'),/^__Host-ob_session=.*; Path=\/; HttpOnly; SameSite=Strict; Secure$/);assert.equal(login.response.headers.get('strict-transport-security'),'max-age=31536000');assert.match(login.response.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  const login=await a.login({code:new TOTP({secret}).generate({timestamp:a.now()})});assert.match(login.response.headers.get('set-cookie'),/^__Host-ob_session=.*; Path=\/; HttpOnly; SameSite=Strict; Secure; Max-Age=2592000; Expires=/);assert.equal(login.response.headers.get('strict-transport-security'),'max-age=31536000');assert.match(login.response.headers.get('content-security-policy'),/frame-ancestors 'none'/);
   assert.equal((await a.post('setup',{token:a.auth.issueSetup({recover:true}).token,password})).response.status,403);
   assert.equal((await fetch(a.url+'/api/auth/session',{headers:{'X-Forwarded-Host':'desk.example','X-Forwarded-Proto':'https'}})).status,403);
   a.auth.db.prepare('UPDATE owner SET totp=NULL WHERE id=1').run();

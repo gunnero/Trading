@@ -9,7 +9,14 @@ import QRCode from 'qrcode';
 
 // Initial identity only. Existing private databases retain their owner's profile.
 export const OWNER={email:process.env.OPENING_BELL_OWNER_EMAIL||'owner@example.com',username:process.env.OPENING_BELL_OWNER_USERNAME||'gunner',name:process.env.OPENING_BELL_OWNER_NAME||'Workspace owner'};
-export const AUTH_IDLE_MS=30*60_000,AUTH_MAX_MS=8*60*60_000;
+// Remember this browser for 30 days from sign-in, even between trading sessions.
+// Interaction and background polling never extend the absolute expiry.
+export const AUTH_MAX_MS=30*24*60*60_000,AUTH_IDLE_MS=AUTH_MAX_MS;
+// Previously issued eight-hour sessions keep their original idle limit too.
+// Changing the default must not make an expired old cookie valid again.
+const LEGACY_MAX_MS=8*60*60_000,LEGACY_IDLE_MS=30*60_000;
+const sessionIdleMs=row=>row.expires-row.created<=LEGACY_MAX_MS?LEGACY_IDLE_MS:AUTH_IDLE_MS;
+const sessionDeadlineSql=`MIN(expires,active+CASE WHEN expires-created<=${LEGACY_MAX_MS} THEN ${LEGACY_IDLE_MS} ELSE ${AUTH_IDLE_MS} END)`;
 const derive=promisify(scrypt),hash=value=>createHash('sha256').update(value).digest('hex');
 const random=()=>randomBytes(32).toString('base64url');
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -64,7 +71,7 @@ export function openAuthStore({directory=process.env.OPENING_BELL_DATA_DIR||file
   function encrypt(secret,purpose='totp'){const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);cipher.setAAD(Buffer.from(`opening-bell:${purpose}:v1`));const encrypted=Buffer.concat([cipher.update(secret,'utf8'),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),encrypted]).toString('base64url');}
   function decrypt(secret,purpose='totp'){const bytes=Buffer.from(secret,'base64url'),cipher=createDecipheriv('aes-256-gcm',key,bytes.subarray(0,12));cipher.setAAD(Buffer.from(`opening-bell:${purpose}:v1`));cipher.setAuthTag(bytes.subarray(12,28));return Buffer.concat([cipher.update(bytes.subarray(28)),cipher.final()]).toString('utf8');}
   function event(name){db.prepare('INSERT INTO events(at,event) VALUES(?,?)').run(now(),name);db.prepare('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 100)').run();}
-  function cleanup(){db.prepare('DELETE FROM sessions WHERE expires<=? OR active<=?').run(now(),now()-AUTH_IDLE_MS);db.prepare('DELETE FROM attempts WHERE started<?').run(now()-15*60_000);}
+  function cleanup(){db.prepare(`DELETE FROM sessions WHERE ${sessionDeadlineSql}<=?`).run(now());db.prepare('DELETE FROM attempts WHERE started<?').run(now()-15*60_000);}
   function throttle(ip){
     cleanup();
     transaction(()=>{for(const [bucket,limit] of [[hash('ip:'+ip),8],['global',24]]){
@@ -77,7 +84,7 @@ export function openAuthStore({directory=process.env.OPENING_BELL_DATA_DIR||file
     if(typeof token!=='string'||!/^[-\w]{43}$/.test(token))return null;
     const row=db.prepare('SELECT * FROM sessions WHERE id=?').get(hash(token));
     if(!row)return null;
-    if(row.expires<=now()||row.active+AUTH_IDLE_MS<=now()){db.prepare('DELETE FROM sessions WHERE id=?').run(row.id);return null;}
+    if(row.expires<=now()||row.active+sessionIdleMs(row)<=now()){db.prepare('DELETE FROM sessions WHERE id=?').run(row.id);return null;}
     return row;
   }
   function newSession(oldId){
@@ -87,7 +94,7 @@ export function openAuthStore({directory=process.env.OPENING_BELL_DATA_DIR||file
     db.prepare('DELETE FROM sessions WHERE id NOT IN (SELECT id FROM sessions ORDER BY created DESC,rowid DESC LIMIT 5)').run();
     return {token,row:{id,created,active:created,expires}};
   }
-  function profile(row){const user=owner();return {authenticated:true,user:{email:user.email,username:user.username,name:user.name,mfaEnabled:!!user.totp},csrf:csrf(row.id),idleExpiresAt:row.active+AUTH_IDLE_MS,expiresAt:row.expires,sessionCount:db.prepare('SELECT count(*) n FROM sessions WHERE expires>? AND active>?').get(now(),now()-AUTH_IDLE_MS).n};}
+  function profile(row){const user=owner();return {authenticated:true,user:{email:user.email,username:user.username,name:user.name,mfaEnabled:!!user.totp},csrf:csrf(row.id),idleExpiresAt:row.active+sessionIdleMs(row),expiresAt:row.expires,sessionCount:db.prepare(`SELECT count(*) n FROM sessions WHERE ${sessionDeadlineSql}>?`).get(now()).n};}
   function secondFactor(user,code){
     if(!user.totp)return {kind:'none'};
     if(typeof code!=='string')return null;
@@ -122,10 +129,13 @@ async function body(req){
 }
 export function authMiddleware(store,{config=authConfig(),development=false}={}){
   let hashing=0;
-  const cookie=(res,token)=>res.setHeader('Set-Cookie',`${config.cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict${config.secure?'; Secure':''}${token?'':'; Max-Age=0'}`);
+  const cookie=(res,token,expires=0)=>{
+    const maxAge=token?Math.max(0,Math.floor((expires-store.now())/1000)):0;
+    res.setHeader('Set-Cookie',`${config.cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict${config.secure?'; Secure':''}; Max-Age=${maxAge}; Expires=${new Date(token?expires:0).toUTCString()}`);
+  };
   async function costly(work){if(hashing>=2)throw fail(429,'Sign-in is busy. Try again shortly.');hashing++;try{return await work();}finally{hashing--;}}
-  function current(row){if(!row||!store.db.prepare('SELECT id FROM sessions WHERE id=? AND expires>? AND active>?').get(row.id,store.now(),store.now()-AUTH_IDLE_MS))throw fail(401,'Your session expired. Sign in again.');}
-  function signedIn(res,result){cookie(res,result.token);return json(res,200,store.profile(result.row));}
+  function current(row){if(!row||!store.db.prepare(`SELECT id FROM sessions WHERE id=? AND ${sessionDeadlineSql}>?`).get(row.id,store.now()))throw fail(401,'Your session expired. Sign in again.');}
+  function signedIn(res,result){cookie(res,result.token,result.row.expires);return json(res,200,store.profile(result.row));}
   async function reauthenticate(row,data,ip){
     store.throttle(ip);const user=store.owner();
     if(!await costly(()=>passwordMatches(data.password,user.password)))throw fail(401,'Check your password and verification code.');
@@ -203,11 +213,11 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
             if(delta===null)throw fail(400,'Enter the current six-digit code from your authenticator.');
             store.db.prepare('UPDATE owner SET totp=pending_totp,last_counter=?,pending_totp=NULL,pending_until=NULL,pending_session=NULL WHERE id=1').run(Math.floor(store.now()/30000)+delta);
             const recoveryCodes=store.recoveryCodes();store.db.exec('DELETE FROM sessions; DELETE FROM setup;');store.event('two_step_enabled');return {...store.newSession(),recoveryCodes};
-          });cookie(res,result.token);return json(res,200,{...store.profile(result.row),recoveryCodes:result.recoveryCodes});
+          });cookie(res,result.token,result.row.expires);return json(res,200,{...store.profile(result.row),recoveryCodes:result.recoveryCodes});
         }
         if(path==='/api/auth/recovery-codes'){
           const user=await reauthenticate(row,data,ip);if(!user.totp)throw fail(400,'Enable two-step verification first.');
-          const result=store.transaction(()=>{const recoveryCodes=store.recoveryCodes();store.db.exec('DELETE FROM sessions;');store.event('recovery_codes_replaced');return {...store.newSession(),recoveryCodes};});cookie(res,result.token);return json(res,200,{...store.profile(result.row),recoveryCodes:result.recoveryCodes});
+          const result=store.transaction(()=>{const recoveryCodes=store.recoveryCodes();store.db.exec('DELETE FROM sessions;');store.event('recovery_codes_replaced');return {...store.newSession(),recoveryCodes};});cookie(res,result.token,result.row.expires);return json(res,200,{...store.profile(result.row),recoveryCodes:result.recoveryCodes});
         }
         throw fail(404,'Unknown account action.');
       }
