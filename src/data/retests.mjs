@@ -1,5 +1,5 @@
 import {awaitingSessionQuote,isExtendedQuote} from './quotes.mjs';
-import {tradingDay,clockTime} from './market-session.mjs';
+import {tradingDay} from './market-session.mjs';
 export const RETEST_WINDOW=12,CONFIRMATION_WINDOW=3;
 export const stageLabel=stage=>({'confirmed':'Retest confirmed','waiting-retest':'Waiting for retest',retesting:'Retesting zone','waiting-break':'Waiting for break','awaiting-session':'Today’s levels ready',extended:'Extended from zone',expired:'Setup expired',invalidated:'Setup invalidated','indicator-conflict':'Indicator conflict','indicators-unavailable':'Indicators unavailable','no-levels':'No supplied levels',dated:'Dated levels',stale:'Cached / old data',loading:'Checking candles',unavailable:'Data unavailable',insufficient:'Incomplete history'}[stage]||'Waiting for data');
 const candidateStages=['confirmed','retesting','waiting-retest'];
@@ -12,7 +12,7 @@ export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
   if(sheetDate!==data.quote?.sessionDate){
     if(awaitingSessionQuote(sheetDate,data.quote,now)){
       const open=tradingDay(sheetDate).open;
-      return {...base,stage:'awaiting-session',through:null,message:now<Date.parse(open)?`Your ${sheetDate} levels are ready for pre-market preparation. Break-and-retest confirmation uses regular-session candles, starting at ${clockTime(open)} Skopje. No new import is needed.`:`Your ${sheetDate} levels are ready. Waiting for today's regular-session candles from Yahoo before confirming a setup. No new import is needed.`};
+      return {...base,stage:'awaiting-session',through:null,message:now<Date.parse(open)?`Your ${sheetDate} levels are ready for pre-market preparation. Break-and-retest confirmation uses regular-session candles, starting at the U.S. market open. No new import is needed.`:`Your ${sheetDate} levels are ready. Waiting for today's regular-session candles from Yahoo before confirming a setup. No new import is needed.`};
     }
     return {...base,stage:'dated'};
   }

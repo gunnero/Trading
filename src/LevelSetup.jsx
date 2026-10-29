@@ -1,3 +1,4 @@
+import {useDisplayTime} from './DisplayTime';
 import {useState} from 'react';
 import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 import {PriceChart} from './Charts';
@@ -6,10 +7,11 @@ import {useZoneRoles} from './ZoneRoles';
 import {useStockSetup} from './useStockSetup';
 import {RetestPanel} from './RetestDesk';
 import {matchingInstrument,locate,formatDate} from './data/market.js';
-import {quoteKey,quotePrice,quoteStamp,quoteDelay,isExtendedQuote,awaitingSessionQuote} from './data/quotes.mjs';
+import {quoteKey,quotePrice,quoteDelay,isExtendedQuote,awaitingSessionQuote} from './data/quotes.mjs';
 import {SETUP_INTERVALS} from './data/instruments.mjs';
 
 export function LevelSetup({entry,sheet,result,initialInterval,onPlan,historical=false}){
+  const {quoteStamp}=useDisplayTime();
   const key=quoteKey(entry),[timeframe,setTimeframe]=useSavedTimeframe(key),[interval,setInterval]=useState(initialInterval);
   const imported=matchingInstrument(entry,sheet),history=useMarketChart(key,timeframe),confirmation=useZoneRoles(historical?null:imported,sheet.date,key);
   const roles=historical?null:confirmation,instrument=historical?imported:roles.instrument;

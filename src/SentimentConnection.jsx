@@ -1,11 +1,13 @@
+import {useDisplayTime} from './DisplayTime';
 import {useEffect,useState} from 'react';
 import {apiFetch} from './auth-client';
 import {SourceLink,invalidateFeed} from './Feeds';
-import {briefingTime} from './data/calendar.mjs';
+
 import {sentimentScore} from './data/sentiment.mjs';
 
 const ENDPOINT='/api/settings/sentiment';
 export function SentimentConnection({onChange,embedded=false}){
+  const {briefingTime,zoneLabel}=useDisplayTime();
   const [open,setOpen]=useState(embedded),[connection,setConnection]=useState(null),[key,setKey]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   useEffect(()=>{
     if(!open){setKey('');return;}
@@ -19,7 +21,7 @@ export function SentimentConnection({onChange,embedded=false}){
       const response=await apiFetch(ENDPOINT,{method:disconnect?'DELETE':'POST',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},...(!disconnect?{body:JSON.stringify({apiKey:key.trim()})}:{}),signal:AbortSignal.timeout(20000)});
       const data=await response.json();if(!response.ok)throw Error(data.message||'Could not update the connection.');
       setConnection(data);
-      setNotice(disconnect?'Disconnected. Automatic community snapshots remain available.':`Key verified. Provider returned ${sentimentScore(data.reading.score)} · ${data.reading.rating}, observed ${briefingTime(data.reading.observedAt)} Skopje. The card checks this reading’s age.`);
+      setNotice(disconnect?'Disconnected. Automatic community snapshots remain available.':`Key verified. Provider returned ${sentimentScore(data.reading.score)} · ${data.reading.rating}, observed ${briefingTime(data.reading.observedAt)} ${zoneLabel}. The card checks this reading’s age.`);
       invalidateFeed('/api/sentiment');invalidateFeed('/api/sentiment/details');
       onChange();
     }catch(e){setError(e.message);}finally{setKey('');setBusy(false);}

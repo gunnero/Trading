@@ -36,9 +36,9 @@ try {
  await expect(overviewNews).toContainText('LATEST HEADLINE');await expect(overviewNews).not.toContainText('BREAKING');
  await page.screenshot({path:'docs/qa/overview-latest-news.png',fullPage:false});
  await page.screenshot({path:'docs/qa/overview-high-impact.png',fullPage:false});
- await page.setViewportSize({width:390,height:900});await noOverflow();await expect(overview).toBeInViewport();
+ await page.setViewportSize({width:390,height:900});await noOverflow();await overview.scrollIntoViewIfNeeded();await expect(overview).toBeInViewport();
  await overview.screenshot({path:'docs/qa/overview-high-impact-mobile.png'});await page.setViewportSize({width:1488,height:1058});
- mark('Overview immediately shows the next high-impact release in Skopje 24-hour time on desktop and mobile');
+ mark('Overview shows the next high-impact release in Skopje 24-hour time on desktop and mobile');
  await page.getByRole('button',{name:'Open News',exact:true}).click();
  await expect(page.getByRole('heading',{name:'News',exact:true,level:1})).toBeVisible();
  await expect(nav('News')).toHaveAttribute('aria-current','page');

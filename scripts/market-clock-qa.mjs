@@ -19,10 +19,12 @@ async function time(value){await page.clock.setSystemTime(new Date(value));await
 async function snap(name){await page.evaluate(async()=>{await document.fonts.ready;});await page.screenshot({path:`docs/qa/${name}.png`,fullPage:false});}
 async function noOverflow(){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
 try{
- await page.clock.install({time:new Date('2026-10-24T21:30:00Z')});await page.clock.pauseAt(new Date('2026-10-24T21:31:00Z'));
+ // Let lazy authenticated app loading finish before pausing browser timers.
+ await page.clock.setFixedTime(new Date('2026-10-24T21:31:00Z'));
  // Keep unrelated public feeds deterministic; the exchange clock needs no network feed.
  await page.route(/\/api\/(sentiment|calendar|news)(?:\?|$)/,route=>route.fulfill({json:{status:'unavailable',data:null,message:'Isolated clock verification'}}));
  await mockMarket(page);await page.goto(process.env.OPENING_BELL_TEST_URL);await expect(sidebar).toBeVisible();
+ await page.clock.install({time:new Date('2026-10-24T21:30:00Z')});await page.clock.pauseAt(new Date('2026-10-24T21:31:00Z'));
  await expect(sidebar.locator('.market-clock-state')).toHaveText('Weekend');
  await expect(sidebar.locator('.market-clock-date')).toHaveText('Sat, 24 Oct 2026');
  await expect(sidebar.locator('.market-clock-time')).toHaveText('23:31:00');

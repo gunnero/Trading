@@ -1,7 +1,8 @@
+import {useDisplayTime} from './DisplayTime';
 import {apiFetch} from './auth-client';
 import {useEffect,useState,useMemo} from 'react';
 import {LEVEL_FRAMES,applyZoneRoles,supportsLevelHistory} from './data/zone-roles.mjs';
-import {clockStamp} from './data/market-session.mjs';
+
 import {zoneName,zoneText,formatPrice} from './data/market';
 
 export function useZoneRoles(instrument,date,marketKey,active=true){
@@ -30,12 +31,13 @@ export function useZoneRoles(instrument,date,marketKey,active=true){
   return {...result,instrument:current,date,frame};
 }
 export function ZoneRoleStatus({roles}){
+  const {clockStamp,zoneLabel}=useDisplayTime();
   if(!roles?.instrument)return null;
   const {status,instrument,date,through}=roles;
   const title=status==='ok'?`Auto-flip · ${instrument.timeframe} closes`:status==='loading'?'Auto-flip · checking closes':status==='stale'?'Auto-flip · cached confirmation':'Auto-flip paused · imported roles';
-  return <details className="zone-role-status"><summary><span className={status==='ok'?'green':'amber'}>{title}</span><span>{through?`Through ${clockStamp(through*1000)} · Skopje`:'Waiting for confirmed candles'}</span></summary>
+  return <details className="zone-role-status"><summary><span className={status==='ok'?'green':'amber'}>{title}</span><span>{through?`Through ${clockStamp(through*1000)} · ${zoneLabel}`:'Waiting for confirmed candles'}</span></summary>
     <p>Supply → demand on a close above the upper edge; demand → supply on a close below the lower edge. Based on available Yahoo {instrument.timeframe} candles from sheet date {date}. Wicks and open candles do not flip a zone. Imported prices stay unchanged. Colors show current confirmed roles across the chart history.</p>
     {status!=='ok'&&<p className="amber">{roles.message||(status==='loading'?'Loading confirmation history. Imported roles shown.':'Confirmation history unavailable. Imported roles shown.')}</p>}
-    <ul>{instrument.zones.map(zone=><li key={`${zone.originalType}-${zone.low}-${zone.high}`}><span className={zone.type==='S'?'red':zone.type==='D'?'green':'amber'}>{zoneName(zone.type)}</span><strong>{zoneText(zone)}</strong><small>{zone.lastFlip?`${zoneName(zone.lastFlip.from)} → ${zoneName(zone.lastFlip.to)} · ${clockStamp(zone.lastFlip.at*1000)} Skopje · close ${formatPrice(zone.lastFlip.close)}`:`Imported ${zoneName(zone.originalType).toLowerCase()}`}</small></li>)}</ul>
+    <ul>{instrument.zones.map(zone=><li key={`${zone.originalType}-${zone.low}-${zone.high}`}><span className={zone.type==='S'?'red':zone.type==='D'?'green':'amber'}>{zoneName(zone.type)}</span><strong>{zoneText(zone)}</strong><small>{zone.lastFlip?`${zoneName(zone.lastFlip.from)} → ${zoneName(zone.lastFlip.to)} · ${clockStamp(zone.lastFlip.at*1000)} ${zoneLabel} · close ${formatPrice(zone.lastFlip.close)}`:`Imported ${zoneName(zone.originalType).toLowerCase()}`}</small></li>)}</ul>
   </details>;
 }

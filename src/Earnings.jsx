@@ -1,8 +1,9 @@
+import {useDisplayTime} from './DisplayTime';
 import {useState} from 'react';
 import {CalendarBlank,CaretLeft,CaretRight,Star} from '@phosphor-icons/react';
 import {useFeed,FeedStatus,SourceLink,Unavailable} from './Feeds';
 import {marketDay,periodRange,weekRange,addDays} from './data/calendar.mjs';
-import {EARNINGS_SOURCE,earningsRange,earningsDate,reportWindow,windowReference,earningsMatches,upcomingEarnings} from './data/earnings.mjs';
+import {EARNINGS_SOURCE,earningsRange,earningsDate,reportWindow,earningsMatches,upcomingEarnings} from './data/earnings.mjs';
 
 export function EarningsSummary({feed,watchlist,now,onOpen}){
   const events=upcomingEarnings(earningsMatches(feed.data?.events||[],watchlist),now).filter(e=>e.status!=='reported'),watched=events.filter(e=>e.watchEntries.length),first=(watched.length?watched:events)[0];
@@ -11,6 +12,7 @@ export function EarningsSummary({feed,watchlist,now,onOpen}){
 }
 
 export function EarningsPanel({watchlist,now,onInspect}){
+  const {windowReference,zoneLabel,formatLabel}=useDisplayTime();
   const [period,setPeriod]=useState('upcoming'),[custom,setCustom]=useState(null),[editing,setEditing]=useState(false),[draft,setDraft]=useState({from:'',to:''}),[error,setError]=useState('');
   const [scope,setScope]=useState('all'),[search,setSearch]=useState(''),[limit,setLimit]=useState(60);
   const range=period==='custom'?custom:periodRange(period,marketDay(now));
@@ -30,7 +32,7 @@ export function EarningsPanel({watchlist,now,onInspect}){
     {!feed.data?<Unavailable feed={feed}/>:<><div className="calendar-coverage" aria-live="polite">{rows.length} reports returned · <Star size={12} weight="fill"/> Highlighted companies are in your watchlist{feed.data.incomplete?' · Partial coverage':''}</div>{rows.length?<>
       <div className="calendar-table-scroll earnings-table-scroll" key={`${range.from}:${range.to}:${scope}:${query}`} role="region" aria-label="Earnings reports" tabIndex={0}><table className="calendar-table earnings-table"><thead><tr><th>U.S. report date</th><th>Company</th><th>Reporting window</th><th>EPS forecast</th><th>Last year EPS</th></tr></thead><tbody>{rows.slice(0,limit).map(e=><tr key={e.id} className={e.watchEntries.length?'watchlist-earnings':''}><td><time dateTime={e.date}>{earningsDate(e.date)}</time><small>{e.date<marketDay(now)?'Past scheduled date':'Expected'}{feed.data.cachedDates?.includes(e.date)?' · Cached':''}</small></td><td><div className="earnings-company">{e.watchEntries.length===1?<button className="text-button" onClick={()=>onInspect(e.watchEntries[0])} aria-label={`Open ${e.symbol} company details`}>{e.symbol}<CaretRight size={12}/></button>:<strong>{e.symbol}</strong>}{e.watchEntries.length>0&&<span className="earnings-watch-badge"><Star size={11} weight="fill"/>Watchlist</span>}</div><span>{e.name}</span>{e.fiscalQuarter&&<small>Fiscal quarter: {e.fiscalQuarter}</small>}</td><td><span className={`earnings-window ${e.window}`}>{reportWindow(e.window)}</span>{windowReference(e)&&<small>{windowReference(e)}</small>}</td><td>{e.epsForecast??'—'}{e.estimates&&<small>{e.estimates} estimates</small>}</td><td>{e.lastYearEPS??'—'}</td></tr>)}</tbody></table></div>{rows.length>limit&&<button className="text-button earnings-load-more" onClick={()=>setLimit(n=>n+60)}>Show more reports ({Math.min(limit,rows.length)} of {rows.length})</button>}
     </>:<div className="feed-empty"><CalendarBlank size={25}/><strong>{scope==='watchlist'?'No watchlist reports returned':'No matching earnings returned'}</strong><p>{search?'Try another symbol or company name.':'Try another date range. An empty result does not guarantee that no reports are scheduled.'}</p></div>}</>}
-    <p className="feed-note">Nasdaq’s U.S. market calendar, including ADRs. Dates and reporting windows are expected; company confirmation is not supplied and schedules can change. Dates follow the U.S. reporting calendar. Open/close references use Skopje time (24h), not exact earnings-release or call times. EPS values retain the source’s notation; “—” means not supplied.</p>
+    <p className="feed-note">Nasdaq’s U.S. market calendar, including ADRs. Dates and reporting windows are expected; company confirmation is not supplied and schedules can change. Dates follow the U.S. reporting calendar. Open/close references use {zoneLabel} time ({formatLabel}), not exact earnings-release or call times. EPS values retain the source’s notation; “—” means not supplied.</p>
     <FeedStatus feed={feed}/>
   </section>;
 }

@@ -1,10 +1,11 @@
+import {useDisplayTime} from './DisplayTime';
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
 import { LineChart, CandlestickChart, BarChart, CustomChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { formatPrice, zoneName, zoneText } from './data/market';
-import {clockStamp} from './data/market-session.mjs';
+
 import {ribbonSegments} from './data/indicators.mjs';
 import {INDICATORS,IndicatorControls,validIndicator} from './ChartIndicators';
 import {ChartNavigation,useChartNavigation} from './ChartNavigation';
@@ -31,13 +32,14 @@ function useChart(option,onZoom) {
   return {ref,chart:ready};
 }
 export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, candles, price, percent = false, indicators }) {
+  const {clockStamp,zoneLabel}=useDisplayTime();
   const scope=`${drawingKey}|${timeframe}`,settings=useSavedChart(scope),{config}=settings;
   const {enabled,fitIndicators,fitLevels}=config;
   const setEnabled=change=>settings.set(current=>({...current,enabled:typeof change==='function'?change(current.enabled):change}));
   const setFitIndicators=fitIndicators=>settings.set({fitIndicators,priceRange:null});
   const plotted=INDICATORS.filter(item=>enabled[item.key]).flatMap(item=>item.series.filter(key=>indicators?.series?.[key]?.some(validIndicator)).map(key=>({...item,id:key,values:indicators.series[key],name:key==='ema9'?'9 EMA':key==='ema21'?'21 EMA':item.label})));
   const formatValue=value=>percent?`${value.toFixed(3)}%`:formatPrice(value);
-  const data = candles.map(row=>({...row,label:['D','W','M'].includes(timeframe)?row.date.slice(0,timeframe==='M'?7:10):clockStamp(row.timestamp*1000).replace(' · ','\n'),time:['D','W','M'].includes(timeframe)?row.date:clockStamp(row.timestamp*1000)+' Skopje'}));
+  const data = candles.map(row=>({...row,label:['D','W','M'].includes(timeframe)?row.date.slice(0,timeframe==='M'?7:10):clockStamp(row.timestamp*1000).replace(' · ','\n'),time:['D','W','M'].includes(timeframe)?row.date:clockStamp(row.timestamp*1000)+` ${zoneLabel}`}));
   const labels = [...data.map(row => row.label), ...Array.from({length:Math.ceil(data.length*.25)},()=> '')];
   const navigation=useChartNavigation(`${symbol}:${timeframe}`,labels.length,[0,1],(data.length-1)/(labels.length-1)*100,{view:config.timeRange,onChange:timeRange=>settings.set({timeRange})});
   const first=Math.min(data.length-1,Math.floor(navigation.view.start/100*(labels.length-1))),last=Math.min(data.length,Math.ceil(navigation.view.end/100*(labels.length-1))+1),visibleData=data.slice(first,last);

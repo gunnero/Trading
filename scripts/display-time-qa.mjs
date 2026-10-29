@@ -1,0 +1,56 @@
+import {chromium,expect} from '@playwright/test';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {testRuntime} from './qa-runtime.mjs';
+import {testFetch} from '../tests/fixtures/auth.mjs';
+import {mockMarket} from '../tests/fixtures/market.mjs';
+import {mockBriefing} from '../tests/fixtures/briefing.mjs';
+import {screenshotFixtures} from '../tests/fixtures/journal.mjs';
+const runtime=await testRuntime(),dir='docs/qa/display-time';mkdirSync(dir,{recursive:true});
+const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}});
+const checks=[],errors=[],mark=s=>{checks.push(s);console.log('PASS '+s);};
+try{
+ const read=async()=>await(await testFetch(runtime.url+'/api/workspace')).json();
+ const first=await read(),trades=screenshotFixtures();
+ const seed={...first.data,journal:{version:1,trades}};
+ const seedResponse=await testFetch(runtime.url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({data:seed,revision:first.revision})});expect(seedResponse.status).toBe(200);
+ const baseline=await read();
+ const page=await browser.newPage({viewport:{width:1488,height:1000},reducedMotion:'reduce'});
+ page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-29T20:00:00Z'));await mockMarket(page);await mockBriefing(page);
+ await page.route('**/api/market/trade-history?*',route=>route.fulfill({json:{status:'unavailable',message:'Isolated no-history fixture'}}));
+ await page.route('**/api/calendar?*',route=>route.fulfill({json:{status:'ok',source:{name:'Fixture',url:'https://example.com'},fetchedAt:'2026-10-29T20:00:00Z',data:{planning:true,events:[{id:'timed',title:'Timed U.S. fixture',country:'US',date:'2026-10-29T20:00:00Z',impact:'High'},{id:'untimed',title:'Date-only fixture',country:'US',calendarDate:'2026-10-29',timeLabel:'All day',impact:'Holiday'}]}}}));
+ await page.goto(runtime.url+'/#settings/workspace');await expect(page.getByLabel('Time zone',{exact:true})).toHaveValue('Europe/Skopje');await expect(page.getByLabel('Time format',{exact:true})).toHaveValue('h23');
+ await expect(page.locator('.session-display-preview strong')).toHaveText('21:00');expect((await read()).revision).toBe(baseline.revision);
+ await expect(page.locator('.settings-facts')).toContainText('U.S. markets');expect(await page.getByLabel('Trading session',{exact:true}).count()).toBe(0);
+ const status=await page.locator('.market-clock-sidebar .market-clock-state').textContent();
+ mark('Older workspace defaults to Skopje/24h without a save; U.S. markets is fixed');
+ const setZone=async zone=>{await page.getByLabel('Time zone',{exact:true}).selectOption(zone);await expect.poll(async()=>(await read()).data.displayTime?.timeZone).toBe(zone);};
+ await setZone('America/New_York');await page.getByLabel('Time format',{exact:true}).selectOption('h12');await expect.poll(async()=>(await read()).data.displayTime?.hourCycle).toBe('h12');
+ await expect(page.locator('.session-display-preview strong')).toHaveText('04:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-time')).toHaveText('04:00:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-state')).toHaveText(status);
+ await page.locator('.market-clock-sidebar').click();await expect(page.locator('.market-hours')).toContainText('New York');await expect(page.locator('.market-hours')).toContainText('AM');await expect(page.locator('.market-hours')).toContainText('PM');await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
+ await page.reload();await expect(page.getByLabel('Time zone',{exact:true})).toHaveValue('America/New_York');await expect(page.getByLabel('Time format',{exact:true})).toHaveValue('h12');
+ const saved=await read(),{displayTime,...rest}=saved.data;expect(rest).toEqual(baseline.data);
+ const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloading,backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(backup.displayTime).toEqual(displayTime);
+ await page.screenshot({path:dir+'/desktop.png',fullPage:true});mark('New York/12h changes both clocks immediately, survives refresh and is included in backup; other workspace data is unchanged');
+ await setZone('Asia/Tokyo');await expect(page.locator('.session-display-preview')).toContainText('Fri, 30 Oct 2026');
+ await page.goto(runtime.url+'/#briefing');await expect(page.locator('.calendar-table')).toBeVisible();
+ await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Timed U.S. fixture'})).toContainText('Oct 30');await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Timed U.S. fixture'})).toContainText('05:00 AM');
+ await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Date-only fixture'})).toContainText('Oct 29');await expect(page.locator('.calendar-table')).toContainText('Date / Tokyo');
+ await expect(page.locator('.calendar-navigation')).toContainText('Oct 25 – Oct 31, 2026');
+ await page.goto(runtime.url+'/#news');await expect(page.locator('.news-panel')).toContainText('09:00 PM');await expect(page.locator('.news-panel')).toContainText('Tokyo');
+ mark('Timed calendar events and news convert across midnight; untimed events, range labels and U.S. date filters retain published dates');
+ await page.goto(runtime.url+'/#journal');await page.getByRole('button',{name:'AMD 530 Call',exact:true}).click();const dialog=page.getByRole('dialog');
+ await expect(dialog.locator('.journal-execution-summary')).toContainText('2026-10-27 · 12:19:54 AM');await expect(dialog.locator('.journal-option-fills')).toHaveText(/12:19:54 AM/);
+ await dialog.getByRole('button',{name:'Details & notes',exact:true}).click();await expect(dialog.getByLabel('Entry time · Skopje · 24h')).toHaveValue('16:19:54');await dialog.getByRole('button',{name:'Close trade dialog'}).click();
+ expect((await read()).data.journal).toEqual(baseline.data.journal);mark('Journal review displays the selected zone/12h with exact seconds; broker-input times and saved executions stay intact');
+ await page.goto(runtime.url+'/#settings/workspace');await setZone('Asia/Kathmandu');await expect(page.locator('.session-display-preview strong')).toHaveText('01:45 AM');
+ for(const width of [320,390,820,1024]){
+  await page.setViewportSize({width,height:950});await expect(page.getByLabel('Time zone',{exact:true})).toBeVisible();await expect(page.getByLabel('Time format',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({path:`${dir}/settings-${width}.png`,fullPage:true});
+ }
+ await page.getByLabel('Time format',{exact:true}).selectOption('h23');await expect(page.locator('.session-display-preview strong')).toHaveText('01:45');await expect.poll(async()=>(await read()).data.displayTime.hourCycle).toBe('h23');
+ await page.reload();await expect(page.getByLabel('Time format',{exact:true})).toHaveValue('h23');mark('Quarter-hour offsets and 24h format work on phone/tablet layouts without overflow and persist after reload');
+ const invalid=await read();const response=await testFetch(runtime.url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({revision:invalid.revision,data:{...invalid.data,displayTime:{timeZone:'Invalid/Zone',hourCycle:'h12'}}})});expect(response.status).toBe(400);expect(await read()).toEqual(invalid);
+ expect(errors).toEqual([]);mark('Invalid time settings are rejected without changing saved data; all visited views have no browser errors');
+ writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
+}finally{await browser.close();await runtime.close();}

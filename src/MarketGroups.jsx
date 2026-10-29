@@ -1,11 +1,13 @@
+import {useDisplayTime} from './DisplayTime';
 import {useState} from 'react';
 import {CaretRight,CaretDown,ChartLine,Stack,Gauge} from '@phosphor-icons/react';
 import {Sparkline} from './Charts';
 import {CONTEXT_INSTRUMENTS} from './data/market-context.mjs';
-import {quotePrice,quoteChange,quoteTone,quoteDelay,quoteStamp} from './data/quotes.mjs';
+import {quotePrice,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
 
 const icons={indicators:Gauge,futures:ChartLine,funds:Stack};
 export function MarketGroups({groups,quotes,onOpen}){
+  const {quoteStamp}=useDisplayTime();
   const [compact]=useState(()=>window.matchMedia('(max-width:1100px)').matches);
   return <section className="market-groups macro-strip" aria-label="Market context">{groups.map(group=>{
     const Icon=icons[group.id];

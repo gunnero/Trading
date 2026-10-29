@@ -1,14 +1,16 @@
+import {useDisplayTime} from './DisplayTime';
 import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 import {Clock} from '@phosphor-icons/react';
 import {PriceChart,TreasuryHistoryChart} from './Charts';
 import {TIMEFRAMES} from './data/candles';
 import {useMarketChart} from './useMarketData';
-import {quotePrice,quoteStamp,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
+import {quotePrice,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
 import {formatDate,zoneName,zoneText} from './data/market';
 import {useZoneRoles,ZoneRoleStatus} from './ZoneRoles';
 
 import {CONTEXT_INSTRUMENTS,FUTURES_CONTEXT} from './data/market-context.mjs';
 export function MarketContextChart({symbol,quotes,sheet,onSelect,historical=false}){
+  const {quoteStamp,zoneLabel}=useDisplayTime();
   const daily=symbol==='US2Y',label=CONTEXT_INSTRUMENTS.find(([key])=>key===symbol)?.[1]||symbol;
   const [timeframe,setTimeframe]=useSavedTimeframe(symbol);
   const futures=FUTURES_CONTEXT.some(item=>item.key===symbol),autoRoles=['NQ','ES'].includes(symbol);
@@ -26,7 +28,7 @@ export function MarketContextChart({symbol,quotes,sheet,onSelect,historical=fals
       <ChartHeader symbol={label} marketKey={symbol} timeframe={timeframe} onTimeframe={setTimeframe} daily={daily} source={daily?'U.S. Treasury':'Yahoo Finance'} roles={roles}/>
       {!daily&&<ChartLevels scope={`${symbol}|${timeframe}`} instrument={instrument} date={imported?.sourceDate||sheet?.date} roles={roles} quoteDate={quote?.sessionDate}/>}
       {daily&&history.points?.length?<TreasuryHistoryChart points={history.points}/>:!daily&&history.candles?.length?<PriceChart symbol={label} drawingKey={symbol} timeframe={timeframe} candles={history.candles} price={history.quote.price} percent={symbol==='US10Y'} instrument={instrument} indicators={history.indicators}/>:<div className="empty" role="status"><Clock size={30}/><h3>{history.status==='loading'?'Loading chart…':'Chart unavailable'}</h3><p>{history.status==='loading'?'Fetching source history.':history.message||'History is not available from this source. Retrying automatically.'}</p></div>}
-      <div className="chart-footnote"><span>{daily&&history.points?.length?`${history.points[0].date} – ${history.points.at(-1).date} · ${history.points.length} published observations`:daily?'Published observation dates':`${timeframe==='4h'?'4h from source hourly bars · ':''}Skopje time · partial bars marked`}</span><span>{daily?'Refreshes hourly':'Refreshes every minute'}</span></div>
+      <div className="chart-footnote"><span>{daily&&history.points?.length?`${history.points[0].date} – ${history.points.at(-1).date} · ${history.points.length} published observations`:daily?'Published observation dates':`${timeframe==='4h'?'4h from source hourly bars · ':''}${zoneLabel} time · partial bars marked`}</span><span>{daily?'Refreshes hourly':'Refreshes every minute'}</span></div>
 
     </section>
     {futures&&!autoRoles&&imported&&<p className="context-chart-note">Imported levels are reference overlays with their original supply/demand roles. Automatic role confirmation is available for NQ and ES.</p>}

@@ -1,3 +1,4 @@
+import {validateDisplayTime} from '../src/data/display-time.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,6 +33,8 @@ export function validateWorkspace(value) {
   if(value.preferences.focus!==undefined){if(!['QQQ','SPY','hot','custom'].includes(value.preferences.focus))throw bad('Invalid focus tab.');preferences.focus=value.preferences.focus;}
   if(value.preferences.customSymbol!==undefined){if(value.preferences.customSymbol!==''&&!isEquityKey(value.preferences.customSymbol))throw bad('Invalid custom listing.');preferences.customSymbol=value.preferences.customSymbol;}
   if(value.preferences.setupInterval!==undefined){if(!SETUP_INTERVALS.includes(value.preferences.setupInterval))throw bad('Invalid setup interval.');preferences.setupInterval=value.preferences.setupInterval;}
+  let displayTime;
+  if(value.displayTime!==undefined){try{displayTime=validateDisplayTime(value.displayTime);}catch(e){throw bad(e.message);}}
   const ids=new Set();
   const plans=value.plans.map(plan=>{
     if(!plan||typeof plan.id!=='string'||plan.id.length>80||!plan.id||ids.has(plan.id))throw bad('Invalid or duplicate plan identifier.');
@@ -51,7 +54,7 @@ export function validateWorkspace(value) {
   if(value.chartSettings!==undefined){try{chartSettings=validateChartSettings(value.chartSettings);}catch(e){throw bad(e.message);}}
   let journal;
   if(value.journal!==undefined){try{journal=validateJournal(value.journal);}catch(e){throw bad(e.message);}}
-  return {schemaVersion:1,levelText,watchText,plans,manualSentiment,preferences,...(levelSourceDates?{levelSourceDates}:{}),...(levelHistory?{levelHistory}:{}),...(chartDrawings?{chartDrawings}:{}),...(chartSettings?{chartSettings}:{}),...(journal?{journal}:{})};
+  return {schemaVersion:1,levelText,watchText,plans,manualSentiment,preferences,...(displayTime?{displayTime}:{}),...(levelSourceDates?{levelSourceDates}:{}),...(levelHistory?{levelHistory}:{}),...(chartDrawings?{chartDrawings}:{}),...(chartSettings?{chartSettings}:{}),...(journal?{journal}:{})};
 }
 export function openWorkspaceStore({directory=process.env.OPENING_BELL_DATA_DIR || defaultDirectory}={}) {
   mkdirSync(directory,{recursive:true,mode:0o700});

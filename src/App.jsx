@@ -1,3 +1,5 @@
+import {useDisplayTime} from './DisplayTime';
+import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
 import {useAuth,AccountDialog} from './Auth';
@@ -16,7 +18,7 @@ import {MarketGroups} from './MarketGroups';
 import {marketGroups,CONTEXT_INSTRUMENTS} from './data/market-context.mjs';
 import {useZoneRoles,ZoneRoleStatus} from './ZoneRoles';
 import {useMarketQuotes, useMarketChart} from './useMarketData';
-import {quoteKey, quotePrice, quoteChange, quoteTone, quoteStamp, quoteDelay, entryState, isExtendedQuote, awaitingSessionQuote} from './data/quotes.mjs';
+import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay,entryState,isExtendedQuote,awaitingSessionQuote} from './data/quotes.mjs';
 import {marketDay} from './data/calendar.mjs';
 import {FocusTabs,SetupControls,RetestPanel} from './RetestDesk';
 import {useRetestScan} from './useRetestScan';
@@ -49,9 +51,10 @@ function Modal({ title, subtitle, children, onClose, wide = false, className = '
 export function App() {
   const workspace=useWorkspace();
   if(!workspace.data) return <div className="workspace-loading"><Bell size={36} className="amber"/><h1>Opening Bell</h1><p>{workspace.status==='loading'?'Loading your saved workspace…':workspace.error}</p>{workspace.status!=='loading'&&<button className="button primary" onClick={workspace.retry}>Retry connection</button>}</div>;
-  return <ChartSettingsProvider workspace={workspace}><DrawingProvider workspace={workspace}><SessionDesk workspace={workspace}/></DrawingProvider></ChartSettingsProvider>;
+  return <DisplayTimeProvider workspace={workspace}><ChartSettingsProvider workspace={workspace}><DrawingProvider workspace={workspace}><SessionDesk workspace={workspace}/></DrawingProvider></ChartSettingsProvider></DisplayTimeProvider>;
 }
 function SessionDesk({workspace}) {
+  const {quoteStamp,zoneLabel}=useDisplayTime();
   const [section, setSection] = useState(currentSection);
   const {user,signOut}=useAuth();
   const [logoutBusy,setLogoutBusy]=useState(false),[logoutError,setLogoutError]=useState('');
@@ -205,7 +208,7 @@ function SessionDesk({workspace}) {
     {dialog === 'level-setup' && selectedEntry && <Modal title={`${selectedEntry.symbol} ${levelView?.historical?'historical levels':'setup'}`} subtitle={levelView?.historical?`Saved list · ${formatDate(viewedSheet.date)}`:"Your levels, chart and break & retest checks"} onClose={()=>setDialog(null)} wide className="level-setup-modal"><LevelSetup key={selectedEntry.id} entry={selectedEntry} sheet={viewedSheet} historical={!!levelView?.historical} result={quotes[quoteKey(selectedEntry)]} initialInterval={setupInterval} onPlan={snapshot=>{setPlanSnapshot(snapshot);setDialog('plan');}}/></Modal>}
     {dialog === 'level-link' && selectedLevel && <LevelLinkDialog instrument={selectedLevel} destination={levelDestination(selectedLevel,watchlist)} historical={!!levelView?.historical} onChoose={openLevelSetup} onAdd={()=>setDialog('level-add')} onClose={()=>setDialog(null)}/>}
     {dialog === 'level-add' && selectedLevel && <AddSymbolDialog watchlist={watchlist} initialSymbol={selectedLevel.symbol} onClose={()=>setDialog(null)} onAdd={entry=>{workspace.update(current=>addWatchEntry(current,entry));openLevelSetup(entry);setToast(`${entry.id} added to your watchlist.`);}}/>}
-    {dialog === 'market-data' && <Modal title="Market data" subtitle="Yahoo Finance · interim personal data source" onClose={()=>setDialog(null)}><div className="market-source-details"><p>Prices and candles come from Yahoo Finance and refresh automatically every minute while this app is visible. Quotes show their original observation time in Skopje.</p><p>SPY, QQQ and U.S. stocks use available Yahoo pre-market and after-hours chart prices during those sessions. Their timestamps are source bar times; changes compare with the last regular close. If no extended-hours observation is available, the last regular-session quote stays labeled with its original date.</p><p>ES/NQ are Yahoo’s selected futures contracts with a 10-minute source delay. VIX and the 10-year yield have a 15-minute source delay. U.S. stock delivery can vary; this connection is not a guaranteed real-time feed.</p><p>The 2-year rate is the U.S. Treasury’s daily par yield, refreshed hourly. It is a daily reference, not an intraday quote.</p><p>Charts, zone-flip confirmation and break-and-retest signals use regular-session candles only. Pre-market prices provide level context; strategy confirmation starts at the regular open. 4-hour candles aggregate actual hourly bars from the U.S. session open; the final bar is shorter. W/M aggregate daily history. Cached readings are labeled; unavailable symbols stay blank. Options bid/ask and Greeks still need an options feed.</p><a className="text-button" href="https://help.yahoo.com/kb/SLN2310.html" target="_blank" rel="noopener noreferrer">Yahoo data sources & delays<ArrowUpRight size={16}/></a></div></Modal>}
+    {dialog === 'market-data' && <Modal title="Market data" subtitle="Yahoo Finance · interim personal data source" onClose={()=>setDialog(null)}><div className="market-source-details"><p>Prices and candles come from Yahoo Finance and refresh automatically every minute while this app is visible. Quotes show their original observation time in {zoneLabel}.</p><p>SPY, QQQ and U.S. stocks use available Yahoo pre-market and after-hours chart prices during those sessions. Their timestamps are source bar times; changes compare with the last regular close. If no extended-hours observation is available, the last regular-session quote stays labeled with its original date.</p><p>ES/NQ are Yahoo’s selected futures contracts with a 10-minute source delay. VIX and the 10-year yield have a 15-minute source delay. U.S. stock delivery can vary; this connection is not a guaranteed real-time feed.</p><p>The 2-year rate is the U.S. Treasury’s daily par yield, refreshed hourly. It is a daily reference, not an intraday quote.</p><p>Charts, zone-flip confirmation and break-and-retest signals use regular-session candles only. Pre-market prices provide level context; strategy confirmation starts at the regular open. 4-hour candles aggregate actual hourly bars from the U.S. session open; the final bar is shorter. W/M aggregate daily history. Cached readings are labeled; unavailable symbols stay blank. Options bid/ask and Greeks still need an options feed.</p><a className="text-button" href="https://help.yahoo.com/kb/SLN2310.html" target="_blank" rel="noopener noreferrer">Yahoo data sources & delays<ArrowUpRight size={16}/></a></div></Modal>}
     {dialog === 'market-hours' && <Modal title="Market hours" subtitle="U.S. stocks & ETFs · your local session clock" onClose={()=>setDialog(null)}><MarketHours/></Modal>}
     {dialog === 'tradingview' && <TradingViewDialog symbol={symbol||primarySymbol} marketKey={marketKey} timeframe={timeframe} levelText={levelText} sheet={sheet} onClose={() => setDialog(null)}/>}
     {dialog === 'import' && <ImportDialog kind="levels" initial={levelText} sourceDates={levelSourceDates} onClose={() => setDialog(null)} onImport={(merged,text) => { workspace.update(current=>importLevelList(current,text)); setDialog(null); setToast(`${merged.updated.length} updated · ${merged.added.length} added · ${merged.carried.length} carried forward for ${formatDate(merged.date)}.`); }}/ >}
@@ -218,6 +221,7 @@ function SessionDesk({workspace}) {
 }
 
 function WatchlistTable({ compact = false, watchlist, sheet, quotes, onInspect, onViewAll, onImport, onAdd, onRemove, removedEntry, onUndoRemove, onDismissRemove }) {
+  const {quoteStamp}=useDisplayTime();
   const [query,setQuery]=useState(''),[status,setStatus]=useState('All'),[group,setGroup]=useState('All'),[sort,setSort]=useState('Default');
   const resetFilters=()=>{setQuery('');setStatus('All');setGroup('All');};
   let rows=compact?overviewWatchlist(watchlist):watchlist.filter(x=>`${x.symbol} ${x.exchange}`.toLowerCase().includes(query.toLowerCase()));
@@ -286,6 +290,7 @@ function ImportDialog({ kind, initial, sourceDates, onClose, onImport }) {
 }
 
 function PlanDialog({ symbol, marketKey, setup, context, quote, onClose, onSave }) {
+  const {quoteStamp}=useDisplayTime();
   const [scenario, setScenario] = useState(setup?.direction==='bullish'?'continuation':'rejection');
   const [strategy, setStrategy] = useState('');
   const [expiration, setExpiration] = useState('');
@@ -302,6 +307,7 @@ function PlanDialog({ symbol, marketKey, setup, context, quote, onClose, onSave 
   </form></Modal>;
 }
 function InstrumentDialog({entry,sheet,result,onClose}) {
+  const {quoteStamp}=useDisplayTime();
   const q=result?.quote,instrument=matchingInstrument(entry,sheet),state=entryState(entry,sheet,result);
   return <Modal title={entry.symbol} subtitle={`${entry.exchange} · ${groupLabels[entry.group]} · ${q?.provider||'Market data'}`} onClose={onClose}><div className="instrument-detail-price"><strong>{quotePrice(q)}</strong><Status text={state.label} tone={state.tone}/></div><p className="detail-reason">{state.reason}</p>{q&&<><div className="detail-metric"><span>Day change</span><strong className={quoteTone(q)}>{quoteChange(q)}</strong></div><p className="form-help">{q.name} · {quoteStamp(q)}<br/>{quoteDelay(q)}{result.status==='stale'?` · ${result.message}`:''}</p><div className="detail-metric"><span>Session volume</span><strong>{q.volume==null?'—':q.volume.toLocaleString('en-US')}</strong></div></>}<h3 className="detail-heading">Your listed levels <small>· {instrument?.sourceDate||sheet.date}{instrument?` · ${instrument.timeframe}${instrument.carriedForward?' · Carried forward':''}`:''}</small></h3>{instrument?instrument.zones.map((z,i)=><div className="level-row" key={i}><span className={z.type==='S'?'red':z.type==='D'?'green':'muted'}>{zoneName(z.type)}</span><strong>{zoneText(z)}</strong></div>):<p className="muted">No matching levels in your sheet. {entry.group==='CRYPTO'&&'Your exchange’s spot crypto quote is not connected.'}</p>}<div className="level-info"><Info size={18}/><p>{entry.group==='FUTURES'?'Yahoo futures are context only. The source contract and adjustment convention may differ from your continuous chart.':'The zone status describes price location. It does not confirm a price reaction or options liquidity.'}</p></div></Modal>;
 }

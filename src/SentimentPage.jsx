@@ -1,8 +1,9 @@
+import {useDisplayTime} from './DisplayTime';
 import {useMemo,useState} from 'react';
 import {ArrowClockwise,CaretRight,Gauge} from '@phosphor-icons/react';
 import {SentimentCard} from './Briefing';
 import {useFeed,SourceLink,Unavailable,FeedStatus} from './Feeds';
-import {briefingTime} from './data/calendar.mjs';
+
 import {sentimentScore} from './data/sentiment.mjs';
 import './sentiment.css';
 
@@ -44,6 +45,7 @@ function History({feed,now}){
  </section>;
 }
 export default function SentimentPage({briefing,onSettings}){
+  const {briefingTime,zoneLabel}=useDisplayTime();
  const details=useFeed('/api/sentiment/details');
  const fallback={status:details.status,message:details.message,data:null};
  const indicators=details.data?.components||fallback,history=details.data?.history||fallback;
@@ -56,8 +58,8 @@ export default function SentimentPage({briefing,onSettings}){
    <p className="sentiment-detail-note">These are sentiment scores out of 100, not stock prices, VIX levels or put/call ratios. Open an indicator to see what it measures.</p>
    {!indicators.data&&<Unavailable feed={indicators}/>}
    {indicators.status==='stale'&&<p className="sentiment-detail-note amber" role="status">{indicators.message}</p>}
-   {indicators.data&&<p className="sentiment-detail-note">{indicators.data.observedAt?`Indicator snapshot · ${briefingTime(indicators.data.observedAt)} Skopje`:'The provider does not supply an observation time for this component snapshot; its freshness cannot be confirmed.'}{indicators.fetchedAt?` Retrieved ${briefingTime(indicators.fetchedAt)} Skopje.`:''} Components and the headline may update separately.</p>}
-   <div className="sentiment-components-grid">{components.map(([id,title,description],index)=>{const item=readings.get(id);return <details className={`panel sentiment-component ${item?tone(item.rating):''}`} key={id}><summary><span className="sentiment-component-number">0{index+1}</span><h3>{title}</h3><CaretRight size={16}/><div className="sentiment-component-reading"><strong>{item?sentimentScore(item.score):'—'}</strong><span>{item?item.rating:'Not supplied'}</span></div>{item&&<div className="sentiment-component-scale" aria-hidden="true"><i style={{width:`${item.score}%`}}/></div>}</summary><div className="sentiment-component-description"><p>{description}</p>{item&&<small>{item.observedAt?`Observed ${briefingTime(item.observedAt)} Skopje`:'Individual observation time not supplied.'}</small>}</div></details>;})}</div>
+   {indicators.data&&<p className="sentiment-detail-note">{indicators.data.observedAt?`Indicator snapshot · ${briefingTime(indicators.data.observedAt)} ${zoneLabel}`:'The provider does not supply an observation time for this component snapshot; its freshness cannot be confirmed.'}{indicators.fetchedAt?` Retrieved ${briefingTime(indicators.fetchedAt)} ${zoneLabel}.`:''} Components and the headline may update separately.</p>}
+   <div className="sentiment-components-grid">{components.map(([id,title,description],index)=>{const item=readings.get(id);return <details className={`panel sentiment-component ${item?tone(item.rating):''}`} key={id}><summary><span className="sentiment-component-number">0{index+1}</span><h3>{title}</h3><CaretRight size={16}/><div className="sentiment-component-reading"><strong>{item?sentimentScore(item.score):'—'}</strong><span>{item?item.rating:'Not supplied'}</span></div>{item&&<div className="sentiment-component-scale" aria-hidden="true"><i style={{width:`${item.score}%`}}/></div>}</summary><div className="sentiment-component-description"><p>{description}</p>{item&&<small>{item.observedAt?`Observed ${briefingTime(item.observedAt)} ${zoneLabel}`:'Individual observation time not supplied.'}</small>}</div></details>;})}</div>
   </section>
   <section className="panel sentiment-about"><Gauge size={25}/><div><h2>Reading the index</h2><p>Lower scores indicate fear; higher scores indicate greed. CNN combines seven measures of market behaviour into one index. Compare it with your levels, price action and the session’s events. It does not confirm a break-and-retest entry.</p><p>The history shows the index score. Raw historical series for the individual indicators are not supplied by this connection.</p></div></section>
  </div>;
