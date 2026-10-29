@@ -14,7 +14,7 @@ const YAHOO = 'https://finance.yahoo.com/';
 const MARKET_NEWS = '/api/news?symbols=DIA%2CIWM%2CQQQ%2CSPY';
 const marketTime = briefingTime;
 export function useBriefing({manual,setManual,section='overview'}) {
-  const sentiment=useFeed('/api/sentiment',section==='overview'||section==='sentiment');
+  const sentiment=useFeed('/api/sentiment');
   const news=useFeed(MARKET_NEWS,section==='overview'||section==='news');
   const now=useMinuteClock();
   const range=periodRange('upcoming',marketDay(now));
@@ -22,6 +22,15 @@ export function useBriefing({manual,setManual,section='overview'}) {
   const [calendarPeriod,setCalendarPeriod]=useState('week');
   const earnings=useFeed(`/api/earnings?${new URLSearchParams(range)}`,section==='overview');
   return {sentiment,calendar,news,manual,setManual,now,calendarPeriod,setCalendarPeriod,earnings};
+}
+export function SidebarSentiment({briefing,active,onOpen}) {
+  const feed=briefing.sentiment,reading=feed.data||briefing.manual,isManual=!feed.data&&Boolean(briefing.manual),display=sentimentDisplay(feed,briefing.now);
+  const rating=reading?.rating||'',tone=display.outdated&&!isManual?'old':rating.toLowerCase().includes('fear')?'fear':rating.toLowerCase().includes('greed')?'greed':'neutral';
+  const status=reading?(isManual?'Manual reading':display.outdated||display.warning?display.label:null):feed.status==='loading'?'Checking score…':'Reading unavailable';
+  const title=reading?`CNN Fear & Greed · ${sentimentScore(reading.score)} / 100 · ${rating} · ${isManual?'Manual reading':display.label} · ${marketTime(reading.observedAt)} Skopje`:'CNN Fear & Greed · '+status;
+  return <button className={`nav-item sidebar-sentiment ${active?'active':''}`} data-tone={tone} aria-label="Fear & Greed" aria-describedby="sidebar-sentiment-description" title={title} aria-current={active?'page':undefined} onClick={onOpen}>
+    <Gauge size={22}/><span className="sidebar-sentiment-copy" id="sidebar-sentiment-description"><span className="sidebar-sentiment-label">Fear & Greed</span><span id="sidebar-sentiment-reading" className="sidebar-sentiment-reading"><strong>{reading?sentimentScore(reading.score):'—'}</strong>{reading&&<small>/ 100</small>}<span>{rating}</span></span>{status&&<small className="sidebar-sentiment-status">{status}</small>}</span>
+  </button>;
 }
 function NewsImage({image,priority=false}) {
   const [failed,setFailed]=useState(null);

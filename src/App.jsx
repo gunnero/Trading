@@ -7,7 +7,7 @@ const EarningsPage=React.lazy(()=>import('./EarningsPage'));
 const TradeJournal=React.lazy(()=>import('./TradeJournal'));
 import { PriceChart, Sparkline } from './Charts';
 import { TIMEFRAMES } from './data/candles';
-import { useBriefing, BriefingStrip, BriefingPage, NewsPage, TV_SCRIPT } from './Briefing';
+import { useBriefing, BriefingStrip, BriefingPage, NewsPage, SidebarSentiment, TV_SCRIPT } from './Briefing';
 import { formatDate, formatPrice, zoneText, zoneName, parseLevels, mergeLevelSheets, parseWatchlist, matchingInstrument, locate, toneFor } from './data/market';
 import { useWorkspace } from './useWorkspace';
 import { MarketClock, MarketHours } from './MarketClock';
@@ -149,7 +149,7 @@ function SessionDesk({workspace}) {
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
       <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${section === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={section === id ? 'page' : undefined}><Icon size={22} weight={section === id ? 'regular' : 'light'}/><span>{title}</span>{id === 'review' && plans.length > 0 && <span className="nav-count">{plans.length}</span>}</button>)}</nav>
       <div className="sidebar-account-area">
-        <button className={`nav-item sidebar-sentiment ${section==='sentiment'?'active':''}`} aria-label="Fear & Greed" title="Fear & Greed" aria-current={section==='sentiment'?'page':undefined} onClick={()=>navigate('sentiment')}><Gauge size={22}/><span>Fear & Greed</span></button>
+        <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>
         <div className="sidebar-profile">
           <button className="nav-item account-nav" aria-label="Account and security" title="Account and security" onClick={()=>{setMenuOpen(false);setDialog('account');}}><UserCircle size={32}/><span className="account-nav-copy"><span className="account-nav-label">{user.username}</span><small className="account-nav-profile">Account & security</small></span><CaretRight className="account-nav-arrow" size={15}/></button>
           <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>
