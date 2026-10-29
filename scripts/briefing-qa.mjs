@@ -110,9 +110,9 @@ try {
   await expect(page.getByRole('heading',{name:'News',exact:true,level:1})).toBeVisible();
   await expect(page.locator('.news-article').first()).toBeVisible();
   if(width===390){
-   await page.getByRole('button',{name:'Open navigation',exact:true}).click();await nav().click();
+   await page.getByRole('button',{name:'More navigation',exact:true}).click();await nav().click();
    await expect(page.locator('.news-panel')).toHaveCount(0);
-   await page.getByRole('button',{name:'Open navigation',exact:true}).click();await nav('News').click();
+   await page.getByRole('button',{name:'More navigation',exact:true}).click();await nav('News').click();
    await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
    await expect(page.locator('.news-article').first()).toBeVisible({timeout:20000});
    await page.screenshot({path:'docs/qa/news-page-mobile.png',fullPage:false});
@@ -145,7 +145,7 @@ try {
  const fixtureArticle=(id,image)=>({id,title:`Fixture market headline ${id}`,url:`https://finance.yahoo.com/news/${id}.html`,publisher:'Fixture publisher',publishedAt:iso,economy:false,image});
  let newsResult=success({articles:[fixtureArticle('latest',{url:imageUrl,alt:'Fixture preview'}),fixtureArticle('missing',null),fixtureArticle('broken',{url:brokenImage,alt:''})]});
  await page.route('**/api/news?**',route=>route.fulfill({json:newsResult}));
- await page.reload();await expect(page.locator('.overview-news')).toContainText('Fixture market headline latest');
+ await page.reload();await nav('Overview').click();await expect(page.locator('.overview-news')).toContainText('Fixture market headline latest');
  await page.getByRole('button',{name:'Open News',exact:true}).click();
  await expect(page.locator('.news-lead img')).toBeVisible();
  await expect.poll(()=>page.locator('.news-lead img').evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
