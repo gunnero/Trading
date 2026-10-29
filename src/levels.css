@@ -1,0 +1,166 @@
+/* Key levels: the selected Focus & Scan layout, using the desk's shared tokens. */
+.app-shell[data-section="levels"] main{padding:0 0 20px}
+.app-shell[data-section="levels"] .workspace-save-status,.app-shell[data-section="levels"] .app-footer{margin-left:28px;margin-right:28px}
+.levels-workbench{min-width:0;background:var(--bg)}
+.level-board-heading{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 32px 18px;border-bottom:1px solid var(--border)}
+.level-board-heading .eyebrow{display:block;line-height:12px;font-size:11px;letter-spacing:.13em;color:var(--muted)}
+.level-board-heading h1{font-size:27px;line-height:1.2;margin:4px 0 7px;letter-spacing:-.6px}
+.level-board-heading p{font-size:13px;color:var(--muted);margin:0}
+.level-board-heading>.button{min-height:42px;flex-shrink:0}
+.level-board-controls.level-history-controls{display:flex;align-items:center;gap:18px;padding:14px 32px;margin:0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.level-board-controls>label:not(.levels-search){display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);flex-shrink:0}
+.level-board-controls select{min-height:38px;max-width:220px;background:#0e191e;border:1px solid #30464f;border-radius:4px;padding:8px 28px 8px 10px;color:#e8edf0;font:inherit}
+.level-board-controls .levels-search{display:flex;align-items:center;margin:0;flex:1;min-width:235px;max-width:none;height:40px;background:#0d181d}
+.level-board-controls .levels-search input{width:100%;min-width:0;font-size:12px}
+.level-guide{position:relative;margin-left:auto;font-size:11px;color:var(--muted)}
+.level-guide summary{display:flex;align-items:center;gap:9px;cursor:pointer;min-height:38px;list-style:none}
+.level-guide summary::-webkit-details-marker{display:none}
+.level-guide p{position:absolute;right:0;top:100%;z-index:8;margin:5px 0;padding:16px;width:280px;line-height:1.6;background:#16262d;border:1px solid #39505a;border-radius:5px;box-shadow:0 10px 26px #0005}
+.level-board-body{display:grid;grid-template-columns:minmax(245px,25%) minmax(0,1fr);min-height:760px}
+.level-instrument-nav{border-right:1px solid var(--border);padding:26px 18px 30px 26px;align-self:start;max-height:1100px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#29434b transparent}
+.level-nav-group+.level-nav-group{border-top:1px solid var(--border);margin-top:20px;padding-top:20px}
+.level-nav-group h2{font-size:14px;font-weight:600;margin:0 8px 10px;color:#e8edf0}
+.level-nav-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:14px 12px;min-height:74px;border:1px solid transparent;border-bottom-color:#23373f;border-radius:0;color:var(--muted)}
+.level-nav-item>span:first-child{display:grid;gap:5px;min-width:0;flex:1}
+.level-nav-item strong{font-size:16px;color:#e8edf0}
+.level-nav-item small{font-size:11px;line-height:1.45}
+.level-nav-item .level-nav-count{font-size:12px;white-space:nowrap}
+.level-nav-item>svg{flex-shrink:0}
+.level-nav-item:hover{background:#152329}
+.level-nav-item.selected{background:#142c30;border:1px solid #225b5b;border-radius:4px;box-shadow:inset 3px 0 0 var(--green)}
+.level-nav-diff{color:var(--muted)}
+.level-nav-diff.changed,.level-nav-diff.added{color:var(--amber)}
+.level-nav-diff.removed{color:var(--red)}
+.level-browse{border-top:1px solid var(--border);padding:22px 8px 0;margin-top:24px}
+.level-browse .text-button{color:var(--muted);width:100%;justify-content:space-between;font-size:13px;min-height:36px}
+.level-browse p{font-size:12px;color:var(--muted);line-height:1.6;margin:8px 0}
+.level-focus{padding:24px 28px 26px;min-width:0}
+.level-focus-heading{display:flex;align-items:center;gap:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.level-focus-name{display:flex;flex-wrap:wrap;align-items:center;gap:22px;margin-right:auto;min-width:0}
+.level-focus-name h2{overflow-wrap:anywhere;min-width:0;max-width:100%;margin:0;font-size:36px;letter-spacing:-1px;line-height:1.2}
+.level-focus-name>div{display:grid;gap:7px;color:var(--muted);font-size:13px}
+.level-focus-name small{font-size:12px;line-height:1.45}
+.level-focus-price{display:grid;gap:5px;flex-shrink:0}
+.level-focus-price small{font-size:11px;color:var(--muted)}
+.level-focus-price strong{font-size:23px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.level-focus-location{border-left:1px solid var(--border);padding-left:24px;display:grid;gap:6px;min-width:135px;max-width:210px}
+.level-focus-location strong{font-size:13px}
+.level-focus-location small{font-size:11px;color:var(--muted);line-height:1.5}
+.level-focus-open{white-space:nowrap;flex-shrink:0;min-height:40px}
+.level-focus-source{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;font-size:10px;line-height:1.5;color:var(--muted);padding:12px 0 8px}
+.level-focus-note{font-size:11px;line-height:1.6;color:var(--muted);margin:0 0 12px}
+.level-focus-chart.chart-panel{min-height:0;border:0;border-radius:0;background:transparent;overflow:visible}
+.level-focus-chart .compact-chart-header{padding:10px 0 13px;min-height:0;flex-wrap:wrap;gap:10px;border-bottom:0;background:transparent}
+.level-focus-chart .chart-header-left{flex:1;min-width:250px}
+.level-focus-chart .drawing-chart-frame{height:430px;min-height:430px}
+.level-focus-chart .chart-footnote{padding:8px 0 0}
+.level-nearest{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:24px}
+.level-nearest-group{min-width:0}
+.level-nearest-group+.level-nearest-group{border-left:1px solid var(--border);padding-left:26px}
+.level-nearest-heading,.level-nearest-row{display:grid;grid-template-columns:minmax(84px,1fr) minmax(126px,1fr) 62px;align-items:center;gap:10px}
+.level-nearest-heading{padding-bottom:12px;border-bottom:1px solid var(--border);font-size:10px;color:var(--muted)}
+.level-nearest-heading h3{font-size:14px;line-height:1.5;color:#e8edf0;margin:0;font-weight:600;text-transform:none}
+.level-nearest-heading h3::first-letter{text-transform:uppercase}
+.level-nearest-row{padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;font-variant-numeric:tabular-nums}
+.level-nearest-row>span:first-child{border-left:4px solid var(--red);padding:2px 0 2px 10px}
+.level-nearest-row.demand>span:first-child{border-color:var(--green)}
+.level-nearest-row strong{font-size:13px;white-space:nowrap;font-weight:500}
+.level-nearest-row>span:last-child{color:var(--muted)}
+.level-nearest-empty{font-size:12px;color:var(--muted);padding:12px 0}
+.level-focus-bottom{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:20px}
+.level-focus-bottom .text-button{font-size:13px;min-height:36px}
+.level-focus-bottom .text-button:disabled{opacity:1;color:var(--muted);cursor:default}
+.level-focus-bottom>small{font-size:10px;color:var(--muted);text-align:right}
+.level-exact-zones{margin-top:14px;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.level-exact-zones .level-focus-note{padding:10px 14px 0}
+.level-exact-zones .level-row>div{display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.level-focus-unavailable{display:flex;align-items:center;justify-content:center;flex-direction:column;min-height:320px;border:1px solid var(--border);padding:24px;text-align:center;border-radius:4px;color:var(--muted)}
+.level-focus-unavailable h3{font-size:18px;color:#e8edf0;margin:14px 0 8px}
+.level-focus-unavailable p{max-width:460px;font-size:13px;line-height:1.7}
+.levels-workbench .level-history-notice{margin:0;padding:14px 32px;justify-content:space-between;border-radius:0;gap:16px;flex-wrap:wrap}
+.levels-workbench .level-comparison-summary{margin:0;padding:14px 32px;border-width:0 0 1px;border-radius:0}
+@media(max-width:1550px){
+ .level-board-controls.level-history-controls{gap:12px 20px}
+ .level-guide summary>span{display:none}
+ .level-board-body{grid-template-columns:245px minmax(0,1fr)}
+ .level-instrument-nav{padding:24px 12px 24px 18px}
+ .level-focus{padding:22px}
+ .level-focus-heading{gap:16px;flex-wrap:wrap}
+ .level-focus-name{gap:16px}
+ .level-focus-name>div{font-size:12px}
+ .level-focus-name h2{font-size:30px}
+ .level-focus-location{padding-left:16px}
+ .level-focus-open{font-size:12px;padding:8px 12px}
+ .level-nearest{gap:18px}
+ .level-nearest-group+.level-nearest-group{padding-left:18px}
+ .level-nearest-heading,.level-nearest-row{grid-template-columns:minmax(65px,1fr) minmax(126px,1fr) 55px;gap:8px}
+ .level-nearest-heading h3{font-size:13px}
+ .level-nearest-row,.level-nearest-row strong{font-size:12px}
+}
+@media(max-width:1100px){
+ .level-board-heading{padding:24px}
+ .level-board-controls.level-history-controls{padding:14px 24px}
+ .level-board-body{grid-template-columns:210px minmax(0,1fr)}
+ .level-instrument-nav{padding:20px 10px}
+ .level-nav-item{padding:12px 9px;gap:6px}
+ .level-nav-item .level-nav-count{display:none}
+ .level-focus{padding:20px}
+ .level-focus-name{width:100%;margin-bottom:2px}
+ .level-focus-name>div{gap:3px}
+ .level-focus-open{margin-left:auto}
+ .level-focus-location{flex:1;min-width:100px}
+ .level-focus-chart .chart-header-left{min-width:0}
+ .level-nearest{grid-template-columns:1fr;gap:24px}
+ .level-nearest-group+.level-nearest-group{padding:0;border:0}
+ .level-nearest-heading,.level-nearest-row{grid-template-columns:1fr minmax(130px,auto) 70px}
+ .level-focus-bottom{align-items:flex-start;flex-direction:column;gap:4px}
+ .level-focus-bottom>small{text-align:left}
+}
+@media(max-width:760px){
+ .level-board-heading{padding:20px 14px;gap:12px;align-items:center}
+ .level-board-heading h1{font-size:24px}
+ .level-board-heading p{font-size:11px;line-height:1.6}
+ .level-board-heading .eyebrow{font-size:9px}
+ .level-board-heading>.button{padding:8px 10px;font-size:11px;min-height:44px;gap:6px}
+ .level-board-controls.level-history-controls{padding:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+ .level-board-controls>label:not(.levels-search){display:grid;gap:7px;font-size:11px;min-width:0}
+ .level-board-controls select{width:100%;max-width:none;min-width:0;font-size:12px;min-height:44px;padding:8px}
+ .level-board-controls .levels-search{grid-column:1/-1;min-width:0;width:100%;height:44px}
+ .level-board-controls .levels-search input{font-size:16px}
+ .level-guide{grid-column:1/-1;justify-self:start;margin:0}
+ .level-guide summary{min-height:30px}
+ .level-guide summary>span{display:block}
+ .level-guide p{position:static;width:auto;max-width:100%;box-shadow:none;margin:6px 0 0}
+ .level-board-body{display:flex;flex-direction:column;min-height:0}
+ .level-instrument-nav{border-right:0;border-bottom:1px solid var(--border);padding:16px 14px;max-height:none;display:flex;gap:18px;flex-wrap:wrap}
+ .level-nav-group{width:100%;min-width:0}
+ .level-nav-group+.level-nav-group{margin:0;padding:0;border:0}
+ .level-nav-group[data-group="All instruments"] .level-nav-items{max-height:260px;overflow-y:auto}
+ .level-nav-group h2{font-size:12px;margin:0 0 8px}
+ .level-nav-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .level-nav-item{min-height:60px;border:1px solid var(--border);border-radius:4px;padding:9px 10px}
+ .level-nav-item strong{font-size:14px}
+ .level-nav-item small{font-size:10px}
+ .level-browse{margin:0;padding:0;width:100%;border:0}
+ .level-browse p{display:none}
+ .level-browse .text-button{min-height:44px}
+ .level-focus{padding:20px 14px}
+ .level-focus-heading{gap:14px}
+ .level-focus-name h2{font-size:30px}
+ .level-focus-name small{font-size:11px}
+ .level-focus-price strong{font-size:22px}
+ .level-focus-price small{font-size:10px}
+ .level-focus-location{padding-left:14px}
+ .level-focus-open{min-height:44px}
+ .level-focus-source{font-size:10px}
+ .level-focus-chart .drawing-chart-frame{height:360px;min-height:360px}
+ .level-focus-chart .compact-chart-header{padding:8px 0 12px}
+ .level-focus-chart .chart-header-icons{gap:0}
+ .level-focus-chart .chart-header-icons button{width:44px}
+ .level-nearest{margin-top:20px}
+ .level-nearest-heading,.level-nearest-row{grid-template-columns:minmax(62px,1fr) minmax(114px,auto) 52px;gap:6px}
+ .level-nearest-row strong{font-size:11px}
+ .level-focus-bottom .text-button{min-height:44px}
+ .levels-workbench .level-history-notice,.levels-workbench .level-comparison-summary{padding:14px}
+ .app-shell[data-section="levels"] .workspace-save-status,.app-shell[data-section="levels"] .app-footer{margin-left:14px;margin-right:14px}
+}

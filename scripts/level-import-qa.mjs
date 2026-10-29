@@ -21,7 +21,7 @@ try{
   await page.route('**/api/market/quotes?*',route=>{const symbols=new URL(route.request().url()).searchParams.get('symbols').split(',');return route.fulfill({json:{quotes:Object.fromEntries(symbols.map(symbol=>{const result=fixtureQuote(symbol);if(result.quote)result.quote.sessionDate='2026-10-26';return [symbol,result];}))}});});
   await page.route('**/api/market/setup?*',route=>{const u=new URL(route.request().url()),symbol=u.searchParams.get('symbol'),result=fixtureQuote(symbol);if(result.quote)result.quote.sessionDate='2026-10-26';return route.fulfill({json:{...result,symbol,timeframe:u.searchParams.get('interval'),from:u.searchParams.get('from'),bars:[]}});});
   await page.route('**/api/briefing/**',route=>route.fulfill({status:503,json:{status:'unavailable',message:'Isolated QA'}}));
-  await page.goto(runtime.url);await expect(page.locator('.topbar')).toBeVisible();const before=await read();
+  await page.goto(runtime.url+'/#levels');await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();const before=await read();
   await openImport(monday);await expect(page.getByLabel('Level import preview')).toContainText('1 updated · 1 added · 39 carried forward');
   await page.getByText('Instruments kept from earlier lists',{exact:true}).click();await expect(page.getByLabel('Level import preview')).toContainText('NQ · FUT');
   expect((await read()).revision).toBe(before.revision);await page.getByRole('dialog').screenshot({path:'docs/qa/level-import-preview.png'});
@@ -29,7 +29,7 @@ try{
   expect(Object.keys(sheet.instruments)).toHaveLength(41);expect(sheet.instruments.QQQ.zones).toEqual([{type:'S',low:719,high:720}]);expect(sheet.instruments.NVDA.sourceDate).toBe('2026-10-23');
   for(const field of ['watchText','plans','preferences','chartDrawings','chartSettings'])expect(current.data[field]).toEqual(before.data[field]);
   mark('Daily import previews and saves whole-row replacements, additions and 39 preserved instruments without disturbing other work');
-  await runtime.stop();await runtime.start();await page.reload();await nav('Key levels');await page.getByLabel('Search levels').fill('NVDA');await expect(page.locator('.level-instrument .level-card-date')).toContainText('Carried forward');await expect(page.locator('.level-instrument time')).toHaveAttribute('datetime','2026-10-23');
+  await runtime.stop();await runtime.start();await page.reload();await nav('Key levels');await page.getByLabel('Search levels').fill('NVDA');await expect(page.locator('.level-focus-name')).toContainText('Carried forward');await expect(page.locator('.level-focus-name time')).toHaveAttribute('datetime','2026-10-23');
   expect((await read()).data.levelSourceDates).toEqual(current.data.levelSourceDates);mark('Carry-forward dates and levels survive server restart and browser reload');
   await nav('Overview');await page.getByRole('tab',{name:/SPY/}).click();await expect(page.locator('.notice')).toContainText('Carried-forward levels dated Oct 23, 2026');await expect(page.getByRole('button',{name:'Review SPY plan'})).toBeDisabled();
   await page.locator('section[aria-label="SPY chart"]').getByRole('button',{name:'Levels',exact:true}).click();await expect(page.getByLabel('Chart levels settings')).toContainText('Carried forward from 2026-10-23');await expect(page.getByRole('img',{name:/SPY Yahoo Finance 4h/})).toBeVisible();

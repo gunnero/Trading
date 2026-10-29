@@ -20,7 +20,7 @@
     "start": "node server/index.mjs",
     "test:watchlist": "node --test tests/watchlist.test.mjs && node scripts/qa-runner.mjs watchlist",
     "test:level-history": "node --test tests/level-history.test.mjs && node scripts/level-history-qa.mjs",
-    "test:level-cards": "node --test tests/level-listings.test.mjs && node scripts/level-cards-qa.mjs",
+    "test:level-cards": "node --test tests/level-listings.test.mjs tests/level-focus.test.mjs && node scripts/level-cards-qa.mjs",
     "test:levels": "node --test tests/level-import.test.mjs && node scripts/level-import-qa.mjs",
     "test:workspace": "node --test tests/workspace.test.mjs",
     "test:workspace:browser": "node scripts/workspace-qa.mjs",

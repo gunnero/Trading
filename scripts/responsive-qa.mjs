@@ -62,7 +62,7 @@ try{
   expect(await mobile.evaluate(()=>document.body.style.overflow)).toBe('hidden');
   await mobile.keyboard.press('Shift+Tab');expect(await mobile.evaluate(()=>document.activeElement.closest('.sidebar')!==null)).toBe(true);
   await mobile.keyboard.press('Escape');await expect(quick.getByRole('button',{name:'More navigation'})).toBeFocused();
-  await quick.getByRole('button',{name:'More navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  await quick.getByRole('button',{name:'More navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await quick.getByRole('button',{name:'Overview',exact:true}).tap();const panel=mobile.locator('.chart-panel'),chart=panel.locator('.price-chart');await expect(chart).toBeVisible();
   await chart.scrollIntoViewIfNeeded();await expect(panel.locator('.touch-chart-shell')).toHaveAttribute('data-touch-active','false');
   const cdp=await mobile.context().newCDPSession(mobile),box=await chart.boundingBox(),start=await mobile.evaluate(()=>scrollY);

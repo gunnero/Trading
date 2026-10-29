@@ -35,11 +35,11 @@ try{
   await account.getByRole('button',{name:'Close account settings'}).click();await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
   mark('Private one-use activation, exact owner profile, local QR enrollment and recovery-code confirmation work');
   // Existing workspace edits still autosave through the protected API.
-  await page.getByRole('button',{name:'Key levels',exact:true}).first().click();await expect(page.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
-  await page.reload();await expect(page.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  await page.getByRole('button',{name:'Key levels',exact:true}).first().click();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Account and security'}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   await login(page,'');await expect(page.getByRole('alert')).toContainText('Check your sign-in details');
-  await login(page,codes[0]);await expect(page.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  await login(page,codes[0]);await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   mark('Sign-out hides private content; password-only login fails with MFA; recovery sign-in restores the saved page');
   // Expiry locks the mounted workspace rather than destroying pending editor state.
   await page.getByRole('button',{name:'Account and security'}).click();await account.getByLabel('Current password',{exact:true}).fill('unsaved-field-preserved');
@@ -59,14 +59,14 @@ try{
   remembered=await chromium.launchPersistentContext(profile,launch);
   let reopened=remembered.pages()[0];await prepare(reopened);await reopened.goto(runtime.url+'/#levels');
   await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
-  await login(reopened,codes[3]);await expect(reopened.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  await login(reopened,codes[3]);await expect(reopened.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   const savedCookie=(await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session');
   expect(savedCookie.httpOnly).toBe(true);expect(savedCookie.sameSite).toBe('Strict');
   expect(savedCookie.expires-Date.now()/1000).toBeGreaterThan(29*24*60*60);
   await remembered.close();remembered=null;
   remembered=await chromium.launchPersistentContext(profile,launch);
   reopened=remembered.pages()[0];await prepare(reopened);await reopened.goto(runtime.url+'/#levels');
-  await expect(reopened.getByRole('heading',{name:'Your map for the session.'})).toBeVisible();
+  await expect(reopened.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session').value).toBe(savedCookie.value);
   await reopened.getByRole('button',{name:'Account and security'}).click();
   await reopened.getByRole('dialog',{name:'Account & security'}).getByRole('button',{name:'Sign out',exact:true}).click();

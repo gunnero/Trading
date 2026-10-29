@@ -11,7 +11,7 @@ page.on('pageerror',e=>errors.push(e.message));const mark=s=>{checks.push(s);con
 const read=async()=>await(await fetch(base+'/api/workspace')).json(),before=await read();
 const save=()=>expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
 const row=id=>page.locator(`[data-watchlist-id="${id}"]`);
-async function navigate(){await expect(page.locator('.topbar')).toBeVisible();if(await page.getByRole('button',{name:'Open navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('button',{name:'Watchlist',exact:true}).click();}
+async function navigate(){await expect(page.locator('.app-shell')).toBeVisible();if(await page.getByRole('button',{name:'Open navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('button',{name:'Watchlist',exact:true}).click();}
 async function add(symbol,exchange='NASDAQ',group='STOCKS'){
   await page.getByRole('button',{name:'Add symbol',exact:true}).click();const d=page.getByRole('dialog');
   await d.getByRole('textbox',{name:'Ticker symbol'}).fill(symbol);await d.getByRole('combobox',{name:'Asset type'}).selectOption(group);await d.getByRole('combobox',{name:'Exchange',exact:true}).selectOption(exchange);await d.getByRole('button',{name:'Add to watchlist',exact:true}).click();
