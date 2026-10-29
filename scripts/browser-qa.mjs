@@ -68,12 +68,12 @@ try {
   await snapshot('plan-dialog');
   await page.getByRole('button', { name: 'Save draft plan' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('navigation').getByRole('button', { name: /Session review/ }).click();
+  await expect(page).toHaveURL(/#journal\/plans$/);
   await expect(page.getByRole('heading', { name: 'Bearish break & retest' })).toBeVisible();
   await expect(page.getByText('$150.00', { exact: true })).toBeVisible();
-  await page.getByLabel('Review notes').fill('Sample review note. No actual trade taken.');
-  await snapshot('session-review');
-  mark('Options plan draft, budget, session review and notes');
+  await page.getByLabel('QQQ plan notes').fill('Sample review note. No actual trade taken.');
+  await snapshot('saved-plans');
+  mark('Options plan draft, budget, saved plans and notes');
 
   await openWatchlist(page);
   await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);

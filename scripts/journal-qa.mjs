@@ -39,6 +39,6 @@ try{
   await page.getByRole('button',{name:'Add trade',exact:true}).click();dialog=page.getByRole('dialog');expect(await dialog.evaluate(n=>n.scrollWidth-n.clientWidth)).toBeLessThanOrEqual(1);await dialog.evaluate(n=>{n.scrollTop=n.scrollHeight;});await expect(dialog.getByRole('button',{name:'Close trade dialog'})).toBeInViewport();await expect(dialog.getByRole('button',{name:'Add trade',exact:true})).toBeInViewport();if(width===390)await page.screenshot({path:dir+'/editor-phone.png'});await dialog.getByRole('button',{name:'Close trade dialog'}).click();
  }
  mark('Journal, calendar and editor fit phone/tablet/desktop; phone trades use stacked cards and modal controls stay reachable');
- await page.getByRole('button',{name:'Saved plans',exact:true}).click();await expect(page).toHaveURL(/#review$/);await expect(page.getByRole('heading',{name:'Session review',exact:true})).toBeVisible();await page.goBack();await expect(page).toHaveURL(/#journal$/);await expect(page.locator('.journal-trades tbody tr')).toHaveCount(4);
+ await page.getByRole('button',{name:/^Plans/}).click();await expect(page).toHaveURL(/#journal\/plans$/);await expect(page.getByRole('heading',{name:'Saved plans',exact:true})).toBeVisible();await page.goBack();await expect(page).toHaveURL(/#journal$/);await expect(page.locator('.journal-trades tbody tr')).toHaveCount(4);
  expect(errors).toEqual([]);writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
 }finally{await browser.close();await runtime.close();}

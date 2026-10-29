@@ -10,6 +10,7 @@ import {validateDrawings} from '../src/data/drawings.mjs';
 import {validateChartSettings} from '../src/data/chart-settings.mjs';
 import {validateLevelHistory} from '../src/data/level-history.mjs';
 import {validateJournal} from '../src/data/journal.mjs';
+import {validateSessionReviews} from '../src/data/session-review.mjs';
 
 export const defaultDirectory = fileURLToPath(new URL('../.data/', import.meta.url));
 export function initialWorkspace() {
@@ -54,7 +55,9 @@ export function validateWorkspace(value) {
   if(value.chartSettings!==undefined){try{chartSettings=validateChartSettings(value.chartSettings);}catch(e){throw bad(e.message);}}
   let journal;
   if(value.journal!==undefined){try{journal=validateJournal(value.journal);}catch(e){throw bad(e.message);}}
-  return {schemaVersion:1,levelText,watchText,plans,manualSentiment,preferences,...(displayTime?{displayTime}:{}),...(levelSourceDates?{levelSourceDates}:{}),...(levelHistory?{levelHistory}:{}),...(chartDrawings?{chartDrawings}:{}),...(chartSettings?{chartSettings}:{}),...(journal?{journal}:{})};
+  let sessionReviews;
+  if(value.sessionReviews!==undefined){try{sessionReviews=validateSessionReviews(value.sessionReviews);}catch(e){throw bad(e.message);}}
+  return {schemaVersion:1,levelText,watchText,plans,manualSentiment,preferences,...(displayTime?{displayTime}:{}),...(levelSourceDates?{levelSourceDates}:{}),...(levelHistory?{levelHistory}:{}),...(chartDrawings?{chartDrawings}:{}),...(chartSettings?{chartSettings}:{}),...(journal?{journal}:{}),...(sessionReviews?{sessionReviews}:{})};
 }
 export function openWorkspaceStore({directory=process.env.OPENING_BELL_DATA_DIR || defaultDirectory}={}) {
   mkdirSync(directory,{recursive:true,mode:0o700});
