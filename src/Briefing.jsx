@@ -29,7 +29,9 @@ export function SidebarSentiment({briefing,active,onOpen}) {
   const status=reading?(isManual?'Manual reading':display.outdated||display.warning?display.label:null):feed.status==='loading'?'Checking score…':'Reading unavailable';
   const title=reading?`CNN Fear & Greed · ${sentimentScore(reading.score)} / 100 · ${rating} · ${isManual?'Manual reading':display.label} · ${marketTime(reading.observedAt)} ${zoneLabel}`:'CNN Fear & Greed · '+status;
   return <button className={`nav-item sidebar-sentiment ${active?'active':''}`} data-tone={tone} aria-label="Fear & Greed" aria-describedby="sidebar-sentiment-description" title={title} aria-current={active?'page':undefined} onClick={onOpen}>
-    <Gauge size={22}/><span className="sidebar-sentiment-copy" id="sidebar-sentiment-description"><span className="sidebar-sentiment-label">Fear & Greed</span><span id="sidebar-sentiment-reading" className="sidebar-sentiment-reading"><strong>{reading?sentimentScore(reading.score):'—'}</strong>{reading&&<small>/ 100</small>}<span>{rating}</span></span>{status&&<small className="sidebar-sentiment-status">{status}</small>}</span>
+    <span className="sidebar-sentiment-heading"><Gauge size={17} aria-hidden="true"/><span className="sidebar-sentiment-label">Fear & Greed</span><CaretRight size={14} aria-hidden="true"/></span>
+    <span className="sidebar-sentiment-copy" id="sidebar-sentiment-description"><span id="sidebar-sentiment-reading" className="sidebar-sentiment-reading"><span className="sidebar-sentiment-score"><strong>{reading?sentimentScore(reading.score):'—'}</strong>{reading&&<small>/ 100</small>}</span>{rating&&<span className="sidebar-sentiment-rating">{rating}</span>}</span>{status&&<small className="sidebar-sentiment-status">{status}</small>}</span>
+    {reading&&<meter className="sidebar-sentiment-meter" min="0" max="100" value={reading.score} aria-hidden="true"/>}
   </button>;
 }
 function NewsImage({image,priority=false}) {
