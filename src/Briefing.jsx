@@ -25,7 +25,7 @@ export function useBriefing({manual,setManual,section='overview'}) {
 export function SidebarSentiment({briefing,active,onOpen}) {
   const {marketTime,zoneLabel}=useDisplayTime();
   const feed=briefing.sentiment,reading=feed.data||briefing.manual,isManual=!feed.data&&Boolean(briefing.manual),display=sentimentDisplay(feed,briefing.now);
-  const rating=reading?.rating||'',tone=display.outdated&&!isManual?'old':rating.toLowerCase().includes('fear')?'fear':rating.toLowerCase().includes('greed')?'greed':'neutral';
+  const rating=reading?.rating||'',tone=({'extreme fear':'fear',fear:'fear',neutral:'neutral',greed:'greed','extreme greed':'greed'})[rating.trim().toLowerCase()]||'unavailable';
   const status=reading?(isManual?'Manual reading':display.outdated||display.warning?display.label:null):feed.status==='loading'?'Checking score…':'Reading unavailable';
   const title=reading?`CNN Fear & Greed · ${sentimentScore(reading.score)} / 100 · ${rating} · ${isManual?'Manual reading':display.label} · ${marketTime(reading.observedAt)} ${zoneLabel}`:'CNN Fear & Greed · '+status;
   return <button className={`nav-item sidebar-sentiment ${active?'active':''}`} data-tone={tone} aria-label="Fear & Greed" aria-describedby="sidebar-sentiment-description" title={title} aria-current={active?'page':undefined} onClick={onOpen}>
