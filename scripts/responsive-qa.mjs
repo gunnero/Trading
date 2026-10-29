@@ -48,7 +48,7 @@ try{
       await page.goto(runtime.url+'/#'+section);await page.locator('main').scrollIntoViewIfNeeded();await noOverflow(page);
       if(section==='news')await expect(page.getByRole('heading',{name:'Technology earnings and the Fed lead the week ahead'})).toBeVisible();
       if(section==='briefing'&&width<=1100){
-        const calendar=await page.locator('.briefing-calendars').boundingBox(),sentiment=await page.locator('.briefing-side').boundingBox();expect(calendar.y).toBeLessThan(sentiment.y);
+        const next=await page.locator('.eco-next').boundingBox(),releases=await page.locator('.eco-releases').boundingBox();expect(next.y).toBeLessThan(releases.y);await expect(page.locator('.briefing-side')).toHaveCount(0);
       }
       if([390,820].includes(width))await page.screenshot({path:`${dir}/${section}-${width}.png`});
     }

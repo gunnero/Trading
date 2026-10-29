@@ -37,7 +37,8 @@
     "test:settings": "node scripts/settings-qa.mjs",
     "test:journal": "node --test tests/journal.test.mjs && node scripts/journal-qa.mjs",
     "test:journal-chart": "node --test tests/journal-chart.test.mjs tests/journal-review.test.mjs && node scripts/journal-chart-qa.mjs",
-    "test:display-time": "node --test tests/display-time.test.mjs && node scripts/display-time-qa.mjs"
+    "test:display-time": "node --test tests/display-time.test.mjs && node scripts/display-time-qa.mjs",
+    "test:calendar": "node --test tests/economic-calendar.test.mjs tests/briefing.test.mjs && node scripts/economic-calendar-qa.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

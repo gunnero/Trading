@@ -1,8 +1,8 @@
 import {useDisplayTime} from './DisplayTime';
 import { useState } from 'react';
-import { CalendarBlank, Gauge, Newspaper, CaretLeft, CaretRight, Factory, ArrowUpRight } from '@phosphor-icons/react';
+import { Gauge, Newspaper, CaretRight, Factory, ArrowUpRight } from '@phosphor-icons/react';
 
-import {marketDay,addDays,weekRange,periodRange,validateRange,eventDay,nextHighImpact} from './data/calendar.mjs';
+import {marketDay,periodRange,nextHighImpact} from './data/calendar.mjs';
 
 import {useFeed,useMinuteClock,SourceLink,FeedStatus,Unavailable} from './Feeds';
 import {EarningsSummary} from './Earnings';
@@ -10,7 +10,6 @@ import {sentimentDisplay,sentimentScore} from './data/sentiment.mjs';
 
 export const TV_SCRIPT = 'https://www.tradingview.com/script/seVxGaLs-gunner-s-lvls/';
 const CNN = 'https://edition.cnn.com/markets/fear-and-greed';
-const FF = 'https://www.forexfactory.com/calendar';
 const YAHOO = 'https://finance.yahoo.com/';
 const MARKET_NEWS = '/api/news?symbols=DIA%2CIWM%2CQQQ%2CSPY';
 export function useBriefing({manual,setManual,section='overview'}) {
@@ -18,7 +17,7 @@ export function useBriefing({manual,setManual,section='overview'}) {
   const news=useFeed(MARKET_NEWS,section==='overview'||section==='news');
   const now=useMinuteClock();
   const range=periodRange('upcoming',marketDay(now));
-  const calendar=useFeed(`/api/calendar?${new URLSearchParams(range)}`,section==='overview');
+  const calendar=useFeed(`/api/calendar?${new URLSearchParams(range)}`,section==='overview'||section==='briefing');
   const [calendarPeriod,setCalendarPeriod]=useState('week');
   const earnings=useFeed(`/api/earnings?${new URLSearchParams(range)}`,section==='overview');
   return {sentiment,calendar,news,manual,setManual,now,calendarPeriod,setCalendarPeriod,earnings};
@@ -95,41 +94,6 @@ export function SentimentCard({briefing,onSettings}) {
     {!feed.data && feed.status!=='loading' && (!editing ? <div className="manual-actions"><button className="text-button" onClick={editReading}>{manual ? 'Edit manual reading' : 'Enter a CNN reading'}</button>{manual && <button className="text-button muted" onClick={()=>setManual(null)}>Clear</button>}</div> : <form className="manual-form" onSubmit={save}><label>Score (0–100)<input type="number" required min="0" max="100" step="0.01" value={score} onChange={e=>setScore(e.target.value)}/></label><label>Reading date<input type="date" required max={new Date().toISOString().slice(0,10)} value={date} onChange={e=>setDate(e.target.value)}/></label><label>CNN rating<select value={rating} onChange={e=>setRating(e.target.value)}>{['Extreme fear','Fear','Neutral','Greed','Extreme greed'].map(x=><option key={x}>{x}</option>)}</select></label>{error && <p role="alert" className="red">{error}</p>}<p className="small-copy muted">Optional backup for a source outage. Automatic readings take priority when the feed returns.</p><div><button className="button primary" type="submit">Save reading</button><button type="button" className="text-button" onClick={()=>setEditing(false)}>Cancel</button></div></form>)}
   </section>;
 }
-function ImpactBadge({impact}) {
-  const label = impact === 'Other' ? 'Unrated' : impact;
-  return <span className={`impact ${impact.toLowerCase()}`} title={impact === 'Holiday' ? 'Holiday / non-economic event' : `${label} expected impact`}><Factory size={15} weight="fill" aria-hidden="true"/>{label}</span>;
-}
-const calendarDate = day => new Intl.DateTimeFormat('en-US',{timeZone:'UTC',month:'short',day:'numeric'}).format(new Date(`${day}T12:00:00Z`));
-const rangeLabel = range => `${calendarDate(range.from)} – ${calendarDate(range.to)}, ${range.to.slice(0,4)}`;
-function CalendarPanel({initialPeriod='week'}) {
-  const {zoneLabel,formatLabel,marketTime,eventDisplayDate}=useDisplayTime();
-  const [period,setPeriod]=useState(initialPeriod), [impact,setImpact]=useState('all');
-  const now=useMinuteClock();
-  const [custom,setCustom]=useState(null), [editing,setEditing]=useState(false), [draft,setDraft]=useState({from:'',to:''}), [error,setError]=useState('');
-  const range=period==='custom' ? custom : periodRange(period,marketDay(now));
-  const feed=useFeed(`/api/calendar?${new URLSearchParams(range)}`);
-  const events=feed.data?.events || [];
-  const rows=events.filter(e=>(impact==='all' || e.impact===impact) && eventDay(e)>=range.from && eventDay(e)<=range.to && (period!=='upcoming' || !e.date || Date.parse(e.date)>=now));
-  const next=nextHighImpact(events,now);
-  function selectPeriod(id) {setPeriod(id);setEditing(false);setError('');}
-  function shiftWeek(direction) {setCustom(weekRange(addDays(range.from,direction*7)));setPeriod('custom');setEditing(false);setError('');}
-  function applyRange(event) {
-    event.preventDefault();
-    try {setCustom(validateRange(draft));setPeriod('custom');setEditing(false);setError('');} catch(e) {setError(e.message);}
-  }
-  const source=feed.source || (period==='week'||period==='today' ? {name:'Forex Factory',url:FF} : {name:'Finance Calendar',url:'https://www.financecalendar.com'});
-  return <section className="panel calendar-panel" aria-label="U.S. economic calendar">
-    <div className="briefing-heading"><div><span className="eyebrow">U.S. ONLY · {zoneLabel} TIME · {formatLabel}</span><h2>Economic calendar</h2></div><SourceLink href={source.url}>{source.name}</SourceLink></div>
-    <div className="calendar-navigation"><button className="icon-button" aria-label="Go to previous week" onClick={()=>shiftWeek(-1)}><CaretLeft size={18}/></button><div aria-live="polite"><strong>{rangeLabel(range)}</strong><span>Loads automatically · refreshes every 10 min</span></div><button className="icon-button" aria-label="Go to next week" onClick={()=>shiftWeek(1)}><CaretRight size={18}/></button><button className="button calendar-date-button" aria-expanded={editing} onClick={()=>{setDraft(range);setError('');setEditing(!editing);}}><CalendarBlank size={16}/>Choose dates</button></div>
-    <div className="calendar-controls"><div className="segmented" aria-label="Calendar period">{[['today','Today'],['upcoming','Upcoming'],['week','This week'],['nextweek','Next week'],['month','This month'],['nextmonth','Next month']].map(([id,label])=><button key={id} className={period===id?'selected':''} aria-pressed={period===id} onClick={()=>selectPeriod(id)}>{label}</button>)}</div><select aria-label="Event impact" value={impact} onChange={e=>setImpact(e.target.value)}><option value="all">All impact levels</option><option>High</option><option>Medium</option><option>Low</option><option>Holiday</option><option value="Other">Unrated</option></select></div>
-    {editing && <form className="calendar-range-form" onSubmit={applyRange}><label>Start date<input type="date" required value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label><label>End date<input type="date" required value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label><button className="button primary" type="submit">Apply dates</button><button className="text-button muted" type="button" onClick={()=>setEditing(false)}>Cancel</button>{error && <p role="alert" className="red">{error}</p>}</form>}
-    <div className="impact-legend" aria-label="Economic impact legend"><span>Filter by impact</span><button className="impact-filter all" aria-pressed={impact==='all'} onClick={()=>setImpact('all')}>All</button>{['Low','Medium','High','Holiday'].map(level=><button key={level} className={`impact-filter ${level.toLowerCase()}`} aria-label={`${level} only`} aria-pressed={impact===level} onClick={()=>setImpact(level)}><ImpactBadge impact={level}/></button>)}</div>
-    {next && <div className="next-release"><Factory className="high-impact-icon" size={16} weight="fill" aria-hidden="true"/><span>Next high impact in range: <strong>{next.title}</strong>{next.status==='estimated'?' · Estimated':''}</span><time dateTime={next.date}>{marketTime(next.date)} {zoneLabel}</time></div>}
-    {!feed.data ? <Unavailable feed={feed}/> : <><div className="calendar-coverage" aria-live="polite">{rows.length} U.S. events in selected dates · {feed.data.planning ? 'Scheduled releases' : 'Published weekly export'}</div>{rows.length ? <div className="calendar-table-scroll" key={`${range.from}:${range.to}`} tabIndex={0} role="region" aria-label="Economic events"><table className="calendar-table"><thead><tr><th>Date / {zoneLabel}</th><th>Event</th><th>Impact</th><th>Forecast</th><th>Previous</th><th>Actual</th></tr></thead><tbody>{rows.map(e=><tr key={e.id} className={e.status==='cancelled'?'cancelled-event':''}><td><time dateTime={e.date || eventDay(e)}>{eventDisplayDate(e)}<small>{e.date ? e.impact==='Holiday' ? 'Holiday' : marketTime(e.date,{month:undefined,day:undefined}) : e.timeLabel || 'Time TBA'}</small></time></td><td>{e.title}<small className={e.status==='estimated'||e.dataStale?'event-caution':''}>{e.status==='cancelled'?'Cancelled':e.status==='estimated'?'Estimated schedule':e.date && Date.parse(e.date)<now?'Past scheduled time':'Scheduled'} · U.S.{e.dataStale?' · Source verification overdue':''}{e.timeRole==='auction-close'?' · Auction closes':''}</small>{(e.unit || e.period) && <small>{[e.period,e.unit].filter(Boolean).join(' · ')}</small>}{e.sourceName && <small>{e.sourceUrl ? <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer">{e.sourceName} ↗</a> : e.sourceName}</small>}{(e.note || e.credits?.length>0) && <details className="event-notes"><summary>Source notes</summary>{e.note && <p>{e.note}</p>}{e.credits?.map((credit,i)=><p key={i}>{credit}</p>)}</details>}</td><td><ImpactBadge impact={e.impact}/></td><td>{e.forecast ?? '—'}</td><td>{e.previous ?? '—'}</td><td>{e.actual ?? '—'}</td></tr>)}</tbody></table></div> : <div className="feed-empty"><CalendarBlank size={26}/><strong>No matching events in this date range</strong><p>Try another date range or impact filter. An empty result does not guarantee that no releases are scheduled.</p></div>}<p className="feed-note">{feed.data.planning ? 'Future dates load automatically from Finance Calendar. Coverage and impact ratings differ from Forex Factory; some releases and forecasts are unavailable. Estimated schedules are marked.' : 'Forex Factory supplies the current published week. Choose Next week or a date range to load future schedules automatically from Finance Calendar.'} “—” means not supplied. Times are {zoneLabel} time ({formatLabel}), including daylight saving changes. Date filters follow the U.S. release calendar; all-day and tentative dates stay as published.</p></>}
-    {feed.status==='stale' && <p className="calendar-warning" role="status">{feed.message || 'Showing the last successful fetch while the app retries.'}</p>}
-    <FeedStatus feed={feed}/>
-  </section>;
-}
 export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
   const {marketTime,zoneLabel}=useDisplayTime();
   const [scope,setScope]=useState(fixedSymbol?'watchlist':'markets'), [selected,setSelected]=useState('all'), [economy,setEconomy]=useState(false);
@@ -147,11 +111,6 @@ export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
     <div className="news-bottom"><FeedStatus feed={feed}/><span className="small-copy muted">Publisher images where available · refreshes every 10 min · links may require a subscription</span></div>
   </section>;
 }
-export function BriefingPage({briefing,onTradingView,onSettings}) {
-  const {marketTime}=useDisplayTime();
-  return <div className="briefing-page"><div className="briefing-intro"><div><h2>Before the opening bell.</h2><p>Economic releases for your U.S. trading session.</p></div><span className="briefing-date">{marketTime(Date.now(),{weekday:'short',hour:undefined,minute:undefined})} · CURRENT SOURCES</span></div><div className="briefing-notice">Each source shows its own observation time. Yahoo quotes and U.S. Treasury rates appear on Overview.</div><div className="briefing-grid"><div className="briefing-side"><section className="panel indicator-card"><span className="eyebrow">YOUR CHART TOOLKIT</span><h3>gunner’s lvls</h3><p>Bring your daily supply, demand and gap zones into TradingView.</p><button className="text-button" onClick={onTradingView}>Open indicator toolkit<CaretRight size={16}/></button></section></div><div className="briefing-calendars"><CalendarPanel initialPeriod={briefing.calendarPeriod}/></div></div></div>;
-}
-
 export function NewsPage({watchlist,marketFeed}) {
   return <div className="briefing-page news-page"><NewsPanel watchlist={watchlist} marketFeed={marketFeed}/></div>;
 }
