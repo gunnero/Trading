@@ -1,3 +1,4 @@
+import {openWatchlist} from '../tests/fixtures/navigation.mjs';
 import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
 import {chromium,expect} from '@playwright/test';
 import {existsSync,readFileSync,writeFileSync} from 'node:fs';
@@ -35,7 +36,7 @@ try{
   await page.locator('section[aria-label="SPY chart"]').getByRole('button',{name:'Levels',exact:true}).click();await expect(page.getByLabel('Chart levels settings')).toContainText('Carried forward from 2026-10-23');await expect(page.getByRole('img',{name:/SPY Yahoo Finance 4h/})).toBeVisible();
   await expect.poll(()=>requests.some(u=>u.pathname.endsWith('level-history')&&u.searchParams.get('symbol')==='SPY'&&u.searchParams.get('from')==='2026-10-23')).toBe(true);
   await page.getByRole('button',{name:'Open NQ chart',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Levels',exact:true}).click();await expect(page.getByRole('dialog').getByLabel('Chart levels settings')).toContainText('Carried forward from 2026-10-23');await page.getByRole('button',{name:'Close dialog',exact:true}).click();
-  await nav('Watchlist');await page.getByLabel('Search watchlist').fill('NVDA');await expect(page.locator('[data-watchlist-id="NASDAQ:NVDA"]')).toContainText('Dated levels');await page.getByRole('button',{name:'NVDA',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Carried forward · 2026-10-23');await page.getByRole('button',{name:'Close dialog',exact:true}).click();await saved();
+  await openWatchlist(page);await page.getByLabel('Search watchlist').fill('NVDA');await expect(page.locator('[data-watchlist-id="NASDAQ:NVDA"]')).toContainText('Dated levels');await page.getByRole('button',{name:'NVDA',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Carried forward · 2026-10-23');await page.getByRole('button',{name:'Close dialog',exact:true}).click();await saved();
   mark('Main, futures and company charts show original dates; source-history requests and comparisons use per-instrument provenance');
   await openImport('LVLS 2026-10-27\nTSLA|4h|D 345-343');await expect(page.getByLabel('Level import preview')).toContainText('1 updated · 0 added · 40 carried forward');await submit();await saved();
   current=await read();expect(current.data.levelSourceDates.QQQ).toBe('2026-10-26');expect(current.data.levelSourceDates.NVDA).toBe('2026-10-23');expect(current.data.levelSourceDates.TSLA).toBe('2026-10-27');

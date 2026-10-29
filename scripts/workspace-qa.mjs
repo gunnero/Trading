@@ -1,3 +1,4 @@
+import {openWatchlist} from '../tests/fixtures/navigation.mjs';
 import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
 import {mockMarket} from '../tests/fixtures/market.mjs';
 import {chromium,expect} from '@playwright/test';
@@ -17,7 +18,7 @@ try{
  await offlineSentiment(page);
  await page.goto(runtime.url);await saved();await expect(page.getByRole('button',{name:'4h',exact:true})).toHaveAttribute('aria-pressed','true');
  await page.getByRole('tab',{name:/SPY/}).click();await page.getByRole('button',{name:'30m',exact:true}).click();await saved();
- await nav('Watchlist').click();await page.getByRole('button',{name:'Import watchlist',exact:true}).click();await page.getByLabel('Watchlist export').fill('###FUND,NASDAQ:QQQ,AMEX:SPY');await page.getByRole('dialog').getByRole('button',{name:'Import watchlist',exact:true}).click();await saved();
+ await openWatchlist(page);await page.getByRole('button',{name:'Import watchlist',exact:true}).click();await page.getByLabel('Watchlist export').fill('###FUND,NASDAQ:QQQ,AMEX:SPY');await page.getByRole('dialog').getByRole('button',{name:'Import watchlist',exact:true}).click();await saved();
  await nav('Overview').click();await page.getByRole('button',{name:'Review SPY plan'}).click();await page.getByLabel('Option structure').selectOption('Long put');await page.getByLabel('Planned expiration').fill('2026-10-30');await page.getByLabel('Premium loss budget · optional ($)').fill('125');await page.getByRole('button',{name:'Save draft plan'}).click();await saved();
  await page.getByRole('navigation').getByRole('button',{name:/Session review/}).click();await page.getByLabel('Review notes').fill('Restart recovery check.');await saved();
  await nav('Market briefing').click();await page.getByRole('button',{name:'Enter a CNN reading'}).click();await page.getByLabel('Score (0–100)').fill('42');await page.getByLabel('Reading date').fill('2026-10-23');await page.getByRole('button',{name:'Save reading'}).click();await saved();

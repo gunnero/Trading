@@ -1,3 +1,4 @@
+import {openWatchlist} from '../tests/fixtures/navigation.mjs';
 import {chromium,expect} from '@playwright/test';
 import {writeFileSync,mkdirSync} from 'node:fs';
 import {testRuntime} from './qa-runtime.mjs';
@@ -77,7 +78,7 @@ try{
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect(chart).toHaveAttribute('data-price-scale','manual');
   await panel.getByRole('button',{name:'Drawing tools',exact:true}).tap();await panel.getByRole('button',{name:'Horizontal level',exact:true}).tap();await chart.scrollIntoViewIfNeeded();const drawingBox=await chart.boundingBox();await mobile.touchscreen.tap(drawingBox.x+100,drawingBox.y+120);await expect(panel.locator('.drawing-shape')).toHaveCount(1);
   await expect(mobile.locator('.workspace-save-status')).toContainText('Workspace saved');await mobile.reload();await expect(panel.locator('.drawing-shape')).toHaveCount(1);await expect(chart).toHaveAttribute('data-price-scale','manual');await panel.getByRole('button',{name:'Reset view',exact:true}).tap();await expect(chart).toHaveAttribute('data-price-scale','auto');await expect(panel.locator('.drawing-shape')).toHaveCount(1);
-  await quick.getByRole('button',{name:'Watchlist',exact:true}).tap();await mobile.getByRole('textbox',{name:'Search watchlist'}).fill('NVDA');await mobile.locator('.watch-table .symbol-button').tap();const dialog=mobile.getByRole('dialog');await expect(dialog.locator('.price-chart')).toBeVisible();
+  await openWatchlist(mobile);await mobile.getByRole('textbox',{name:'Search watchlist'}).fill('NVDA');await mobile.locator('.watch-table .symbol-button').tap();const dialog=mobile.getByRole('dialog');await expect(dialog.locator('.price-chart')).toBeVisible();
   expect(await dialog.evaluate(node=>node.scrollWidth-node.clientWidth)).toBeLessThanOrEqual(1);await dialog.evaluate(node=>{node.scrollTop=1000;});await expect(dialog.getByRole('button',{name:'Close dialog',exact:true})).toBeInViewport();await dialog.getByRole('button',{name:'Close dialog',exact:true}).tap();await expect(mobile.locator('.watch-table .symbol-button')).toBeFocused();
   await mobile.close();mark('Phone drawer traps/returns focus, page refresh preserves navigation, chart swipes scroll until activated, touch axis/drawings work and persist, Reset keeps drawings, and company dialogs stay closable');
 

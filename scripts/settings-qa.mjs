@@ -16,7 +16,7 @@ try{
  const read=async()=>await(await testFetch(runtime.url+'/api/workspace')).json(),before=await read();
  await page.goto(runtime.url+'/#settings/charts');await expect(page.getByRole('heading',{name:'Chart defaults',exact:true})).toBeVisible();
  expect(requests.some(path=>path.startsWith('/api/market/'))).toBe(false);expect((await read()).revision).toBe(before.revision);
- const footer=page.locator('.sidebar-account-area'),footerBox=await footer.boundingBox();expect(footerBox.y).toBeGreaterThan(600);expect(footerBox.y+footerBox.height).toBeLessThanOrEqual(956);
+ const footer=page.locator('.sidebar-account-area'),footerBox=await footer.boundingBox();expect(footerBox.y+footerBox.height).toBeGreaterThan(954);expect(footerBox.y+footerBox.height).toBeLessThanOrEqual(956);
  await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Chart settings'})).toHaveCount(0);
  await page.screenshot({path:dir+'/charts-desktop.png'});await page.locator('.sidebar').screenshot({path:dir+'/sidebar-after.png'});
  mark('Settings loads directly without market/chart polling or workspace writes; account and visible Log out sit at the sidebar bottom');
@@ -39,7 +39,7 @@ try{
  mark('Account controls reuse the protected security dialog with focus return; Workspace exposes time settings and a credential-free backup');
  for(const width of [320,390,820,1024,1488]){
   await page.setViewportSize({width,height:900});
-  for(const category of ['Charts','Connections','Account','Workspace']){
+  for(const category of ['Watchlist','Charts','Connections','Account','Workspace']){
    await settingsNav.getByRole('link',{name:category,exact:true}).click();await expect(page.locator('.settings-content')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
    expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
@@ -47,7 +47,7 @@ try{
   }
   if(width===390){await page.getByRole('button',{name:'More navigation'}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await footer.getByRole('button',{name:'Log out',exact:true}).scrollIntoViewIfNeeded();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
  }
- mark('All four settings sections and bottom account controls fit phone, tablet and desktop; the mobile drawer closes after navigation');
+ mark('All five settings sections and bottom account controls fit phone, tablet and desktop; the mobile drawer closes after navigation');
  await settingsNav.getByRole('link',{name:'Charts',exact:true}).click();
  await page.route('**/api/workspace',route=>route.request().method()==='PUT'?route.fulfill({status:503,json:{message:'Isolated save outage'}}):route.fallback());
  await page.getByLabel('Default chart timeframe').selectOption('2m');await page.getByRole('button',{name:'Save defaults',exact:true}).click();await expect(page.locator('.workspace-save-status')).toHaveClass(/needs-attention/);

@@ -3,7 +3,7 @@ import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
 import {useAuth,AccountDialog} from './Auth';
-import {SettingsPage} from './SettingsPage';
+import {SettingsPage,settingsCategory} from './SettingsPage';
 const SentimentPage=React.lazy(()=>import('./SentimentPage'));
 const EarningsPage=React.lazy(()=>import('./EarningsPage'));
 const TradeJournal=React.lazy(()=>import('./TradeJournal'));
@@ -33,10 +33,11 @@ import {WATCH_GROUPS, WATCH_EXCHANGES, overviewWatchlist, readWatchlist, newWatc
 import {DrawingProvider} from './ChartDrawings';
 import {ChartSettingsProvider,ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 
-const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'watchlist', title: 'Watchlist', icon: Tag }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
-function currentSection() {
-  const id = window.location.hash.slice(1).split('/')[0];
-  return sections.some(section => section.id === id) ? id : 'overview';
+const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
+function currentRoute() {
+  const route = window.location.hash.slice(1);
+  if (route.split('/')[0] === 'watchlist') return 'settings/watchlist';
+  return sections.some(section => section.id === route.split('/')[0]) ? route : 'overview';
 }
 const groupLabels = { STOCKS: 'Stocks', 'DEPOSITARY RECEIPT': 'Depositary receipts', FUND: 'Funds', FUTURES: 'Futures', CRYPTO: 'Crypto' };
 function Status({ text, tone }) { return <span className={`status ${tone || toneFor(text)}`}>{text}</span>; }
@@ -56,7 +57,8 @@ export function App() {
 }
 function SessionDesk({workspace}) {
   const {quoteStamp,zoneLabel}=useDisplayTime();
-  const [section, setSection] = useState(currentSection);
+  const [route, setRoute] = useState(currentRoute);
+  const section=route.split('/')[0],category=settingsCategory(route),watchlistOpen=section==='settings'&&category==='watchlist';
   const {user,signOut}=useAuth();
   const [logoutBusy,setLogoutBusy]=useState(false),[logoutError,setLogoutError]=useState('');
   async function logout(){
@@ -114,14 +116,14 @@ function SessionDesk({workspace}) {
   const symbol=['QQQ','SPY'].includes(focus)?focus:selectedStock?.symbol;
   const marketKey=['QQQ','SPY'].includes(focus)?focus:selectedStock?quoteKey(selectedStock):null;
   const [timeframe,setTimeframe]=useSavedTimeframe(marketKey,{primary:true});
-  const quotes=useMarketQuotes(watchlist,section==='watchlist',[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(!['settings','journal','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
+  const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['settings','journal','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
   const chart=useMarketChart(marketKey,timeframe,section==='overview');
   const quoteResult=quotes[marketKey],quote=quoteResult?.quote;
   const setup=scan.byKey[marketKey]||{stage:scan.status==='loading'?'loading':symbol?'no-levels':'waiting-break',timeframe:setupInterval};
   const [planSnapshot,setPlanSnapshot]=useState(null);
   const macro=CONTEXT_INSTRUMENTS;
   const [macroSymbol,setMacroSymbol]=useState('NQ');
-  const qqqRoles=useZoneRoles(sheet.instruments.QQQ,sheet.date,undefined,section==='overview'||section==='watchlist'),spyRoles=useZoneRoles(sheet.instruments.SPY,sheet.date,undefined,section==='overview'||section==='watchlist');
+  const qqqRoles=useZoneRoles(sheet.instruments.QQQ,sheet.date,undefined,section==='overview'||watchlistOpen),spyRoles=useZoneRoles(sheet.instruments.SPY,sheet.date,undefined,section==='overview'||watchlistOpen);
   const stockRoles=useZoneRoles(selectedStock?matchingInstrument(selectedStock,sheet):null,sheet.date,marketKey,section==='overview');
   const roles=focus==='QQQ'?qqqRoles:focus==='SPY'?spyRoles:stockRoles;
   const currentSheet={...sheet,instruments:{...sheet.instruments,...(qqqRoles.instrument?{QQQ:qqqRoles.instrument}:{}),...(spyRoles.instrument?{SPY:spyRoles.instrument}:{})}};
@@ -133,11 +135,13 @@ function SessionDesk({workspace}) {
   const startPlan=()=>{setPlanSnapshot({symbol,marketKey,setup,quote,context:setup.zone?{...context,zone:setup.zone}:context});setDialog('plan');};
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 5000); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => {
-    const syncSection = () => { setSection(currentSection()); setMenuOpen(false); setDialog(null); window.scrollTo(0, 0); };
+    const canonicalize = () => { if(window.location.hash.slice(1).split('/')[0]==='watchlist') window.history.replaceState(window.history.state,'','#settings/watchlist'); };
+    canonicalize();
+    const syncSection = () => { canonicalize(); setRoute(currentRoute()); setMenuOpen(false); setDialog(null); window.scrollTo(0, 0); };
     window.addEventListener('hashchange', syncSection);
     return () => window.removeEventListener('hashchange', syncSection);
   }, []);
-  const navigate = next => { window.location.hash = next; setSection(next.split('/')[0]); setMenuOpen(false); window.scrollTo(0, 0); };
+  const navigate = next => { window.location.hash = next; setRoute(next); setMenuOpen(false); window.scrollTo(0, 0); };
   const inspect = entry => { setSelectedEntry(entry); setDialog('instrument'); };
   const openLevelSetup=entry=>{setSelectedEntry(entry);setDialog('level-setup');};
   const openLevel=(item,selectedSheet,historical)=>{
@@ -163,9 +167,9 @@ function SessionDesk({workspace}) {
       </div>
     </aside>
     {menuOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
-    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','watchlist','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
+    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
     <div className="main-shell" inert={menuOpen||undefined}>
-      {!['overview','levels','briefing'].includes(section) && <header className="topbar"><div className="topbar-title"><button className="icon-button mobile-menu" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={() => setMenuOpen(!menuOpen)}><List size={23}/></button><h1>{section === 'watchlist' ? 'Find your focus.' : section === 'levels' ? 'Your map for the session.' : section === 'briefing' ? 'The context behind the move.' : section === 'sentiment' ? 'Fear & Greed' : section === 'earnings' ? 'Earnings' : section === 'news' ? 'News' : section === 'settings' ? 'Settings' : section === 'journal' ? 'Trade journal' : 'A plan worth reviewing.'}</h1></div><div className="topbar-actions">{['settings','journal','earnings','sentiment'].includes(section)?<span className="settings-private-label"><LockKey size={16}/>Private workspace</span>:<><span className="sample-date">{quote ? `${isExtendedQuote(quote)?quote.session.toUpperCase():'QUOTE SESSION'} · ${formatDate(quote.sessionDate).toUpperCase()}` : 'CONNECTING MARKET DATA'}</span><button className="demo-label" onClick={()=>setDialog('market-data')}><span className="status-dot"/>Yahoo Finance <Info size={14}/></button><button className="button outline" onClick={() => setDialog('import')}><UploadSimple size={18}/><span>Import levels</span></button></>}</div></header>}
+      {!['overview','levels','briefing'].includes(section) && <header className="topbar"><div className="topbar-title"><button className="icon-button mobile-menu" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={() => setMenuOpen(!menuOpen)}><List size={23}/></button><h1>{section === 'levels' ? 'Your map for the session.' : section === 'briefing' ? 'The context behind the move.' : section === 'sentiment' ? 'Fear & Greed' : section === 'earnings' ? 'Earnings' : section === 'news' ? 'News' : section === 'settings' ? 'Settings' : section === 'journal' ? 'Trade journal' : 'A plan worth reviewing.'}</h1></div><div className="topbar-actions">{['settings','journal','earnings','sentiment'].includes(section)?<span className="settings-private-label"><LockKey size={16}/>Private workspace</span>:<><span className="sample-date">{quote ? `${isExtendedQuote(quote)?quote.session.toUpperCase():'QUOTE SESSION'} · ${formatDate(quote.sessionDate).toUpperCase()}` : 'CONNECTING MARKET DATA'}</span><button className="demo-label" onClick={()=>setDialog('market-data')}><span className="status-dot"/>Yahoo Finance <Info size={14}/></button><button className="button outline" onClick={() => setDialog('import')}><UploadSimple size={18}/><span>Import levels</span></button></>}</div></header>}
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
       {!['settings','journal','earnings','sentiment','levels','briefing'].includes(section)&&<MarketGroups groups={contextGroups} quotes={quotes} onOpen={(group,item)=>{
         setLevelView(null);
@@ -190,15 +194,14 @@ function SessionDesk({workspace}) {
             <RetestPanel symbol={symbol} result={setup} canPlan={!!context&&!!(context.supply||context.demand||setup.zone)} onPlan={startPlan}/>
 
           </div>
-          <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('watchlist')}/>
+          <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} onPlans={()=>navigate('review')}/></React.Suspense>}
-        {section === 'settings' && <SettingsPage workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
+        {section === 'settings' && <SettingsPage category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
         {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news}/>}
-        {section === 'watchlist' && <WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel}/ >}
         {section === 'review' && <section className="panel review-page"><div className="section-heading"><div><h2>Session review</h2><p>Keep your thesis, its invalidation, and what you learn together.</p></div><span className="eyebrow">SAVED WORKSPACE</span></div>{plans.length === 0 ? <Empty icon={Notebook} title="Start with a plan">Review a break-and-retest scenario and save a draft. Your plans and notes are saved automatically to your workspace.<button className="button primary" onClick={() => navigate('overview')}>Review a scenario<CaretRight size={18}/></button></Empty> : <div className="plan-list">{plans.map(plan => <article className="saved-plan" key={plan.id}><header><div><span className="eyebrow">{plan.symbol} · {plan.priceMode==='sample'?'SAMPLE SESSION':`YAHOO · ${plan.sessionDate}`}</span><h3>{plan.scenarioTitle}</h3></div><Status text="Draft plan" tone="amber"/></header><div className="plan-facts"><span>Structure<strong>{plan.strategy}</strong></span><span>Expiration<strong>{formatDate(plan.expiration)}</strong></span><span>Premium loss budget<strong>{plan.budget ? `$${Number(plan.budget).toFixed(2)}` : 'Not set'}</strong></span></div><p>{plan.thesis}</p>{plan.marketQuote&&<p className="small-copy muted">Reference quote {formatPrice(plan.marketQuote.price)} · {quoteStamp(plan.marketQuote)}</p>}<label>Review notes<textarea rows={3} value={plan.notes} placeholder="What confirmed or changed your view?" onChange={e => setPlans(p => p.map(x => x.id === plan.id ? { ...x, notes: e.target.value } : x))}/></label><small>No trade or performance is recorded. Drafts and notes save automatically.</small></article>)}</div>}</section>}
         <div className={`workspace-save-status ${workspace.status==='error'||workspace.status==='conflict'?'needs-attention':''}`} role="status" aria-live="polite"><span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span><div>{['error','conflict'].includes(workspace.status)&&<>{workspace.status==='error'&&<button onClick={workspace.retry}>Retry save</button>}<button onClick={workspace.reload}>Load saved version</button></>}<button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button></div></div>

@@ -1,3 +1,4 @@
+import {openWatchlist} from '../tests/fixtures/navigation.mjs';
 import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
 if (!process.env.OPENING_BELL_TEST_URL) throw new Error('Run this check through its npm script to use an isolated workspace.');
 import {mockMarket} from '../tests/fixtures/market.mjs';
@@ -74,7 +75,7 @@ try {
   await snapshot('session-review');
   mark('Options plan draft, budget, session review and notes');
 
-  await nav('Watchlist').click();
+  await openWatchlist(page);
   await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
   await page.getByRole('textbox', { name: 'Search watchlist' }).fill('NVDA');
   await expect(page.locator('.watch-table tbody tr')).toHaveCount(1);
@@ -148,7 +149,7 @@ try {
       await expect(page.locator('.sidebar')).toHaveCSS('visibility', 'hidden');
       await snapshot('mobile-web');
       await page.getByRole('button', { name: 'Open navigation' }).click();
-      await nav('Watchlist').click();
+      await openWatchlist(page);
       await assertNoOverflow();
       await expect(page.getByRole('heading', { name: 'Watchlist radar' })).toBeVisible();
       await snapshot('mobile-watchlist');
