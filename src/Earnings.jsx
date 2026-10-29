@@ -5,7 +5,7 @@ import {marketDay,periodRange,weekRange,addDays} from './data/calendar.mjs';
 import {EARNINGS_SOURCE,earningsRange,earningsDate,reportWindow,windowReference,earningsMatches,upcomingEarnings} from './data/earnings.mjs';
 
 export function EarningsSummary({feed,watchlist,now,onOpen}){
-  const events=upcomingEarnings(earningsMatches(feed.data?.events||[],watchlist),now),watched=events.filter(e=>e.watchEntries.length),first=(watched.length?watched:events)[0];
+  const events=upcomingEarnings(earningsMatches(feed.data?.events||[],watchlist),now).filter(e=>e.status!=='reported'),watched=events.filter(e=>e.watchEntries.length),first=(watched.length?watched:events)[0];
   const title=first?`${first.symbol} · ${first.name}`:feed.status==='loading'?'Checking earnings…':!feed.data?'Earnings unavailable':'No earnings returned';
   return <button className="overview-earnings" onClick={onOpen} aria-label="Upcoming earnings: open earnings calendar"><CalendarBlank size={23}/><span><small>UPCOMING EARNINGS</small><strong>{watched.length>0&&<Star size={12} weight="fill" aria-label="In your watchlist"/>}{title}</strong>{first&&<time dateTime={first.date}>{earningsDate(first.date)} · {reportWindow(first.window)}</time>}<em className={feed.status==='stale'||feed.status==='unavailable'?'amber':''}>{feed.data?.incomplete?'Partial schedule · ':feed.status==='stale'?'Cached schedule · ':''}{watched.length?`${watched.length} watchlist reports · `:'Next 14 days · '}{feed.source?.name||'Nasdaq'} · Expected</em></span><CaretRight size={15}/></button>;
 }

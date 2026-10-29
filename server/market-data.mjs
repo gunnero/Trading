@@ -17,6 +17,8 @@ const aliases={NQ:['NQ=F','future',10],ES:['ES=F','future',10],VIX:['^VIX','inde
 export function resolveSymbol(key){
   if(Object.hasOwn(aliases,key)){const [symbol,kind,delayMinutes]=aliases[key];return {key,symbol,kind,delayMinutes};}
   if(['QQQ','SPY'].includes(key))return {key,symbol:key,kind:'equity',delayMinutes:null};
+  const earnings=/^EARNINGS:([A-Z][A-Z0-9.-]{0,14})$/.exec(key);
+  if(earnings)return {key,symbol:earnings[1].replaceAll('.','-'),kind:'equity',delayMinutes:null,earnings:true};
   const match=/^(NASDAQ|NYSE|AMEX|CBOE|NYSEARCA|NYSEAMERICAN|BATS):([A-Z][A-Z0-9.]{0,9})$/.exec(key);
   return match?{key,symbol:match[2].replaceAll('.','-'),kind:'equity',delayMinutes:null}:null;
 }
@@ -44,6 +46,8 @@ export function parseYahoo(payload,asset,now=Date.now(),{extended=false}={}){
   const stride=Math.max(1,Math.ceil(points.length/48));
   const trend=points.filter((_,i)=>i%stride===0||i===points.length-1);
   const regular={provider:'Yahoo Finance',providerSymbol:asset.symbol,name:m.shortName||m.longName||asset.symbol,kind:asset.kind,currency:m.currency||null,price:m.regularMarketPrice,previousClose:previous,change,changePercent:previous===null?null:change/previous*100,observedAt:iso(m.regularMarketTime),sessionDate:day,sessionEnd:validNumber(m.currentTradingPeriod?.regular?.end)?iso(m.currentTradingPeriod.regular.end):null,delayMinutes:asset.delayMinutes,volume:validNumber(m.regularMarketVolume)?m.regularMarketVolume:null,trend,sourceUrl:`https://finance.yahoo.com/quote/${encodeURIComponent(asset.symbol)}/`,session:asset.kind==='equity'?'Regular session':'Market quote',sessionType:'regular'};
+  regular.exchangeName=typeof m.exchangeName==='string'?m.exchangeName:null;
+  regular.instrumentType=m.instrumentType;
   if(!extended||asset.kind!=='equity')return regular;
   // regularMarketPrice remains the regular close during pre/post-market. Use only
   // real chart observations inside the source's currently active extended period.
@@ -165,7 +169,7 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
   function markAge(value){if(value.quote&&quoteIsOld(value.quote,now()))return {...value,status:'stale',message:'The source quote is older than the expected session.'};return value;}
   async function quote(key){
     const asset=resolveSymbol(key);if(!asset)return unavailable('No verified Yahoo mapping for this exchange/instrument.');
-    return markAge(await get(`quote:${asset.kind==='equity'?'extended:':''}${asset.symbol}`,asset.kind==='treasury'?3600000:60000,async()=>{
+    const result=markAge(await get(`quote:${asset.kind==='equity'?'extended:':''}${asset.symbol}`,asset.kind==='treasury'?3600000:60000,async()=>{
       if(asset.kind==='treasury'){
         const year=marketDay(now()).slice(0,4);let xml=await request(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=${year}`,false);
         // Early January can precede the first publication for the new year.
@@ -175,6 +179,10 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
       const payload=JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=5m&range=5d&includePrePost=${asset.kind==='equity'}`));
       return {quote:parseYahoo(payload,asset,now(),{extended:true})};
     }));
+    // Calendar symbols do not invent an exchange-prefixed watchlist identity.
+    // Validate provider metadata even for entries returned from the shared cache.
+    if(asset.earnings&&result.quote&&(result.quote.currency!=='USD'||result.quote.instrumentType!=='EQUITY'||!['NMS','NGM','NCM','NYQ','ASE','BTS','BATS','PCX','CBOE'].includes(result.quote.exchangeName)))return unavailable('The source did not verify a U.S. stock listing for this earnings symbol.');
+    return result;
   }
   async function chart(symbol,frame){
     if(!supportsChart(symbol,frame))return unavailable('Unsupported chart.');

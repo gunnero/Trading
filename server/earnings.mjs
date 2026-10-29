@@ -1,6 +1,6 @@
 import {readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
-import {EARNINGS_SOURCE,earningsRange,earningsDays} from '../src/data/earnings.mjs';
+import {EARNINGS_SOURCE,earningsRange,earningsDays,earningsNumber} from '../src/data/earnings.mjs';
 import {validDay} from '../src/data/calendar.mjs';
 const clean=(value,max=180)=>typeof value==='string'||typeof value==='number'?String(value).trim().slice(0,max):'';
 const supplied=value=>{const s=clean(value,60);return !s||['N/A','--','—','-'].includes(s)?null:s;};
@@ -18,13 +18,14 @@ export function parseEarnings(raw,date){
     const symbol=clean(row?.symbol,20),name=clean(row?.name);
     if(!/^[A-Z][A-Z0-9.\/-]{0,14}$/.test(symbol)||!name||seen.has(symbol))throw Error('The earnings source returned incomplete company records.');
     seen.add(symbol);
-    return {id:`${date}:${symbol}`,date,symbol,name,window:({'time-pre-market':'before','time-after-hours':'after','time-during-market':'during'})[row.time]||'unknown',epsForecast:supplied(row.epsForecast),lastYearEPS:supplied(row.lastYearEPS),fiscalQuarter:supplied(row.fiscalQuarterEnding),estimates:supplied(row.noOfEsts),status:'expected'};
+    const epsActual=supplied(row.eps),reported=earningsNumber(epsActual)!==null;
+    return {id:`${date}:${symbol}`,date,symbol,name,window:({'time-pre-market':'before','time-after-hours':'after','time-during-market':'during'})[row.time]||'unknown',epsForecast:supplied(row.epsForecast),epsActual:reported?epsActual:null,epsSurprise:reported?earningsNumber(row.surprise):null,marketCap:supplied(row.marketCap),lastYearEPS:supplied(row.lastYearEPS),fiscalQuarter:supplied(row.fiscalQuarterEnding),estimates:supplied(row.noOfEsts),status:reported?'reported':'expected'};
   });
 }
 export function createEarningsService({fetcher=fetch,now=()=>Date.now(),cachePath=null,timeoutMs=12000,onError=()=>{}}={}){
   const cache=new Map(),pending=new Map(),queue=[];let active=0,blockedUntil=0;
-  if(cachePath)try{const saved=JSON.parse(readFileSync(cachePath,'utf8'));if(saved.version===1){blockedUntil=Math.min(now()+86400000,Number(saved.blockedUntil)||0);for(const [day,item] of (saved.entries||[]).slice(-93))if(validDay(day)&&Number.isFinite(item.retryAt)&&item.retryAt<now()+86400001&&(!item.events||Array.isArray(item.events)&&Number.isFinite(item.at)&&item.at<=now()&&now()-item.at<86400000&&item.events.every(e=>e.date===day)))cache.set(day,item);}}catch{}
-  function persist(){if(!cachePath)return;try{mkdirSync(dirname(cachePath),{recursive:true});const temp=`${cachePath}.${process.pid}.tmp`;writeFileSync(temp,JSON.stringify({version:1,blockedUntil,entries:[...cache]}),{mode:0o600});renameSync(temp,cachePath);}catch{/* Optional public-feed cache. */}}
+  if(cachePath)try{const saved=JSON.parse(readFileSync(cachePath,'utf8'));blockedUntil=Math.min(now()+86400000,Number(saved.blockedUntil)||0);if(saved.version===2){for(const [day,item] of (saved.entries||[]).slice(-93))if(validDay(day)&&Number.isFinite(item.retryAt)&&item.retryAt<now()+86400001&&(!item.events||Array.isArray(item.events)&&Number.isFinite(item.at)&&item.at<=now()&&now()-item.at<86400000&&item.events.every(e=>e.date===day)))cache.set(day,item);}}catch{}
+  function persist(){if(!cachePath)return;try{mkdirSync(dirname(cachePath),{recursive:true});const temp=`${cachePath}.${process.pid}.tmp`;writeFileSync(temp,JSON.stringify({version:2,blockedUntil,entries:[...cache]}),{mode:0o600});renameSync(temp,cachePath);}catch{/* Optional public-feed cache. */}}
   function store(day,item){cache.delete(day);cache.set(day,item);while(cache.size>93)cache.delete(cache.keys().next().value);persist();}
   async function limited(fn){if(active>=2)await new Promise(r=>queue.push(r));else active++;try{return await fn();}finally{const next=queue.shift();if(next)next();else active--;}}
   async function daily(date){

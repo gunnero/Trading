@@ -91,3 +91,17 @@ test('Four-hour futures aggregation stays anchored to source sessions crossing m
  const start=Date.parse('2026-10-22T22:00Z')/1000,body=yahooPayload('NQ=F',{start,minutes:23*60}),nq=resolveSymbol('NQ');
  const bars=parseCandles(body,nq,'4h',NOW);assert.equal(bars.length,6);assert.equal(bars[1].timestamp,start+4*3600);assert.equal(bars[1].volume,104+105+106+107);assert.equal(bars[1].partial,false);assert.equal(bars.at(-1).partial,true);
 });
+
+test('Earnings quote aliases require actual U.S. equity metadata, including shared cached results',async()=>{
+ let meta={exchangeName:'NMS',instrumentType:'EQUITY',currency:'USD'},calls=0;
+ const service=createMarketService({now:()=>NOW,fetcher:async url=>{calls++;const symbol=decodeURIComponent(new URL(url).pathname.split('/').at(-1)),body=yahooPayload(symbol);Object.assign(body.chart.result[0].meta,meta);return Response.json(body);}});
+ const good=await service.quote('EARNINGS:GOOG');assert.equal(good.quote.providerSymbol,'GOOG');assert.equal(good.quote.exchangeName,'NMS');
+ assert.equal((await service.chart('EARNINGS:GOOG','4h')).status,'unavailable');assert.equal(calls,1);
+ for(const [symbol,fields] of [['BAD1',{exchangeName:'LSE'}],['BAD2',{currency:'GBP'}],['BAD3',{instrumentType:'ETF'}],['BAD4',{exchangeName:null}]]){
+  meta={exchangeName:'NMS',instrumentType:'EQUITY',currency:'USD',...fields};
+  await service.quote(`NASDAQ:${symbol}`);const before=calls;
+  assert.equal((await service.quote(`EARNINGS:${symbol}`)).status,'unavailable');assert.equal(calls,before);
+ }
+ meta={exchangeName:'NYQ',instrumentType:'EQUITY',currency:'USD'};
+ assert.equal((await service.quote('EARNINGS:CL')).quote.providerSymbol,'CL');assert.equal(resolveSymbol('NYMEX:CL1!').symbol,'CL=F');
+});

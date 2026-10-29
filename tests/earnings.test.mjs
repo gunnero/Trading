@@ -52,3 +52,31 @@ test('A date-specific HTTP failure does not suppress healthy reporting dates',as
  const requested=[],service=createEarningsService({now:()=>NOW,fetcher:async url=>{const date=new URL(url).searchParams.get('date');requested.push(date);return date==='2026-10-26'?new Response('',{status:502}):Response.json(payload(date));}});
  const result=await service.get({from:'2026-10-26',to:'2026-10-29'});assert.equal(result.status,'stale');assert.equal(requested.length,4);assert.deepEqual(result.data.missingDates,['2026-10-26']);assert.equal(result.data.events.length,3);
 });
+
+test('Published EPS alone establishes reported status; missing surprises and negative/zero EPS remain honest',async()=>{
+ const {resultState}=await import('../src/data/earnings-board.mjs');
+ for(const [eps,surprise,id] of [['$0.00','0','met'],['($0.12)','25.5','beat'],['$2.12','-27.89','miss'],['$4.89',null,'reported'],[null,'90','pending'],['N/A','0','pending']]){
+  const [e]=parseEarnings(payload('2026-10-28',[{...row,eps,surprise,marketCap:'$3,973,404,690,000'}]),'2026-10-28');
+  assert.equal(resultState(e).id,id);assert.equal(e.status,id==='pending'?'expected':'reported');assert.equal(e.marketCap,'$3,973,404,690,000');
+  if(id==='pending')assert.equal(e.epsSurprise,null);
+ }
+});
+test('Board uses trading sessions across weekends and holidays, and never infers release from elapsed time',async()=>{
+ const {earningsBoardDates,groupEarnings,earningsBoardRows}=await import('../src/data/earnings-board.mjs');
+ const thursday=earningsBoardDates(Date.parse('2026-10-29T20:53Z'));
+ assert.equal(thursday.previous,'2026-10-28');assert.equal(thursday.next,'2026-10-30');
+ const saturday=earningsBoardDates(Date.parse('2026-10-31T12:00Z'));
+ assert.equal(saturday.previous,'2026-10-30');assert.equal(saturday.after,'2026-11-02');assert.equal(saturday.next,'2026-11-02');
+ const holiday=earningsBoardDates(Date.parse('2026-11-26T12:00Z'));
+ assert.equal(holiday.after,'2026-11-27');assert.equal(holiday.next,'2026-11-27');
+ assert.deepEqual(earningsBoardDates(Date.parse('2026-10-29T20:53Z'),1).days,['2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06']);
+ const rows=earningsBoardRows([{symbol:'OLD',date:'2026-10-28',window:'after',epsActual:null},{symbol:'GOOG',date:'2026-10-28',window:'unknown',epsActual:'$2.12',epsSurprise:-27.89}],[],{});
+ assert.deepEqual(groupEarnings(rows,thursday).recent.map(e=>e.symbol),['GOOG']);
+});
+test('Board badges retain exact stock identity, source dates, missing market caps and strict numeric parsing',async()=>{
+ const {earningsBoardRows}=await import('../src/data/earnings-board.mjs');const {earningsNumber}=await import('../src/data/earnings.mjs');
+ const rows=earningsBoardRows([{symbol:'CL',marketCap:null},{symbol:'MSFT',marketCap:'$3,000',epsActual:'($0.12)'}],[{id:'NYMEX:CL1!',symbol:'CL',exchange:'NYMEX',group:'FUTURES'}],{instruments:{CL:{symbol:'CL',futures:true},MSFT:{symbol:'MSFT',sourceDate:'2026-10-28',carriedForward:true}}});
+ assert.equal(rows[0].symbol,'MSFT');assert.equal(rows[0].level.sourceDate,'2026-10-28');assert.equal(rows[1].level,undefined);assert.equal(rows[1].watchEntries.length,0);assert.equal(rows[1].listing,undefined);assert.equal(rows[1].cap,null);
+ for(const value of [null,'N/A','','12junk','Infinity'])assert.equal(earningsNumber(value),null);
+ assert.equal(earningsNumber('($0.12)'),-.12);assert.equal(earningsNumber('$0.00'),0);assert.equal(earningsNumber('-27.89%'),-27.89);
+});

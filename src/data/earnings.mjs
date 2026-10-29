@@ -24,3 +24,13 @@ export function upcomingEarnings(events,now){
   // These dates/windows are not exact release instants. Keep today's entries visible all day.
   return events.filter(event=>event.date>=marketDay(now)).sort((a,b)=>a.date.localeCompare(b.date)||({'before':0,'during':1,'after':2,'unknown':3}[a.window]??3)-({'before':0,'during':1,'after':2,'unknown':3}[b.window]??3)||a.symbol.localeCompare(b.symbol));
 }
+
+// Preserve source notation for display; accept only complete numeric values.
+export function earningsNumber(value){
+  if(typeof value==='number')return Number.isFinite(value)?value:null;
+  if(typeof value!=='string'||!value.trim())return null;
+  const text=value.trim(),parenthesized=text.startsWith('(')&&text.endsWith(')');
+  const normalized=(parenthesized?text.slice(1,-1):text).replace(/^\$/, '').replaceAll(',','').replace(/%$/, '');
+  if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized))return null;
+  const n=Number(normalized);return Number.isFinite(n)?(parenthesized?-Math.abs(n):n):null;
+}

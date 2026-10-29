@@ -3,9 +3,9 @@ import {useEffect, useMemo, useState} from 'react';
 import {PRIMARY_QUOTES, quoteKey} from './data/quotes.mjs';
 import {overviewWatchlist} from './data/watchlist.mjs';
 const empty={status:'loading',quote:null};
-export function useMarketQuotes(watchlist,full=false,extra=[],active=true){
+export function useMarketQuotes(watchlist,full=false,extra=[],active=true,includePrimary=true){
   const extraKey=extra.filter(Boolean).join(',');
-  const keys=useMemo(()=>[...new Set([...PRIMARY_QUOTES,...extraKey.split(',').filter(Boolean),...(full?watchlist:overviewWatchlist(watchlist)).map(quoteKey)])],[watchlist,full,extraKey]);
+  const keys=useMemo(()=>[...new Set([...(includePrimary?PRIMARY_QUOTES:[]),...extraKey.split(',').filter(Boolean),...(full?watchlist:overviewWatchlist(watchlist)).map(quoteKey)])],[watchlist,full,extraKey,includePrimary]);
   const keyString=keys.join(',');
   const [state,setState]=useState({});
   useEffect(()=>{
