@@ -67,6 +67,7 @@ button,a,input,select,summary{ -webkit-tap-highlight-color:transparent }
   .topbar-actions>.button{min-height:36px;padding:6px 8px;font-size:10px}
   .sample-date{display:none}
   .market-clock-compact{margin:0;padding:10px 14px;gap:6px 12px}
+  .app-shell[data-section="overview"] .market-clock-compact{padding-top:calc(10px + env(safe-area-inset-top))}
   .market-clock-compact .market-clock-heading svg{width:20px}
   .market-clock-compact .market-clock-state{font-size:14px}
   .market-clock-compact .market-clock-local{gap:4px}
