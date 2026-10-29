@@ -14,7 +14,7 @@ const YAHOO = 'https://finance.yahoo.com/';
 const MARKET_NEWS = '/api/news?symbols=DIA%2CIWM%2CQQQ%2CSPY';
 const marketTime = briefingTime;
 export function useBriefing({manual,setManual,section='overview'}) {
-  const sentiment=useFeed('/api/sentiment',section==='overview'||section==='briefing');
+  const sentiment=useFeed('/api/sentiment',section==='overview'||section==='sentiment');
   const news=useFeed(MARKET_NEWS,section==='overview'||section==='news');
   const now=useMinuteClock();
   const range=periodRange('upcoming',marketDay(now));
@@ -28,7 +28,7 @@ function NewsImage({image,priority=false}) {
   if (!image?.url || failed===image.url) return null;
   return <span className="news-image"><img src={image.url} alt={image.alt || ''} loading={priority?'eager':'lazy'} decoding="async" referrerPolicy="no-referrer" onError={()=>setFailed(image.url)}/></span>;
 }
-export function BriefingStrip({briefing,watchlist,onOpen,onNews,onEarnings}) {
+export function BriefingStrip({briefing,watchlist,onOpen,onNews,onEarnings,onSentiment}) {
   const reading=briefing.sentiment.data || briefing.manual;
   const isManual=!briefing.sentiment.data && Boolean(briefing.manual);
   const sentimentState=sentimentDisplay(briefing.sentiment,briefing.now);
@@ -41,13 +41,13 @@ export function BriefingStrip({briefing,watchlist,onOpen,onNews,onEarnings}) {
   const news=briefing.news, headline=news.data?.articles?.[0];
   const newsTitle=headline?.title || (news.status==='loading' ? 'Checking the latest headlines…' : news.data ? 'No market headlines returned' : 'Headlines unavailable');
   return <section className="briefing-strip briefing-strip-with-earnings" aria-label="Current market briefing">
-    <button className={`overview-sentiment sentiment-${sentimentTone}`} onClick={onOpen}><Gauge size={23}/><span><small>CNN FEAR & GREED</small><strong>{outdated ? 'Current reading unavailable' : reading ? `${sentimentScore(reading.score)} / 100 · ${reading.rating}` : briefing.sentiment.status==='loading' ? 'Checking market sentiment' : 'Reading unavailable'}</strong>{outdated && <em>Last snapshot: {sentimentScore(reading.score)} · {reading.rating}</em>}<em>{isManual ? 'Saved manual reading' : reading ? `${sentimentState.label} · ${marketTime(reading.observedAt)} Skopje` : 'Updates automatically here'}</em></span><CaretRight size={15}/></button>
+    <button className={`overview-sentiment sentiment-${sentimentTone}`} onClick={onSentiment} aria-label="Open Fear & Greed"><Gauge size={23}/><span><small>CNN FEAR & GREED</small><strong>{outdated ? 'Current reading unavailable' : reading ? `${sentimentScore(reading.score)} / 100 · ${reading.rating}` : briefing.sentiment.status==='loading' ? 'Checking market sentiment' : 'Reading unavailable'}</strong>{outdated && <em>Last snapshot: {sentimentScore(reading.score)} · {reading.rating}</em>}<em>{isManual ? 'Saved manual reading' : reading ? `${sentimentState.label} · ${marketTime(reading.observedAt)} Skopje` : 'Updates automatically here'}</em></span><CaretRight size={15}/></button>
     <button className="overview-next-impact" onClick={()=>{briefing.setCalendarPeriod('upcoming');onOpen();}} aria-label="Next high-impact event: open economic calendar"><Factory size={23} weight="fill"/><span><small>NEXT HIGH IMPACT</small><strong title={calendarTitle}>{calendarTitle}</strong>{event && <time dateTime={event.date}>{marketTime(event.date)} · Skopje</time>}<em className={calendar.status==='stale' || event?.dataStale ? 'amber' : ''}>{calendarContext}</em></span><CaretRight size={15}/></button>
     <EarningsSummary feed={briefing.earnings} watchlist={watchlist} now={briefing.now} onOpen={onEarnings}/>
     <button className="overview-news" onClick={onNews} aria-label="Open News"><NewsImage image={headline?.image} priority/><Newspaper className="news-fallback-icon" size={23}/><span className="overview-news-copy"><small>LATEST HEADLINE</small><strong title={newsTitle}>{newsTitle}</strong>{headline && <em>{headline.publisher} · <time dateTime={headline.publishedAt}>{marketTime(headline.publishedAt)} Skopje</time></em>}<em className={news.status==='stale' || news.status==='unavailable'?'amber':''}>{news.status==='stale'?'Cached headlines · ':news.status==='unavailable'?'Feed unavailable · ':''}Yahoo Finance · View news</em></span><CaretRight size={15}/></button>
   </section>;
 }
-function SentimentCard({briefing,onSettings}) {
+export function SentimentCard({briefing,onSettings}) {
   const {sentiment:feed,manual,setManual}=briefing;
   const reading=feed.data || manual;
   const isManual=!feed.data && Boolean(manual);
@@ -73,7 +73,7 @@ function SentimentCard({briefing,onSettings}) {
       {!outdated && <><div className="sentiment-scale" role="meter" aria-label="Fear and Greed score" aria-valuemin={0} aria-valuemax={100} aria-valuenow={reading.score} aria-valuetext={`${sentimentScore(reading.score)} out of 100, ${reading.rating}`}><i style={{left:`${reading.score}%`}}/></div><div className="scale-labels"><span>Extreme fear</span><span>Extreme greed</span></div></>}
       <p className="reading-date">{isManual ? `Manually entered · ${manual.date}` : `Index reading · ${marketTime(reading.observedAt)} Skopje`}</p>
       {isManual && Date.now()-Date.parse(reading.observedAt)>4*24*60*60*1000 && <p className="amber small-copy">This manual reading is over four days old.</p>}
-      <div className="sentiment-history">{[['Previous close','previousClose'],['1 week ago','previousWeek'],['1 month ago','previousMonth']].map(([label,key])=><div key={key}><span>{label}</span><strong>{sentimentScore(reading[key])}</strong></div>)}</div>
+      <div className="sentiment-history">{[['Previous close','previousClose'],['1 week ago','previousWeek'],['1 month ago','previousMonth'],['1 year ago','previousYear']].map(([label,key])=><div key={key}><span>{label}</span><strong>{sentimentScore(reading[key])}</strong></div>)}</div>
     </div> : <Unavailable feed={feed}>{feed.message || 'The automatic source is temporarily unavailable. The app will retry without you leaving this page.'}</Unavailable>}
     {feed.data && display.detail && !outdated && <p className="amber small-copy" role="status">{display.detail}</p>}
     {feed.data && feed.source?.via && <div className="sentiment-provenance"><span>{feed.source.delivery==='api'?'CNN API snapshot':feed.source.delivery==='hourly'?'Hourly CNN snapshot':'Daily CNN backup'} · checks every 10 min</span><SourceLink href={feed.source.via.url}>Via {feed.source.via.name}</SourceLink><small>{feed.source.delivery==='api'?'Uses the provider’s CNN observation time. Periodic snapshots may differ from CNN between checks.':feed.source.delivery==='hourly'?'The mirror runs about hourly and can lag. This is not a real-time feed.':'Published after the U.S. session. Automatic sources are checked for a newer reading.'}</small></div>}
@@ -134,7 +134,7 @@ export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
   </section>;
 }
 export function BriefingPage({briefing,onTradingView,onSettings}) {
-  return <div className="briefing-page"><div className="briefing-intro"><div><h2>Before the opening bell.</h2><p>Sentiment and economic releases for your session.</p></div><span className="briefing-date">{marketTime(Date.now(),{weekday:'short',hour:undefined,minute:undefined})} · CURRENT SOURCES</span></div><div className="briefing-notice">Each source shows its own observation time. Yahoo quotes and U.S. Treasury rates appear on Overview.</div><div className="briefing-grid"><div className="briefing-side"><SentimentCard briefing={briefing} onSettings={onSettings}/><section className="panel indicator-card"><span className="eyebrow">YOUR CHART TOOLKIT</span><h3>gunner’s lvls</h3><p>Bring your daily supply, demand and gap zones into TradingView.</p><button className="text-button" onClick={onTradingView}>Open indicator toolkit<CaretRight size={16}/></button></section></div><div className="briefing-calendars"><CalendarPanel initialPeriod={briefing.calendarPeriod}/></div></div></div>;
+  return <div className="briefing-page"><div className="briefing-intro"><div><h2>Before the opening bell.</h2><p>Economic releases for your U.S. trading session.</p></div><span className="briefing-date">{marketTime(Date.now(),{weekday:'short',hour:undefined,minute:undefined})} · CURRENT SOURCES</span></div><div className="briefing-notice">Each source shows its own observation time. Yahoo quotes and U.S. Treasury rates appear on Overview.</div><div className="briefing-grid"><div className="briefing-side"><section className="panel indicator-card"><span className="eyebrow">YOUR CHART TOOLKIT</span><h3>gunner’s lvls</h3><p>Bring your daily supply, demand and gap zones into TradingView.</p><button className="text-button" onClick={onTradingView}>Open indicator toolkit<CaretRight size={16}/></button></section></div><div className="briefing-calendars"><CalendarPanel initialPeriod={briefing.calendarPeriod}/></div></div></div>;
 }
 
 export function NewsPage({watchlist,marketFeed}) {

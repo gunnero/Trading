@@ -16,7 +16,7 @@ const errors=[],checks=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 const mark=name=>{checks.push(name);console.log('PASS '+name);};
-const nav=(name='Market briefing')=>page.getByRole('navigation').getByRole('button',{name,exact:true});
+const nav=(name='Market briefing')=>name==='Fear & Greed'?page.locator('.sidebar-account-area').getByRole('button',{name,exact:true}):page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true});
 const snap=async name=>{await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);});await page.screenshot({path:`docs/qa/${name}.png`,fullPage:true});};
 const noOverflow=async()=>expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
 const iso=new Date().toISOString();
@@ -54,12 +54,14 @@ try {
  await expect(page.getByRole('heading',{name:'Before the opening bell.'})).toBeVisible();
  await expect(page.locator('.calendar-panel .feed-status')).not.toContainText('Connecting',{timeout:20000});
  await expect(page.locator('.news-panel')).toHaveCount(0);
+ const calendarStatus=await page.locator('.calendar-panel .feed-status').innerText(),calendarRows=await page.locator('.calendar-table tbody tr').count();
+ await nav('Fear & Greed').click();
  await expect(page.getByRole('meter',{name:'Fear and Greed score'})).toBeVisible({timeout:20000});
  await expect(page.locator('.sentiment-provenance')).toContainText(/Hourly CNN snapshot|Daily CNN backup/);
  await expect(page.getByRole('button',{name:'Enter a CNN reading'})).toHaveCount(0);
- const live={calendarStatus:await page.locator('.calendar-panel .feed-status').innerText(),calendarRows:await page.locator('.calendar-table tbody tr').count(),newsArticles,sentiment:await page.locator('.sentiment-panel .feed-status').innerText(),sentimentScore:await page.getByRole('meter').getAttribute('aria-valuenow')};
+ const live={calendarStatus,calendarRows,newsArticles,sentiment:await page.locator('.sentiment-panel .feed-status').innerText(),sentimentScore:await page.getByRole('meter').getAttribute('aria-valuenow')};
  await page.locator('.sentiment-panel').screenshot({path:'docs/qa/sentiment-automatic.png'});mark('CNN snapshot loads automatically with original timestamp and daily archive attribution');
- await snap('market-briefing-live');await noOverflow();mark('Market briefing keeps sentiment and calendar; news is on its own page');
+ await nav().click();await snap('market-briefing-live');await noOverflow();mark('Market briefing keeps the calendar; sentiment and news have dedicated pages');
  await page.getByRole('button',{name:'Next week',exact:true}).click();
  await expect(page.locator('.calendar-panel .feed-status')).toContainText('Connected',{timeout:20000});
  await expect(page.locator('.calendar-panel .briefing-heading')).toContainText('Finance Calendar');
@@ -90,6 +92,7 @@ try {
  if(live.calendarRows && !(await page.locator('.calendar-table .impact').count())) await expect(page.getByText('No matching events in this date range')).toBeVisible();
  expect((await page.locator('.calendar-table .impact').allTextContents()).every(x=>x==='High')).toBe(true);
  await page.getByRole('combobox',{name:'Event impact'}).selectOption('all');mark('Calendar period and impact controls remain available with source status');
+ await nav('Fear & Greed').click();
  const unavailableSentiment=route=>route.fulfill({json:{status:'unavailable',source,message:'Temporary source outage',data:null}});
  await page.route('**/api/sentiment',unavailableSentiment);await page.locator('.sentiment-panel').getByRole('button',{name:'Refresh source'}).click();
  await page.getByRole('button',{name:'Enter a CNN reading'}).click();
@@ -117,7 +120,7 @@ try {
  }mark('News page and sidebar navigation work at 1024, 800, 390 and 360 pixels');
  await page.setViewportSize({width:1488,height:1058});await nav().click();
  for(const width of [1024,800,390,360]){
-  await page.setViewportSize({width,height:900});await noOverflow();await expect(page.getByRole('heading',{name:'Fear & Greed'})).toBeVisible();await expect(page.getByRole('heading',{name:'Economic calendar'})).toBeVisible();
+  await page.setViewportSize({width,height:900});await noOverflow();await expect(page.locator('.sentiment-panel')).toHaveCount(0);await expect(page.getByRole('heading',{name:'Economic calendar'})).toBeVisible();
   if(width===390)await snap('mobile-briefing');
  }mark('Briefing responsive at 1024, 800, 390 and 360 pixels');
  await page.setViewportSize({width:1488,height:1058});
@@ -127,7 +130,7 @@ try {
  await page.route(calendarRoute,route=>route.fulfill({json:success({events:[],coverageStart:iso,coverageEnd:iso})}));
  await page.route('**/api/news?**',route=>{queries.push(new URL(route.request().url()).searchParams.get('symbols'));return route.fulfill({json:success({articles:[]})});});
  await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();await page.reload();await nav().click();
- await expect(page.getByRole('meter')).toHaveAttribute('aria-valuenow','0');await expect(page.getByText('No matching events in this date range')).toBeVisible();await nav('News').click();await expect(page.getByText('No headlines returned for this selection')).toBeVisible();
+ await expect(page.getByText('No matching events in this date range')).toBeVisible();await nav('Fear & Greed').click();await expect(page.getByRole('meter')).toHaveAttribute('aria-valuenow','0');await nav('News').click();await expect(page.getByText('No headlines returned for this selection')).toBeVisible();
  await page.getByRole('button',{name:'My watchlist',exact:true}).click();
  await expect.poll(()=>queries.at(-1)).toContain('NVDA');
  for (const excluded of ['BTCUSD','ETHUSD','NQ','ES','GC','CL','RTY']) expect(queries.at(-1).split(',')).not.toContain(excluded);
@@ -184,7 +187,7 @@ try {
  await snap('calendar-fixture');mark('Calendar renders dates, impact, forecast, missing actuals, next release and filtered empty states');
  await page.unroute('**/api/sentiment');await page.route('**/api/sentiment',route=>route.fulfill({json:{status:'unavailable',source,message:'Source unavailable',data:null}}));
  await page.unroute(calendarRoute);await page.route(calendarRoute,route=>route.fulfill({json:{status:'unavailable',source,message:'Source unavailable',data:null}}));
- await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();await page.reload();await expect(page.locator('.overview-next-impact')).toContainText('Calendar unavailable');await expect(page.locator('.overview-next-impact time')).toHaveCount(0);await nav().click();await expect(page.getByRole('heading',{name:'Economic calendar'})).toBeVisible();await expect(page.getByText('Reading unavailable')).toHaveCount(2);await expect(page.getByRole('meter')).toHaveCount(0);mark('Unavailable sources never become fabricated readings or empty success states');
+ await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();await nav('Overview').click();await page.reload();await expect(page.locator('.overview-next-impact')).toContainText('Calendar unavailable');await expect(page.locator('.overview-next-impact time')).toHaveCount(0);await nav().click();await expect(page.getByRole('heading',{name:'Economic calendar'})).toBeVisible();await expect(page.locator('.calendar-panel').getByText('Reading unavailable')).toHaveCount(1);await nav('Fear & Greed').click();await expect(page.locator('.sentiment-panel').getByText('Reading unavailable')).toBeVisible();await expect(page.getByRole('meter')).toHaveCount(0);mark('Unavailable sources never become fabricated readings or empty success states');
  // Exercise the automatic timer and DST/date-only states with isolated source fixtures.
  await page.unroute(calendarRoute);
  let rangeRequests=0;

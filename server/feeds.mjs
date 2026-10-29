@@ -18,7 +18,7 @@ export function parseSentiment(raw) {
   const item = raw?.fear_and_greed;
   const rating = text(item?.rating).toLowerCase();
   if (score(item?.score) === null || !iso(item?.timestamp) || !['extreme fear','fear','neutral','greed','extreme greed'].includes(rating)) throw new Error('The CNN archive returned an unrecognized reading.');
-  return { score: item.score, rating, observedAt: iso(item.timestamp), previousClose: score(item.previous_close), previousWeek: score(item.previous_1_week), previousMonth: score(item.previous_1_month) };
+  return { score: item.score, rating, observedAt: iso(item.timestamp), previousClose: score(item.previous_close), previousWeek: score(item.previous_1_week), previousMonth: score(item.previous_1_month), previousYear: score(item.previous_1_year) };
 }
 function readingFreshness(kind, result, now) {
   if (kind !== 'sentiment' || !result.data) return result;

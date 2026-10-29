@@ -1,5 +1,5 @@
 .sidebar-account-area{margin-top:auto;padding:16px 10px 14px;flex-shrink:0}
-.sidebar-account-area .sidebar-settings{width:100%;margin-bottom:12px}
+.sidebar-account-area .sidebar-sentiment{width:100%;margin-bottom:12px}.sidebar-profile .sidebar-settings{width:100%;margin:4px 0}
 .sidebar-profile{border-top:1px solid var(--border);padding-top:13px}
 .sidebar-profile .account-nav{gap:10px;padding:10px 12px;height:auto;min-height:58px;width:100%;text-align:left}
 .sidebar-profile .account-nav>svg:first-child{flex-shrink:0;color:var(--green)}
@@ -77,3 +77,6 @@
   .settings-facts>div{grid-template-columns:minmax(0,1fr);gap:5px;padding:14px 0}
   .settings-private-label{font-size:10px}
 }
+/* Keep profile actions visible while the growing section list scrolls. */
+.sidebar > nav[aria-label="Main navigation"]{flex:1 1 auto;min-height:96px;overflow-y:auto;overscroll-behavior:contain}
+.sidebar .market-clock-sidebar{flex-shrink:0}

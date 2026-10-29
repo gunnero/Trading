@@ -22,7 +22,7 @@ try{
  let result={status:'ok',source:HOURLY_SENTIMENT_SOURCE,fetchedAt:new Date(SENTIMENT_NOW).toISOString(),checkedAt:new Date(SENTIMENT_NOW).toISOString(),data:parseHourlySentiment(hourlySentiment(),parseSentiment,SENTIMENT_NOW)},calls=0;
  await page.route('**/api/sentiment',route=>{calls++;return route.fulfill({json:result});});
  const card=page.getByRole('region',{name:'CNN Fear and Greed'}),overview=page.locator('.overview-sentiment');
- await page.goto(runtime.url+'/#briefing');await expect(card.locator('.sentiment-value>strong')).toHaveText('21.37');await expect(card.locator('.sentiment-history')).toContainText('20.98');await expect(card.locator('.reading-date')).toContainText('15:05 Skopje');await expect(card.locator('.feed-status')).toContainText(/Source checked Oct 26.*15:15 Skopje/);await expect(card).toContainText('Hourly CNN snapshot');await expect(card).toContainText('not a real-time feed');await expect(card.getByRole('meter')).toHaveAttribute('aria-valuenow','21.37');await expect(card.getByRole('button',{name:'Enter a CNN reading'})).toHaveCount(0);
+ await page.goto(runtime.url+'/#sentiment');await expect(card.locator('.sentiment-value>strong')).toHaveText('21.37');await expect(card.locator('.sentiment-history')).toContainText('20.98');await expect(card.locator('.reading-date')).toContainText('15:05 Skopje');await expect(card.locator('.feed-status')).toContainText(/Source checked Oct 26.*15:15 Skopje/);await expect(card).toContainText('Hourly CNN snapshot');await expect(card).toContainText('not a real-time feed');await expect(card.getByRole('meter')).toHaveAttribute('aria-valuenow','21.37');await expect(card.getByRole('button',{name:'Enter a CNN reading'})).toHaveCount(0);
  mark('Hourly source, two-decimal score, exact comparisons and separate reading/check times render correctly');
  const oldCalls=calls;result={...result,data:{...result.data,score:22.15,observedAt:'2026-10-26T14:14:00Z'}};
  await page.clock.fastForward(600001);await expect.poll(()=>calls).toBeGreaterThan(oldCalls);await expect(card.locator('.sentiment-value>strong')).toHaveText('22.15');
@@ -67,7 +67,7 @@ try{
  expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('isolated-browser-fixture-key');
  await page.locator('.settings-content').screenshot({path:'docs/qa/sentiment-api-connection-mobile.png'});expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
  await page.setViewportSize({width:1488,height:1100});await page.locator('.settings-content').screenshot({path:'docs/qa/sentiment-api-connection-desktop.png'});
- await connection.getByRole('button',{name:'Disconnect',exact:true}).click();await expect(connection).toContainText('Disconnected.');await page.goto(runtime.url+'/#briefing');await expect(card).toContainText('Hourly CNN snapshot');
+ await connection.getByRole('button',{name:'Disconnect',exact:true}).click();await expect(connection).toContainText('Disconnected.');await page.goto(runtime.url+'/#sentiment');await expect(card).toContainText('Hourly CNN snapshot');
  mark('Private API setup handles rejected/successful keys, clears the input, renders the actual response and disconnects without losing fallback data');
  const after=await (await testFetch(runtime.url+'/api/workspace')).json();expect(after.data).toEqual(before.data);expect(after.revision).toBe(before.revision);expect(errors).toEqual([]);
  writeFileSync('docs/qa/sentiment-hourly-checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');

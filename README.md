@@ -1,6 +1,6 @@
 # Opening Bell — Session Desk
 
-Trading web app in its first implementation phase. SPY and QQQ options planning stays central; ES/NQ and the imported watchlist provide context. The approved design now has a standalone backend and a durable saved workspace. Market briefing adds external sentiment and U.S. events; the dedicated News page carries Yahoo market and watchlist headlines. Yahoo Finance supplies interim stock prices and chart history; an options feed is not connected yet.
+Trading web app in its first implementation phase. SPY and QQQ options planning stays central; ES/NQ and the imported watchlist provide context. The approved design now has a standalone backend and a durable saved workspace. Market briefing shows U.S. events; Fear & Greed has a dedicated sentiment page; the dedicated News page carries Yahoo market and watchlist headlines. Yahoo Finance supplies interim stock prices and chart history; an options feed is not connected yet.
 
 ## Run locally
 
@@ -44,7 +44,8 @@ Edits autosave after a short delay. A visible status confirms saves or offers re
 - SPY/QQQ chart intervals: **2m, 5m, 15m, 30m, 1h, 4h, D, W, M**. Initial default **4h**; subsequent selections persist. Intervals use source candles and the documented session-aware aggregation; missing history is never generated.
 - Inspect all 52 supplied watchlist entries and 141 original zones across 40 instruments. Paste or upload replacement watchlists and level sheets with validation.
 - Draft conditional options plans with expiration, structure, premium loss budget and notes. Top/Hot ranks eligible watchlist break-and-retest setups using completed candles and EMA/VWAP checks; it is not a calibrated forecast. No options quote or trade execution is connected.
-- Open **Market briefing** for sentiment and the U.S. economic calendar.
+- Open **Market briefing** for the U.S. economic calendar.
+- Open **Fear & Greed** above your account for the CNN score, previous close/week/month/year comparisons, 1M/3M/1Y history and seven expandable indicators. Settings sits below your account; Log out remains visible.
 - Open **Earnings** for recent published EPS results, upcoming reporting windows, this/next week, watchlist filters and saved-level links. The Overview shortcut opens this page; Full calendar retains custom date ranges.
 - Open **News** from the sidebar or the Overview latest-headline card for a full-width feed, led by the latest story and its publisher preview image where available. Other stories have smaller thumbnails or a text layout. Switch between U.S. markets, your watchlist, individual tickers and economy headlines. Source timestamps use Skopje’s 24-hour clock; story links open the original publisher.
 - Open **gunner’s lvls** beside the chart or in the briefing toolkit. Copy the current level sheet, open the protected script, and open SPY/QQQ in TradingView with the selected interval. The app independently calculates completed-candle supply/demand flips; it does not execute the protected Pine script or synchronize with TradingView.
@@ -156,3 +157,11 @@ Cards, upcoming tables and the five-day board link to summaries and existing com
 Yahoo price moves retain their quote session and observation time. They are not calculated earnings reactions or guaranteed real-time quotes. Calendar-only symbols use a quotes-only alias and require Yahoo to verify a USD-denominated U.S. equity listing, including shared-cache responses. This does not create a watchlist/chart mapping. Quote requests cover displayed cards and expanded rows, are batched, and stop while the page is inactive or hidden. Nasdaq dates use shared 30-minute caches, bounded concurrency, explicit partial coverage and provider backoff.
 
 Run `npm run test:earnings` after building for result normalization, session boundaries, symbol matching and isolated browser checks of navigation, summaries, filters, date ranges, source failures and mobile layouts. All QA uses separate accounts and databases.
+
+## Fear & Greed details
+
+The `#sentiment` page and Overview shortcut share the automatic headline reading. The private `/api/sentiment/details` route uses the existing encrypted Oanor connection for `/v1/components` and `/v1/history?limit=365`. The API key stays on the server. Component results cache for 30 minutes and history for six hours, with persistent provider backoff, shared in-flight requests, bounded responses and independent partial/outage states. Caches expire after one day during an outage and are cleared when the connection changes. No market-chart or quote polling runs on this page.
+
+Only the seven index components appear; the S&P and VIX moving-average reference lines do not become additional indicators. Values are sentiment scores, not raw price/ratio series. The documented component response lacks observation timestamps, so retrieval time is labeled separately and freshness is explicitly unverified. The history preserves provider dates, gaps and exact scores; a later observation on the same date replaces the earlier daily label. No missing days or individual-indicator price histories are synthesized. The current headline, historical series and components can reflect different update times.
+
+Run `npm run test:sentiment` after building for parser, cache, authentication, stale-source and isolated browser checks. `npm run test:settings` covers account/settings placement, protected controls and responsive navigation.

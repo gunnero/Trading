@@ -151,3 +151,5 @@ button.macro-item{text-align:left;cursor:pointer;transition:background .15s,box-
 .retest-panel p.scenario-copy{display:block}
 
 .sentiment-setup-steps{padding-left:18px;margin:14px 0;color:var(--muted);font-size:11px;line-height:1.7}.sentiment-setup-steps li+li{margin-top:7px}
+
+.briefing-page .briefing-grid{grid-template-columns:1fr}.briefing-page .briefing-side{order:2}.briefing-page .indicator-card{padding:20px 24px}

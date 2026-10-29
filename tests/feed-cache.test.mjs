@@ -21,3 +21,11 @@ test('range caches remain independent and an outage only retains dated matching 
   const stale=await cache.read('/calendar?week=1',true);assert.equal(stale.status,'stale');assert.equal(stale.data.range,'/calendar?week=1');
   time+=24*60*60*1000;const expired=await cache.read('/calendar?week=1');assert.equal(expired.status,'unavailable');assert.equal(expired.data,undefined);
 });
+
+test('replacing a connection invalidates saved and in-flight readings',async()=>{
+ let release,calls=0;
+ const cache=createFeedCache(async()=>{const n=++calls;if(n===1)await new Promise(r=>{release=r;});return Response.json({status:'ok',data:{n}});});
+ const old=cache.read('/details');cache.invalidate('/details');
+ const current=await cache.read('/details');release();
+ assert.equal((await old).status,'unavailable');assert.equal(current.data.n,2);assert.equal(cache.peek('/details').data.n,2);
+});

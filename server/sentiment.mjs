@@ -7,7 +7,7 @@ export function parseHourlySentiment(raw,parseSnapshot,now=Date.now()){
   // CNN-specific snapshot preserves its original rating and observation time.
   const cnn=raw?.cnn,mirroredAt=Date.parse(raw?.updated),observedAt=Date.parse(cnn?.timestamp);
   if(raw?.sources?.cnn?.ok!==true||!cnn||typeof cnn.timestamp!=='string'||!/[T ].*(?:Z|[+-]\d\d:\d\d)$/.test(cnn.timestamp)||!Number.isFinite(mirroredAt)||!Number.isFinite(observedAt)||mirroredAt>now+300000||observedAt>mirroredAt+300000)throw Error('The hourly mirror has no valid CNN snapshot.');
-  return {...parseSnapshot({fear_and_greed:{score:cnn.value,rating:cnn.rating,timestamp:cnn.timestamp,previous_close:cnn.previousClose,previous_1_week:cnn.previous1Week,previous_1_month:cnn.previous1Month}}),mirroredAt:new Date(mirroredAt).toISOString()};
+  return {...parseSnapshot({fear_and_greed:{score:cnn.value,rating:cnn.rating,timestamp:cnn.timestamp,previous_close:cnn.previousClose,previous_1_week:cnn.previous1Week,previous_1_month:cnn.previous1Month,previous_1_year:cnn.previous1Year}}),mirroredAt:new Date(mirroredAt).toISOString()};
 }
 
 export function ageChecked(result,now){

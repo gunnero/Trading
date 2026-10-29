@@ -16,7 +16,7 @@ try{
  const read=async()=>await(await testFetch(runtime.url+'/api/workspace')).json(),before=await read();
  await page.goto(runtime.url+'/#settings/charts');await expect(page.getByRole('heading',{name:'Chart defaults',exact:true})).toBeVisible();
  expect(requests.some(path=>path.startsWith('/api/market/'))).toBe(false);expect((await read()).revision).toBe(before.revision);
- const footer=page.locator('.sidebar-account-area'),footerBox=await footer.boundingBox();expect(footerBox.y).toBeGreaterThan(700);expect(footerBox.y+footerBox.height).toBeLessThanOrEqual(956);
+ const footer=page.locator('.sidebar-account-area'),footerBox=await footer.boundingBox();expect(footerBox.y).toBeGreaterThan(600);expect(footerBox.y+footerBox.height).toBeLessThanOrEqual(956);
  await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Chart settings'})).toHaveCount(0);
  await page.screenshot({path:dir+'/charts-desktop.png'});await page.locator('.sidebar').screenshot({path:dir+'/sidebar-after.png'});
  mark('Settings loads directly without market/chart polling or workspace writes; account and visible Log out sit at the sidebar bottom');
@@ -31,8 +31,8 @@ try{
  await settingsNav.getByRole('link',{name:'Connections'}).click();await expect(page.getByLabel('API key',{exact:true})).toBeVisible();
  await page.getByLabel('API key',{exact:true}).fill('isolated-unsaved-key-fixture');await settingsNav.getByRole('link',{name:'Account',exact:true}).click();await settingsNav.getByRole('link',{name:'Connections'}).click();await expect(page.getByLabel('API key',{exact:true})).toHaveValue('');
  await page.reload();expect(page.url()).toContain('#settings/connections');await expect(settingsNav.getByRole('link',{name:'Connections'})).toHaveAttribute('aria-current','page');await page.screenshot({path:dir+'/connections-desktop.png'});
- await page.goto(runtime.url+'/#briefing');await expect(page.getByLabel('API key',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Manage CNN connection'}).click();await expect(page.getByLabel('API key',{exact:true})).toBeVisible();expect(page.url()).toContain('#settings/connections');
- mark('CNN management lives in Connections, clears unsaved keys when leaving, retains its route on refresh and is linked from briefing');
+ await page.goto(runtime.url+'/#sentiment');await expect(page.getByLabel('API key',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Manage CNN connection'}).click();await expect(page.getByLabel('API key',{exact:true})).toBeVisible();expect(page.url()).toContain('#settings/connections');
+ mark('CNN management lives in Connections, clears unsaved keys when leaving, retains its route on refresh and is linked from Fear & Greed');
  await footer.getByRole('button',{name:'Account and security'}).click();const account=page.getByRole('dialog',{name:'Account & security'});await expect(account).toBeVisible();await account.getByRole('button',{name:'Close account settings'}).click();await expect(footer.getByRole('button',{name:'Account and security'})).toBeFocused();
  await settingsNav.getByRole('link',{name:'Account',exact:true}).click();await expect(page.locator('.settings-content')).toContainText('owner@example.com');await page.getByRole('button',{name:'Manage account security'}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Close account settings'}).click();await page.screenshot({path:dir+'/account-desktop.png'});
  await settingsNav.getByRole('link',{name:'Workspace',exact:true}).click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloadPromise;const backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(JSON.stringify(backup)).not.toContain('isolated-unsaved-key-fixture');await expect(page.locator('.settings-content')).toContainText('Europe/Skopje');
@@ -45,7 +45,7 @@ try{
    expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
    if(['Charts','Connections'].includes(category)&&[390,820].includes(width))await page.screenshot({path:`${dir}/${category.toLowerCase()}-${width}.png`,fullPage:true});
   }
-  if(width===390){await page.getByRole('button',{name:'More navigation'}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
+  if(width===390){await page.getByRole('button',{name:'More navigation'}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await footer.getByRole('button',{name:'Log out',exact:true}).scrollIntoViewIfNeeded();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
  }
  mark('All four settings sections and bottom account controls fit phone, tablet and desktop; the mobile drawer closes after navigation');
  await settingsNav.getByRole('link',{name:'Charts',exact:true}).click();

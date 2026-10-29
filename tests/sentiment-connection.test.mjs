@@ -22,7 +22,8 @@ function setup(t,fetcher=async()=>Response.json(snapshot())){
 }
 
 test('Oanor parser uses the CNN observation, original rating and complete comparisons',()=>{
-  const raw=snapshot();assert.deepEqual(parseOanorSentiment(raw),{score:30.12,rating:'fear',observedAt:'2026-10-26T14:13:00.000Z',previousClose:20.98,previousWeek:20.8,previousMonth:36.94});
+  const raw=snapshot();assert.deepEqual(parseOanorSentiment(raw),{score:30.12,rating:'fear',observedAt:'2026-10-26T14:13:00.000Z',previousClose:20.98,previousWeek:20.8,previousMonth:36.94,previousYear:null});
+  raw.data.year_ago=64.2;assert.equal(parseOanorSentiment(raw).previousYear,64.2);
   delete raw.data.week_ago;raw.data.previous_close=0;assert.equal(parseOanorSentiment(raw).previousWeek,null);assert.equal(parseOanorSentiment(raw).previousClose,0);
   for(const edit of [r=>{r.success=false;},r=>{r.data.index='Crypto Fear & Greed';},r=>{r.data.source='Alternative.me';},r=>{r.data.updated='2026-10-26';},r=>{r.data.score=101;},r=>{r.data.score='30';},r=>{r.data.rating='uncertain';}]){const value=snapshot();edit(value);assert.throws(()=>parseOanorSentiment(value));}
 });
@@ -87,4 +88,33 @@ test('Connection endpoints require owner session, exact origin and CSRF, and nev
   const response=await fetch(url,{method:'POST',headers,body:JSON.stringify({apiKey:KEY})});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.text()).includes(KEY),false);
   const status=await fetch(url,{headers});assert.equal(status.status,200);assert.equal((await status.text()).includes(KEY),false);
   assert.equal((await fetch(url,{method:'DELETE',headers})).status,200);assert.equal(a.service.status().configured,false);
+});
+
+const detailRaw=kind=>({success:true,status:'ok',data:{index:'CNN Fear & Greed (US stocks)',source:'CNN Business',count:1,...(kind==='components'?{components:[{indicator:'stock_price_strength',score:32.2,rating:'fear'}]}:{history:[{date:'2026-10-23T00:00:00Z',score:20.98,rating:'extreme fear'}]})}});
+test('details use the saved encrypted key, bounded fixed endpoints, independent persistent caches and no fabricated timestamps',async t=>{
+ const urls=[];const a=setup(t,async(url,options)=>{urls.push(url);assert.equal(options.headers['x-oanor-key'],KEY);assert.equal(options.redirect,'error');return Response.json(url===OANOR_URL?snapshot():detailRaw(url.endsWith('components')?'components':'history'));});
+ assert.equal((await a.service.details()).data.components.status,'unavailable');assert.equal(urls.length,0);
+ await a.service.connect(KEY);a.advance(30001);
+ const [x,y]=await Promise.all([a.service.details(),a.service.details()]);assert.deepEqual(x,y);assert.equal(urls.length,3);assert.equal(x.data.components.data.observedAt,null);assert.equal(x.data.history.data.points[0].date,'2026-10-23');assert.ok(urls.includes(OANOR_URL.replace('/index','/history?limit=365')));
+ const restored=createSentimentConnection(a.account,a.options);await restored.details();assert.equal(urls.length,3);
+ a.advance(31*60000);await restored.details();assert.equal(urls.length,4);
+ assert.equal(JSON.stringify(x).includes(KEY),false);a.service.disconnect();assert.equal(a.account.db.prepare('SELECT count(*) AS n FROM sentiment_provider_details').get().n,0);
+});
+test('detail provider failure retains matching cached data, persists backoff and expires old snapshots',async t=>{
+ let fail=false,calls=0;const a=setup(t,async url=>{calls++;if(fail)return new Response(KEY,{status:429,headers:{'Retry-After':'3600'}});return Response.json(url===OANOR_URL?snapshot():detailRaw(url.endsWith('components')?'components':'history'));});
+ await a.service.connect(KEY);a.advance(30001);const first=await a.service.details();a.advance(31*60000);fail=true;const stale=await a.service.details();assert.equal(stale.data.components.status,'stale');assert.equal(stale.data.components.fetchedAt,first.data.components.fetchedAt);assert.equal(JSON.stringify(stale).includes(KEY),false);
+ const n=calls;await createSentimentConnection(a.account,a.options).details();assert.equal(calls,n);
+ a.advance(25*3600000);const expired=await a.service.details();assert.equal(expired.data.components.data,null);assert.equal(expired.data.history.data,null);
+});
+test('disconnect prevents in-flight details from restoring a removed connection',async t=>{
+ let release;const a=setup(t,async url=>{if(url!==OANOR_URL)await new Promise(r=>{release=r;});return Response.json(url===OANOR_URL?snapshot():detailRaw('components'));});
+ await a.service.connect(KEY);a.advance(30001);const pending=a.service.details();a.service.disconnect();release();assert.equal((await pending).status,'unavailable');assert.equal(a.account.db.prepare('SELECT count(*) AS n FROM sentiment_provider_details').get().n,0);
+});
+test('details route is owner-only, read-only and does not expose credentials',async t=>{
+ const a=setup(t),gate=authMiddleware(a.account),server=createServer((req,res)=>gate(req,res,()=>a.service.middleware(req,res,()=>res.end())));
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+ const origin=`http://127.0.0.1:${server.address().port}`,url=origin+'/api/sentiment/details';assert.equal((await fetch(url)).status,401);
+ const session=a.account.newSession(),{authConfig}=await import('../server/auth.mjs');const headers={Cookie:authConfig().cookieName+'='+session.token,Origin:origin,'X-CSRF-Token':a.account.csrf(session.row.id)};
+ const response=await fetch(url,{headers});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.text()).includes(KEY),false);
+ assert.equal((await fetch(url,{method:'POST',headers})).status,405);assert.equal((await fetch(url,{headers:{...headers,Origin:'https://other.example'}})).status,403);
 });

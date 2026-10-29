@@ -9,7 +9,7 @@ const fetcher=async url=>Response.json(payloadFor(url));
 
 test('Hourly snapshot preserves CNN-specific observation, rating and comparisons, excluding other markets and run dates',()=>{
  const raw=hourlySentiment(),data=parseHourlySentiment(raw,parseSentiment,SENTIMENT_NOW);
- assert.deepEqual(data,{score:21.37,rating:'extreme fear',observedAt:'2026-10-26T14:05:00.000Z',previousClose:20.98,previousWeek:20.8,previousMonth:36.94,mirroredAt:'2026-10-26T14:10:00.000Z'});
+ assert.deepEqual(data,{score:21.37,rating:'extreme fear',observedAt:'2026-10-26T14:05:00.000Z',previousClose:20.98,previousWeek:20.8,previousMonth:36.94,previousYear:null,mirroredAt:'2026-10-26T14:10:00.000Z'});
  raw.cnn.value=0;raw.cnn.previousClose=0;delete raw.cnn.previous1Week;assert.equal(parseHourlySentiment(raw,parseSentiment,SENTIMENT_NOW).previousClose,0);assert.equal(parseHourlySentiment(raw,parseSentiment,SENTIMENT_NOW).previousWeek,null);
  for(const edit of [r=>{r.cnn=null;},r=>{r.sources.cnn.ok=false;},r=>{r.cnn.timestamp='2026-10-26';},r=>{r.cnn.value='21';},r=>{r.cnn.value=101;},r=>{r.cnn.rating='crypto fear';},r=>{r.updated='2026-10-27T14:00Z';},r=>{r.cnn.timestamp='2026-10-26T14:20Z';}]){const item=hourlySentiment();edit(item);assert.throws(()=>parseHourlySentiment(item,parseSentiment,SENTIMENT_NOW));}
 });

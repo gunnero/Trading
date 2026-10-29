@@ -8,6 +8,7 @@ export function useMinuteClock() {
   return now;
 }
 const feeds=createFeedCache();
+export const invalidateFeed=url=>feeds.invalidate(url);
 export function useFeed(url,active=true) {
   const [state,setState]=useState({key:url,value:feeds.peek(url)||{status:'loading'}});
   const refreshRef=useRef(()=>{});
