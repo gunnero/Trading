@@ -25,7 +25,7 @@
     "test:workspace": "node --test tests/workspace.test.mjs",
     "test:workspace:browser": "node scripts/workspace-qa.mjs",
     "test:hot": "node scripts/qa-runner.mjs hot",
-    "test:company": "node scripts/qa-runner.mjs company",
+    "test:company": "node --test tests/company-data.test.mjs tests/company-earnings.test.mjs && node scripts/qa-runner.mjs company",
     "test:drawings": "node --test tests/drawings.test.mjs && node scripts/qa-runner.mjs drawings",
     "test:chart-settings": "node --test tests/chart-settings.test.mjs && node scripts/qa-runner.mjs chart-settings",
     "test:sentiment": "node --test tests/sentiment.test.mjs tests/sentiment-connection.test.mjs tests/sentiment-details.test.mjs tests/feed-cache.test.mjs && node scripts/sentiment-qa.mjs && node scripts/sentiment-page-qa.mjs",

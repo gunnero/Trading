@@ -165,3 +165,11 @@ The `#sentiment` page and Overview shortcut share the automatic headline reading
 Only the seven index components appear; the S&P and VIX moving-average reference lines do not become additional indicators. Values are sentiment scores, not raw price/ratio series. The documented component response lacks observation timestamps, so retrieval time is labeled separately and freshness is explicitly unverified. The history preserves provider dates, gaps and exact scores; a later observation on the same date replaces the earlier daily label. No missing days or individual-indicator price histories are synthesized. The current headline, historical series and components can reflect different update times.
 
 Run `npm run test:sentiment` after building for parser, cache, authentication, stale-source and isolated browser checks. `npm run test:settings` covers account/settings placement, protected controls and responsive navigation.
+
+### Company earnings history
+
+Company details include an Earnings tab immediately after Financials. It shows every available quarterly EPS result from the existing Yahoo company snapshot, a comparison chart, report dates, consensus estimates, surprises and beat/miss labels, plus quarterly/annual revenue and net income. GAAP and Non-GAAP histories stay separate, with the provider default selected; year and basis filters do not change the workspace. Source percentages are preserved; calculated percentages are labeled and use an absolute estimate denominator (zero estimates have no calculated percentage).
+
+This public source generally supplies recent quarters, not full lifetime history: GOOG supplied four quarters when checked on October 29, 2026. The UI reports actual coverage and does not invent older reports, report dates, currency or missing figures. The application no longer truncates the source to four EPS rows. No new API key or extra provider request is required. Funds show that corporate earnings do not apply. Existing bounded Yahoo fetching, cache/backoff, authentication and outage handling remain in place.
+
+Run `npm run test:company` for parsing/comparison tests and isolated desktop/mobile company-detail checks.

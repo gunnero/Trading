@@ -3,6 +3,7 @@ import {dirname} from 'node:path';
 import {isEquityKey} from '../src/data/instruments.mjs';
 import {resolveSymbol} from './market-data.mjs';
 import {validDay} from '../src/data/calendar.mjs';
+import {companyEarningsSeries} from './company-earnings.mjs';
 const numeric=value=>typeof value==='number'&&Number.isFinite(value)?value:null;
 const raw=value=>numeric(value?.raw??value);
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):null;
@@ -50,17 +51,17 @@ export function parseCompanyPage(html,symbol,now=Date.now()){
  group('distributions','Dividends',[
   ['dividendRate','Forward annual dividend',s.dividendRate,'price',currency],['dividendYield','Forward dividend yield',s.dividendYield,'percent'],['payout','Payout ratio',s.payoutRatio,'percent']
  ]);
- const history=earnings.financialsChart||{},historyRows=rows=>(Array.isArray(rows)?rows:[]).slice(-5).map(r=>({period:clean(String(r.fiscalQuarter||r.date),30),revenue:raw(r.revenue),income:raw(r.earnings)}));
+ const history=earnings.financialsChart||{},historyRows=rows=>(Array.isArray(rows)?rows:[]).filter(r=>r&&typeof r==='object').map(r=>({period:clean(String(r.fiscalQuarter||r.date),30),revenue:raw(r.revenue),income:raw(r.earnings)}));
  const dates=[...new Set((calendar.earnings?.earningsDate||ec.earningsDate||[]).map(day).filter(Boolean))].sort();
  return {symbol,name:clean(p.longName||p.shortName||symbol),type:p.quoteType,fund,currency,financialCurrency,quarter,sourceUrl:`https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`,quoteObservedAt:new Date(raw(p.regularMarketTime)*1000).toISOString(),
   profile:{sector:clean(profile.sector),industry:clean(profile.industry),country:clean(profile.country),city:clean(profile.city),employees:raw(profile.fullTimeEmployees),website:safeLink(profile.website),investorRelations:safeLink(profile.irWebsite),description:clean(profile.longBusinessSummary,700),fundFamily:clean(k.fundFamily),category:clean(k.category),inception:day(k.fundInceptionDate)},
-  metrics,groups,earnings:{dates,period:clean(ec.currentFiscalQuarter||ec.currentQuarterEstimateDate,30),estimated:typeof calendar.earnings?.isEarningsDateEstimate==='boolean'?calendar.earnings.isEarningsDateEstimate:typeof ec.isEarningsDateEstimate==='boolean'?ec.isEarningsDateEstimate:null,epsEstimate:raw(calendar.earnings?.earningsAverage),revenueEstimate:raw(calendar.earnings?.revenueAverage),basis:earnings.defaultMethodology==='nongaap'?'Non-GAAP':earnings.defaultMethodology==='gaap'?'GAAP':'Source basis unspecified',history:(ec.quarterly||[]).slice(-4).map(r=>({period:clean(r.fiscalQuarter||r.date,30),end:day(r.periodEndDate),reported:day(r.reportedDate),actual:raw(r.actual),estimate:raw(r.estimate)}))},
+  metrics,groups,earnings:{dates,period:clean(ec.currentFiscalQuarter||ec.currentQuarterEstimateDate,30),estimated:typeof calendar.earnings?.isEarningsDateEstimate==='boolean'?calendar.earnings.isEarningsDateEstimate:typeof ec.isEarningsDateEstimate==='boolean'?ec.isEarningsDateEstimate:null,epsEstimate:raw(calendar.earnings?.earningsAverage),revenueEstimate:raw(calendar.earnings?.revenueAverage),...companyEarningsSeries(modules,now)},
   annual:historyRows(history.yearly),quarterly:historyRows(history.quarterly),exDividend:day(calendar.exDividendDate??s.exDividendDate),dividendDate:day(calendar.dividendDate),split:{factor:clean(k.lastSplitFactor,40),date:day(k.lastSplitDate)}};
 }
 export function createCompanyService({fetcher=fetch,now=()=>Date.now(),cachePath=null,onError=()=>{}}={}){
  const cache=new Map(),failures=new Map(),pending=new Map();let blockedUntil=0,active=0;const queue=[];
- if(cachePath)try{const saved=JSON.parse(readFileSync(cachePath,'utf8'));if(saved.version===1){for(const [key,item] of (saved.entries||[]).slice(-100))if(item.data?.symbol===key&&Number.isFinite(item.at)&&now()-item.at<86400000&&item.at<=now())cache.set(key,item);blockedUntil=Math.min(now()+86400000,Number(saved.blockedUntil)||0);}}catch{}
- function persist(){if(!cachePath)return;try{mkdirSync(dirname(cachePath),{recursive:true});writeFileSync(cachePath+'.tmp',JSON.stringify({version:1,entries:[...cache],blockedUntil}),{mode:0o600});renameSync(cachePath+'.tmp',cachePath);}catch{}}
+ if(cachePath)try{const saved=JSON.parse(readFileSync(cachePath,'utf8'));blockedUntil=Math.min(now()+86400000,Number(saved.blockedUntil)||0);if(saved.version===2){for(const [key,item] of (saved.entries||[]).slice(-100))if(item.data?.symbol===key&&Number.isFinite(item.at)&&now()-item.at<86400000&&item.at<=now())cache.set(key,item);}}catch{}
+ function persist(){if(!cachePath)return;try{mkdirSync(dirname(cachePath),{recursive:true});writeFileSync(cachePath+'.tmp',JSON.stringify({version:2,entries:[...cache],blockedUntil}),{mode:0o600});renameSync(cachePath+'.tmp',cachePath);}catch{}}
  async function limited(fn){if(active>=2)await new Promise(r=>queue.push(r));else active++;try{return await fn();}finally{const next=queue.shift();if(next)next();else active--;}}
  async function get(key){
   if(!isEquityKey(key))return {status:'unavailable',symbol:key,message:'Company fundamentals are available for supported U.S. stocks and funds.'};

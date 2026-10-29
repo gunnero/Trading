@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createCompanyService,parseCompanyPage,companyMiddleware} from '../server/company-data.mjs';
@@ -36,4 +36,9 @@ test('Invalid listing keys, methods, non-HTML and oversized responses never reac
  let calls=0;const service=createCompanyService({now:()=>NOW,fetcher:async()=>{calls++;return Response.json({});}}),middleware=companyMiddleware(service);
  for(const [url,method,status] of [['/api/company?symbol=LSE:NVDA','GET',400],['/api/company?symbol=NASDAQ:NVDA','POST',405]]){let body;const res={setHeader(){},end(s){body=s;}};await middleware({url,method},res,()=>{});assert.equal(res.statusCode,status);assert.ok(body);}assert.equal(calls,0);
  assert.equal((await service.get('NASDAQ:NVDA')).status,'unavailable');assert.equal((await createCompanyService({now:()=>NOW,fetcher:async()=>new Response('x'.repeat(4000001),{headers:{'content-type':'text/html'}})}).get('NASDAQ:NVDA')).status,'unavailable');
+});
+
+test('Cache schema updates preserve existing provider backoff',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'company-old-cache-')),cachePath=join(directory,'cache.json');let calls=0;
+ try{writeFileSync(cachePath,JSON.stringify({version:1,entries:[],blockedUntil:NOW+3600000}));const service=createCompanyService({now:()=>NOW,cachePath,fetcher:async()=>{calls++;return response(modules());}});assert.equal((await service.get('NASDAQ:NVDA')).status,'unavailable');assert.equal(calls,0);}finally{rmSync(directory,{recursive:true,force:true});}
 });
