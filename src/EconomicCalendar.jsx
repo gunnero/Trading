@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useRef,useState} from 'react';
 import {CalendarBlank,CaretLeft,CaretRight,Factory,Circle,ArrowDown} from '@phosphor-icons/react';
 import {useDisplayTime} from './DisplayTime';
@@ -58,7 +59,7 @@ export default function EconomicCalendar({briefing}) {
   function selectDay(date) {setSelectedDay(date);setLimit(60);tableRef.current?.scrollIntoView({behavior:'instant',block:'start'});tableRef.current?.focus({preventScroll:true});}
   const changeImpact=id=>{setImpact(id);setLimit(60);};
   return <div className="economic-page calendar-panel">
-    <header className="eco-page-heading"><h1>Economic calendar</h1><p>U.S. economic releases, Fed events and Treasury auctions. Times in {zoneLabel} · {formatLabel}.</p></header>
+    <PageHeader title="Economic Calendar" description={`U.S. economic releases, Fed events and Treasury auctions. Times in ${zoneLabel} · ${formatLabel}.`}/>
     <div className="eco-session-strip"><strong><Circle size={10} weight="fill" aria-hidden="true"/>{marketTime(now,{weekday:'short',hour:undefined,minute:undefined})}</strong><span>{session.label} · {clockTime(now)} {zoneLabel}</span><span className={feed.status==='stale'?'amber':''}>{feed.status==='loading'?'Loading schedule…':feed.status==='stale'?'Cached · '+fetchedAgo(feed.fetchedAt,now):feed.data?fetchedAgo(feed.fetchedAt,now):'Schedule unavailable'}</span></div>
     <NextRelease feed={upcoming} now={now}/>
     <section className="eco-releases" aria-labelledby="eco-table-title">

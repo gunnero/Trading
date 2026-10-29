@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useMemo,useState} from 'react';
 import {UploadSimple,Info,MagnifyingGlass,CaretRight,CaretDown,ArrowRight,ArrowSquareOut,Clock} from '@phosphor-icons/react';
 import {formatDate,formatPrice,parseLevels,zoneText,zoneName} from './data/market';
@@ -83,7 +84,7 @@ export function LevelsView({workspace,watchlist,onImport,onSelect}){
   const expanded=browseAll||!!query.trim()||others.includes(active);
   const groups=[['Your focus',FOCUS_SYMBOLS.filter(s=>entries.includes(s))],['Market context',CONTEXT_SYMBOLS.filter(s=>entries.includes(s))],['All instruments',expanded?others:[]]];
   return <section className="levels-page levels-workbench" aria-labelledby="levels-title">
-    <header className="level-board-heading"><div><span className="eyebrow">FOCUS & SCAN</span><h1 id="levels-title">Key levels</h1><p>{formatDate(sheet.date)} · {Object.keys(sheet.instruments).length} instruments · {count} zones</p></div><button className="button outline" onClick={onImport}><UploadSimple size={18}/>Import levels</button></header>
+    <PageHeader id="levels-title" title="Key levels" description={`${formatDate(sheet.date)} · ${Object.keys(sheet.instruments).length} instruments · ${count} zones`} actions={<button className="button outline" onClick={onImport}><UploadSimple size={18}/>Import levels</button>}/>
     <div className="level-board-controls level-history-controls">
       <label>Levels from<select aria-label="Level list date" value={historical?selected.date:'latest'} onChange={e=>changeDate(e.target.value)}>{snapshots.map((item,index)=><option key={item.date} value={index===0?'latest':item.date}>{formatDate(item.date)}{index===0?' · Latest':''}</option>)}</select></label>
       <label>Compare with<select aria-label="Compare levels with" value={comparison?.date||''} onChange={e=>setCompareDate(e.target.value)} disabled={snapshots.length<2}><option value="">No comparison</option>{snapshots.filter(item=>item.date!==selected.date).map(item=><option key={item.date} value={item.date}>{formatDate(item.date)}</option>)}</select></label>

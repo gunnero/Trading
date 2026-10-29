@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import { useState } from 'react';
 import { Gauge, Newspaper, CaretRight, Factory, ArrowUpRight } from '@phosphor-icons/react';
@@ -105,7 +106,7 @@ export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
   const watchlistFeed=useFeed(scope==='watchlist' && symbols.length ? `/api/news?symbols=${encodeURIComponent([...new Set(symbols)].sort().join(','))}` : null);
   const feed=scope==='markets'?marketFeed:watchlistFeed;
   const articles=(feed.data?.articles || []).filter(a=>!economy || a.economy);
-  return <section className="panel news-panel" aria-label="Market and watchlist news"><div className="briefing-heading"><div><span className="eyebrow">HEADLINES & CATALYSTS</span><h2>{fixedSymbol?`${fixedSymbol} headlines`:'News for your session'}</h2></div><SourceLink href={YAHOO}>Yahoo Finance</SourceLink></div>
+  return <section className="panel news-panel" aria-label="Market and watchlist news">{fixedSymbol&&<div className="briefing-heading"><div><span className="eyebrow">HEADLINES & CATALYSTS</span><h2>{fixedSymbol} headlines</h2></div><SourceLink href={YAHOO}>Yahoo Finance</SourceLink></div>}
     {!fixedSymbol&&<div className="news-controls"><div className="segmented" aria-label="News scope">{[['markets','U.S. markets'],['watchlist','My watchlist']].map(([id,label])=><button key={id} className={scope===id?'selected':''} aria-pressed={scope===id} onClick={()=>setScope(id)}>{label}</button>)}</div>{scope==='watchlist' && <select aria-label="News symbol" value={current} onChange={e=>setSelected(e.target.value)}><option value="all">All {stocks.length} U.S. listings</option>{stocks.map(s=><option key={s.id} value={s.symbol}>{s.symbol}</option>)}</select>}<label className="check-label"><input type="checkbox" checked={economy} onChange={e=>setEconomy(e.target.checked)}/>Economy headlines only</label></div>}
     <p className="news-context">{scope==='markets' ? 'Headlines from SPY, QQQ, IWM and DIA feeds.' : `Yahoo headlines for ${current==='all' ? 'the U.S.-listed stocks, ETFs and ADRs in your imported watchlist' : current}.`} {economy ? 'Economy view matches topics such as the Fed, inflation and jobs in returned headlines.' : 'Publisher selection may include related companies and global stories affecting U.S. markets.'}</p>
     {!symbols.length ? <div className="feed-empty"><strong>No U.S. listings in this watchlist</strong><p>Import stocks, ETFs or ADRs to follow their news.</p></div> : !feed.data ? <Unavailable feed={feed}/> : !articles.length ? <div className="feed-empty"><Newspaper size={26}/><strong>No headlines returned for this selection</strong><p>Try another symbol or turn off the economy filter. Coverage is limited to the publisher’s latest feed.</p></div> : <div className="news-list">{articles.map((a,i)=><a className={`news-article ${i===0?'news-lead':''}`} key={a.id} href={a.url} target="_blank" rel="noopener noreferrer"><NewsImage image={a.image} priority={i===0}/><span className="news-number">{String(i+1).padStart(2,'0')}</span><div className="news-article-copy">{i===0 && <span className="news-lead-label">Latest headline</span>}<span className="news-meta">{a.publisher} <span>·</span> <time dateTime={a.publishedAt}>{marketTime(a.publishedAt)} {zoneLabel}</time> {a.economy && <b>ECONOMY</b>}</span><h3>{a.title}</h3></div><ArrowUpRight size={20}/></a>)}</div>}
@@ -113,6 +114,6 @@ export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
     <div className="news-bottom"><FeedStatus feed={feed}/><span className="small-copy muted">Publisher images where available · refreshes every 10 min · links may require a subscription</span></div>
   </section>;
 }
-export function NewsPage({watchlist,marketFeed}) {
-  return <div className="briefing-page news-page"><NewsPanel watchlist={watchlist} marketFeed={marketFeed}/></div>;
+export function NewsPage({watchlist,marketFeed,marketContext}) {
+  return <div className="briefing-page news-page"><PageHeader title="News" description="U.S. market headlines and catalysts for your watchlist." actions={<SourceLink href={YAHOO}>Yahoo Finance</SourceLink>}/><div className="page-market-context">{marketContext}</div><NewsPanel watchlist={watchlist} marketFeed={marketFeed}/></div>;
 }

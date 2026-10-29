@@ -40,6 +40,8 @@ Edits autosave after a short delay. A visible status confirms saves or offers re
 
 ## Workflows
 
+All pages use one shared compact header with a title, short description and page-specific actions. Actions wrap on phones, where the header menu opens the existing navigation drawer. The session clock remains visible above the page. `npm run test:page-headers` checks layout, page actions and navigation across phone, tablet and desktop using an isolated workspace.
+
 - **Settings → Workspace → Session display** lets you choose a time zone and 12-hour or 24-hour clock. Changes save automatically and apply to clocks, timed calendar events, news, quotes, chart readings and trade reviews. U.S. markets stays fixed. Exchange schedules, source dates and strategy calculations do not change. Journal entry/import fields and P/L day grouping remain explicitly labeled Skopje to preserve broker-record interpretation; stored executions are never shifted.
 - The sidebar shows the current **U.S. stock-market session**, your selected local date and clock, next change/countdown and next regular opening. A compact clock stays visible on tablet/mobile. Click it for local pre-market, regular and after-hours times and separate SPY/QQQ options reference hours.
 - SPY/QQQ chart intervals: **2m, 5m, 15m, 30m, 1h, 4h, D, W, M**. Initial default **4h**; subsequent selections persist. Intervals use source candles and the documented session-aware aggregation; missing history is never generated.

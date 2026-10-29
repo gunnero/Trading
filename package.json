@@ -34,6 +34,7 @@
     "auth:setup": "node scripts/owner-access.mjs",
     "auth:recover": "node scripts/owner-access.mjs --recover",
     "test:auth": "node --test tests/auth.test.mjs && node scripts/auth-qa.mjs && node scripts/auth-vite-qa.mjs",
+    "test:page-headers": "node scripts/page-headers-qa.mjs",
     "test:settings": "node scripts/settings-qa.mjs",
     "test:journal": "node --test tests/journal.test.mjs && node scripts/journal-qa.mjs",
     "test:journal-chart": "node --test tests/journal-chart.test.mjs tests/journal-review.test.mjs && node scripts/journal-chart-qa.mjs",

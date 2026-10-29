@@ -1,3 +1,4 @@
+import {PageHeader,PageNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -153,6 +154,11 @@ function SessionDesk({workspace}) {
     else if(target.kind==='details'&&!historical)inspect(target.entry);
     else setDialog('level-link');
   };
+  const marketContext=<MarketGroups groups={contextGroups} quotes={quotes} onOpen={(group,item)=>{
+    setLevelView(null);
+    if(group==='funds'||!macro.some(([key])=>key===item.key)){inspect(item.entry);return;}
+    setMacroSymbol(item.key);setDialog('macro-chart');
+  }}/>;
   return <div className="app-shell" data-section={section}>
     <aside ref={sidebarRef} id="desk-navigation" role={menuOpen?'dialog':undefined} aria-modal={menuOpen||undefined} aria-label="Navigation" className={`sidebar ${menuOpen ? 'is-open' : ''}`}>
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
@@ -170,18 +176,14 @@ function SessionDesk({workspace}) {
     {menuOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
     <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
     <div className="main-shell" inert={menuOpen||undefined}>
-      {!['overview','levels','briefing'].includes(section) && <header className="topbar"><div className="topbar-title"><button className="icon-button mobile-menu" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={() => setMenuOpen(!menuOpen)}><List size={23}/></button><h1>{section === 'levels' ? 'Your map for the session.' : section === 'briefing' ? 'The context behind the move.' : section === 'sentiment' ? 'Fear & Greed' : section === 'earnings' ? 'Earnings' : section === 'news' ? 'News' : section === 'settings' ? 'Settings' : section === 'journal' ? 'Trade journal' : 'Session review'}</h1></div><div className="topbar-actions">{['settings','journal','review','earnings','sentiment'].includes(section)?<span className="settings-private-label"><LockKey size={16}/>Private workspace</span>:<><span className="sample-date">{quote ? `${isExtendedQuote(quote)?quote.session.toUpperCase():'QUOTE SESSION'} · ${formatDate(quote.sessionDate).toUpperCase()}` : 'CONNECTING MARKET DATA'}</span><button className="demo-label" onClick={()=>setDialog('market-data')}><span className="status-dot"/>Yahoo Finance <Info size={14}/></button><button className="button outline" onClick={() => setDialog('import')}><UploadSimple size={18}/><span>Import levels</span></button></>}</div></header>}
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
-      {!['settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)&&<MarketGroups groups={contextGroups} quotes={quotes} onOpen={(group,item)=>{
-        setLevelView(null);
-        if(group==='funds'||!macro.some(([key])=>key===item.key)){inspect(item.entry);return;}
-        setMacroSymbol(item.key);setDialog('macro-chart');
-      }}/>}
-      <main>
+      <PageNavigation.Provider value={{expanded:menuOpen,open:()=>setMenuOpen(true)}}><main>
         {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>setDialog('account')}>Set up security <CaretRight size={15}/></button></div>}
-        {section!=='levels' && !['settings','journal','review','earnings','sentiment','briefing'].includes(section) && quote && instrument && !matchedDate && <div className="notice"><WarningCircle size={20}/><span>{awaitingSessionQuote(sourceDate,quote)?`Today's levels are ready. Waiting for today's ${symbol} price; Yahoo's last regular-session quote is from ${formatDate(quote.sessionDate)}. No new level import is needed.`:<>{instrument.carriedForward?'Carried-forward levels':'Levels'} dated {formatDate(sourceDate)}; {symbol} quote session {formatDate(quote.sessionDate)}. The chart remains available; zone comparisons are paused until dates match.</>}</span></div>}
+
         {section === 'overview' && <>
-          <h1 className="sr-only">Overview</h1>
+          <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session."/>
+          <div className="page-market-context">{marketContext}</div>
+          {quote && instrument && !matchedDate && <div className="notice"><WarningCircle size={20}/><span>{awaitingSessionQuote(sourceDate,quote)?`Today's levels are ready. Waiting for today's ${symbol} price; Yahoo's last regular-session quote is from ${formatDate(quote.sessionDate)}. No new level import is needed.`:<>{instrument.carriedForward?'Carried-forward levels':'Levels'} dated {formatDate(sourceDate)}; {symbol} quote session {formatDate(quote.sessionDate)}. The chart remains available; zone comparisons are paused until dates match.</>}</span></div>}
           <BriefingStrip briefing={briefing} watchlist={watchlist} onOpen={() => navigate('briefing')} onNews={() => navigate('news')} onEarnings={()=>navigate('earnings')} onSentiment={()=>navigate('sentiment')}/>
           <FocusTabs focus={focus} onFocus={setFocus} quotes={quotes} qqqRoles={qqqRoles} spyRoles={spyRoles} sheet={sheet} scan={scan} customEntry={customEntry}/>
           <SetupControls focus={focus} watchlist={watchlist} customKey={customKey} onCustom={setCustom} interval={setupInterval} onInterval={setSetupInterval} scan={scan} sheetDate={sheet.date}/>
@@ -202,12 +204,12 @@ function SessionDesk({workspace}) {
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={route.split('/')[1]==='plans'?'plans':'trades'} tradeId={route.split('/')[2]} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}
         {section === 'settings' && <SettingsPage category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
-        {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news}/>}
+        {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news} marketContext={marketContext}/>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel}/ >}
         {section === 'review' && <React.Suspense fallback={<p role="status">Loading session review…</p>}><SessionReview workspace={workspace} selectedDay={route.split('/')[1]} onDay={day=>navigate(`review/${day}`)} onJournal={()=>navigate('journal/trades')} onTrade={id=>navigate(`journal/trades/${encodeURIComponent(id)}`)}/></React.Suspense>}
         <div className={`workspace-save-status ${workspace.status==='error'||workspace.status==='conflict'?'needs-attention':''}`} role="status" aria-live="polite"><span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span><div>{['error','conflict'].includes(workspace.status)&&<>{workspace.status==='error'&&<button onClick={workspace.retry}>Retry save</button>}<button onClick={workspace.reload}>Load saved version</button></>}<button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button></div></div>
         <footer className="app-footer"><span>OPENING BELL <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
-      </main>
+      </main></PageNavigation.Provider>
     </div>
     {dialog === 'account' && <AccountDialog workspace={workspace} onClose={()=>setDialog(null)}/>}
       {dialog === 'macro-chart' && <Modal title={`${macro.find(([key])=>key===macroSymbol)?.[1]} chart`} subtitle="Market context · source history" onClose={()=>setDialog(null)} wide className="market-chart-modal"><MarketContextChart key={macroSymbol} symbol={macroSymbol} quotes={quotes} sheet={viewedSheet} historical={!!levelView?.historical} onSelect={setMacroSymbol}/></Modal>}

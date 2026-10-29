@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {timeZones} from './data/display-time.mjs';
 import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,UserCircle,ArrowRight,DownloadSimple,Clock,SignOut,Tag} from '@phosphor-icons/react';
@@ -24,8 +25,8 @@ function Connections(){
 }
 export function SettingsPage({category,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
   const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
-  return <div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
-    <div className="settings-intro"><span className="eyebrow">PERSONAL WORKSPACE</span><h2>Workspace settings</h2><p>Manage your watchlist, charts, data connections and account in one place.</p></div>
+  return <><PageHeader title="Settings" description="Manage your watchlist, charts, data connections and account in one place."/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
+
     <div className="settings-layout"><nav className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>
       <div className="settings-content" key={category}>
         {category==='watchlist'&&watchlistContent}
@@ -35,7 +36,7 @@ export function SettingsPage({category,watchlistContent,workspace,onAccount,onLo
         {category==='workspace'&&<><SessionDisplay workspace={workspace}/><section className="panel settings-card"><header><HardDrives size={25}/><div><h2>Workspace backup</h2><p>Keep a copy of your saved trading workspace.</p></div></header><p className="settings-card-description">Includes watchlist, imported levels, chart settings, drawings, plans, journal trades, daily reviews and notes. Passwords, API keys and account recovery codes are excluded.</p><button className="button outline" onClick={workspace.backup}><DownloadSimple size={18}/>Download workspace backup</button></section></>}
       </div>
     </div>
-  </div>;
+  </div></>;
 }
 
 function SessionDisplay({workspace}){

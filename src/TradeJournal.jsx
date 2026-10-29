@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {lazy,Suspense,useEffect,useId,useMemo,useRef,useState} from 'react';
 import {Notebook,Plus,UploadSimple,DownloadSimple,CaretLeft,CaretRight,X,Trash,ArrowUpRight,CheckCircle,Clock,ImageSquare,ArrowCounterClockwise} from '@phosphor-icons/react';
@@ -115,7 +116,7 @@ function JournalTrades({workspace,tradeId,onClearTrade}){
 export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,onTab,onNewPlan,onReview,onClearTrade}){
   let tradeId='';try{tradeId=decodeURIComponent(encodedId||'');}catch{}
   const selected=workspace.data.journal?.trades.find(trade=>trade.id===tradeId);
-  return <div className="journal-page"><div className="journal-heading"><div><span className="eyebrow">YOUR PROCESS. YOUR RECORD.</span><h2>Trade journal</h2><p>Review the trade. Refine the next one.</p></div><button className="button outline" onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review<CaretRight size={16}/></button></div>
+  return <div className="journal-page"><PageHeader title="Trade journal" description="Review the trade. Refine the next one." actions={<button className="button outline" onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review<CaretRight size={16}/></button>}/>
     <nav className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans <span>{workspace.data.plans.length}</span></button></nav>
     {tab==='plans'?<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>:<>{tradeId&&!selected&&<p className="journal-help amber" role="status">This trade is no longer in the journal.</p>}<JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade}/></>}
   </div>;

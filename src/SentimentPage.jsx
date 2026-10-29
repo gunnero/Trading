@@ -1,3 +1,4 @@
+import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {useMemo,useState} from 'react';
 import {ArrowClockwise,CaretRight,Gauge} from '@phosphor-icons/react';
@@ -52,7 +53,7 @@ export default function SentimentPage({briefing,onSettings}){
  const readings=new Map((indicators.data?.components||[]).map(item=>[item.id,item]));
  const refresh=()=>{briefing.sentiment.refresh();details.refresh();};
  return <div className="sentiment-page">
-  <div className="sentiment-page-intro"><p>The mood of the U.S. stock market, and the indicators behind it.</p><button className="button outline" onClick={refresh} disabled={details.refreshing||details.status==='loading'}><ArrowClockwise size={17}/>Refresh readings</button></div>
+  <PageHeader title="Fear & Greed" description="The mood of the U.S. stock market, and the indicators behind it." actions={<button className="button outline" onClick={refresh} disabled={details.refreshing||details.status==='loading'}><ArrowClockwise size={17}/>Refresh readings</button>}/>
   <div className="sentiment-hero"><SentimentCard briefing={briefing} onSettings={onSettings}/><History feed={{...history,refresh:details.refresh,refreshing:details.refreshing}} now={briefing.now}/></div>
   <section className="sentiment-components" aria-label="Seven sentiment indicators"><header><div><span className="eyebrow">THE SEVEN INDICATORS</span><h2>What’s behind the score?</h2></div><SourceLink href="https://www.oanor.dev/api/stockfeargreed-api">CNN data via Oanor</SourceLink></header>
    <p className="sentiment-detail-note">These are sentiment scores out of 100, not stock prices, VIX levels or put/call ratios. Open an indicator to see what it measures.</p>

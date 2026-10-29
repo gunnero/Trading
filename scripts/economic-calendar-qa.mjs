@@ -43,7 +43,7 @@ try {
  });
  const read=async()=>await(await testFetch(runtime.url+'/api/workspace')).json(),before=await read();
  await page.goto(runtime.url+'/#briefing');
- await expect(page.getByRole('heading',{name:'Economic calendar',exact:true,level:1})).toBeVisible();await expect(page.locator('.eco-next h2')).toHaveText('ISM Manufacturing PMI');
+ await expect(page.getByRole('heading',{name:'Economic Calendar',exact:true,level:1})).toBeVisible();await expect(page.locator('.eco-next h2')).toHaveText('ISM Manufacturing PMI');
  await expect(page.locator('.eco-countdown strong')).toHaveText('in 3d 16h');await expect(page.locator('.eco-next-heading time')).toContainText('16:00');
  await expect(page.locator('.eco-table tbody tr')).toHaveCount(4);await expect(page.locator('.eco-week-grid>.eco-day')).toHaveCount(5);
  await expect(page.locator('.eco-day.is-today')).toContainText('Thu, Oct 29');
@@ -67,7 +67,7 @@ try {
  await period.getByRole('button',{name:'Upcoming',exact:true}).click();await expect(table).not.toContainText('Advance GDP');await expect(table).toContainText('ISM Manufacturing PMI');
  mark('Automatic next/following week, weekend events, day drill-down, custom validation, upcoming and midnight rollover retain notes and source dates');
  mode='slow';await period.getByRole('button',{name:'Next month',exact:true}).click();await expect(page.locator('.eco-table tbody tr')).toHaveCount(0);await expect(page.locator('.eco-releases')).toContainText('Connecting to source');await expect(table).toContainText('Later release');mode='ok';
- await page.reload();await expect(page.locator('h1')).toHaveText('Economic calendar');expect(page.url()).toContain('#briefing');
+ await page.reload();await expect(page.locator('h1')).toHaveText('Economic Calendar');expect(page.url()).toContain('#briefing');
  mode='stale';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.calendar-warning')).toContainText('provider reconnecting');await expect(table.locator('tbody tr')).toHaveCount(4);
  mode='unavailable';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.eco-releases')).toContainText('Source temporarily unavailable');await expect(table).toHaveCount(0);
  mode='empty';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.eco-releases')).toContainText('No matching events');
@@ -76,7 +76,7 @@ try {
  const requestCount=requests.filter(r=>new URL(r.url()).pathname==='/api/calendar').length;await page.clock.fastForward(600001);await expect.poll(()=>requests.filter(r=>new URL(r.url()).pathname==='/api/calendar').length).toBeGreaterThan(requestCount);mark('Selected schedule and independent next-release feed refresh automatically after ten minutes');
  const current=await read();expect(current.revision).toBe(before.revision);
  const changed=await testFetch(runtime.url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({revision:current.revision,data:{...current.data,displayTime:{timeZone:'America/New_York',hourCycle:'h12'}}})});expect(changed.ok).toBeTruthy();
- await page.reload();await expect(page.locator('.eco-next-heading time')).toContainText('10:00 AM');await expect(page.locator('.eco-page-heading')).toContainText('New York · 12h');await expect(page.locator('.eco-table')).toContainText('08:30 AM');
+ await page.reload();await expect(page.locator('.eco-next-heading time')).toContainText('10:00 AM');await expect(page.locator('.page-header-description')).toContainText('New York · 12h');await expect(page.locator('.eco-table')).toContainText('08:30 AM');
  mark('Saved New York / 12-hour setting updates release, countdown and clock displays without changing U.S. date grouping');
  for(const width of [1485,1024,820,390,320]){
   await page.setViewportSize({width,height:1231});await page.evaluate(()=>window.scrollTo(0,0));
@@ -84,7 +84,7 @@ try {
   await expect(page.locator('.eco-next')).toBeVisible();await expect(page.locator('.eco-releases')).toBeVisible();
   await page.screenshot({path:dir+`/width-${width}.png`,fullPage:true});
  }
- await page.getByRole('navigation',{name:'Quick navigation'}).getByRole('button',{name:'Economic Calendar',exact:true}).click();await expect(page.locator('h1')).toHaveText('Economic calendar');
+ await page.getByRole('navigation',{name:'Quick navigation'}).getByRole('button',{name:'Economic Calendar',exact:true}).click();await expect(page.locator('h1')).toHaveText('Economic Calendar');
  await page.getByRole('button',{name:'More navigation'}).click();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Economic Calendar',exact:true})).toBeVisible();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Economic Calendar',exact:true}).click();
  await page.clock.setSystemTime(new Date('2026-11-02T15:01:00Z'));await page.clock.fastForward(60001);await expect(page.locator('.eco-next h2')).toHaveText('Later release');await expect(page.locator('#eco-table-title')).toHaveText('Today');await expect(page.locator('.eco-week-grid')).toContainText('Mon, Nov 2');mark('Countdown advances to the next release and current week rolls forward as time passes');
  expect(errors).toEqual([]);mark('Desktop/tablet/390/320px layout, drawer and bottom navigation work without horizontal overflow or runtime errors');
