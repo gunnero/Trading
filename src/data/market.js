@@ -16,8 +16,8 @@ export function parseLevels(text, sourceDates = {}) {
     const [symbol, rawTimeframe, ...tokens] = line.split('|').map(x => x.trim());
     if (!/^[A-Z0-9.]{1,15}$/.test(symbol) || !rawTimeframe) throw new Error(`Line ${i + 2}: expected SYMBOL|timeframe|zones.`);
     if (instruments[symbol]) throw new Error(`Line ${i + 2}: ${symbol} appears more than once.`);
-    const timeframe = { '30min': '30 min', '1hr': '1 h', '1h': '1 h', '4h': '4 h', 'daily': 'Daily' }[rawTimeframe.toLowerCase()];
-    if (!timeframe) throw new Error(`Line ${i + 2}: use 30min, 1h, 1HR, 4h or Daily.`);
+    const timeframe = { '15min': '15 min', '30min': '30 min', '1hr': '1 h', '1h': '1 h', '4hr': '4 h', '4h': '4 h', 'daily': 'Daily' }[rawTimeframe.toLowerCase()];
+    if (!timeframe) throw new Error(`Line ${i + 2}: use 15min, 30min, 1h, 1HR, 4h, 4HR or Daily.`);
     let futures = false;
     const zones = [];
     tokens.forEach(token => {

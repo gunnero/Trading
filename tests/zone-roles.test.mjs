@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {applyZoneRoles} from '../src/data/zone-roles.mjs';
+import {applyZoneRoles,LEVEL_FRAMES} from '../src/data/zone-roles.mjs';
 import {parseLevels} from '../src/data/market.js';
 import {entryState} from '../src/data/quotes.mjs';
 import {createMarketService,marketDataMiddleware,parseCandles,resolveSymbol} from '../server/market-data.mjs';
@@ -41,6 +41,19 @@ test('Delayed futures and cached source snapshots cannot confirm a candle premat
  const service=createMarketService({now:()=>time,fetcher:async()=>{if(offline)throw Error('offline');return Response.json(body);}});
  const first=await service.levelHistory('NQ','30m','2026-10-23');assert.equal(first.bars.length,1);assert.equal(first.through,start+1800);
  time+=45*60000;offline=true;const cached=await service.levelHistory('NQ','30m','2026-10-23');assert.equal(cached.status,'stale');assert.deepEqual(cached.bars,first.bars);
+});
+test('Imported 15-minute NQ levels request 15-minute candles and honor futures delay',async()=>{
+ const nq=parseLevels('LVLS 2026-10-23\nNQ|15min|S 30370-30332.25|FUT').instruments.NQ;
+ const body=yahooPayload('NQ=F',{step:15}),start=body.chart.result[0].timestamp[0],time=(start+50*60)*1000;
+ body.chart.result[0].meta.regularMarketTime=time/1000;
+ const urls=[],service=createMarketService({now:()=>time,fetcher:async url=>{urls.push(url);return Response.json(body);}});
+ const frame=LEVEL_FRAMES[nq.timeframe];assert.equal(frame,'15m');
+ let result;const res={setHeader(){},end(text){result=JSON.parse(text);}};
+ await marketDataMiddleware(service)({method:'GET',url:`/api/market/level-history?symbol=NQ&interval=${frame}&from=2026-10-23`},res,()=>assert.fail('Expected level-history response'));
+ assert.equal(result.status,'ok');assert.equal(result.timeframe,'15m');
+ assert.equal(new URL(urls[0]).searchParams.get('interval'),'15m');
+ assert.equal(result.bars.length,2);assert.equal(result.through,start+30*60);
+ assert.ok(result.bars.every(b=>b.closed&&b.end-b.timestamp===900));
 });
 test('Closed shortened 4h sessions confirm; missing constituent bars never confirm',async()=>{
  const payload=yahooPayload(),asset=resolveSymbol('QQQ');

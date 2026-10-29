@@ -1,6 +1,6 @@
 import {isEquityKey} from './instruments.mjs';
-export const LEVEL_FRAMES={'30 min':'30m','1 h':'1h','4 h':'4h',Daily:'D'};
-export const supportsLevelHistory=(symbol,frame)=>(isEquityKey(symbol)||['NQ','ES'].includes(symbol))&&['30m','1h','4h','D'].includes(frame);
+export const LEVEL_FRAMES={'15 min':'15m','30 min':'30m','1 h':'1h','4 h':'4h',Daily:'D'};
+export const supportsLevelHistory=(symbol,frame)=>(isEquityKey(symbol)||['NQ','ES'].includes(symbol))&&Object.values(LEVEL_FRAMES).includes(frame);
 export function applyZoneRoles(instrument,bars=[]){
   if(!instrument)return null;
   const ordered=[...bars].filter(bar=>bar.closed===true&&Number.isFinite(bar.close)&&Number.isFinite(bar.end)).sort((a,b)=>a.end-b.end);

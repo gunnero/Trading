@@ -13,6 +13,19 @@ const monday='LVLS 2026-10-26\nQQQ|1HR|S 720-719\nKO|Daily|D 65-64';
 const parse=merged=>parseLevels(merged.levelText,merged.levelSourceDates);
 const savedFields=merged=>({levelText:merged.levelText,levelSourceDates:merged.levelSourceDates});
 
+test('15-minute source levels and 4HR aliases survive import, validation and carry-forward unchanged',()=>{
+  const incoming='LVLS 2026-10-29\nNQ|15min|S 30370-30332.25|D 29589.5-29572|FUT\nXLV|4HR|D 176.6-175.96';
+  const merged=mergeLevelSheets(friday,incoming),workspace=validateWorkspace({...initialWorkspace(),...savedFields(merged)}),sheet=parseLevels(workspace.levelText,workspace.levelSourceDates);
+  assert.equal(sheet.instruments.NQ.timeframe,'15 min');assert.equal(sheet.instruments.NQ.futures,true);
+  assert.equal(sheet.instruments.XLV.timeframe,'4 h');assert.ok(workspace.levelText.startsWith(incoming+'\n'));
+  const next=mergeLevelSheets(workspace.levelText,'LVLS 2026-10-30\nQQQ|30min|S 730-729',workspace.levelSourceDates);
+  for(const symbol of ['NQ','XLV']){
+    assert.equal(parse(next).instruments[symbol].sourceDate,'2026-10-29');
+    assert.ok(next.levelText.split('\n').includes(incoming.split('\n').find(row=>row.startsWith(symbol+'|'))));
+  }
+  assert.throws(()=>parseLevels(incoming.replace('15min','7min')),/use 15min/);
+});
+
 test('New daily rows replace whole instruments; every omitted Friday row survives exactly',()=>{
   const old=parseLevels(friday),merged=mergeLevelSheets(friday,monday),sheet=parse(merged);
   assert.equal(Object.keys(old.instruments).length,40);
