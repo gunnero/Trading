@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer} from 'node:net';
 import {openAuthStore,passwordHash} from '../server/auth.mjs';
-import {Secret} from 'otpauth';
+import {Secret,TOTP} from 'otpauth';
 export async function testRuntime({authenticated=true}={}){
  const directory=mkdtempSync(join(tmpdir(),'opening-bell-browser-'));
  const listener=createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));const port=listener.address().port;await new Promise(r=>listener.close(r));
@@ -23,5 +23,8 @@ export async function testRuntime({authenticated=true}={}){
  async function stop(){if(child&&child.exitCode===null){const exited=new Promise(r=>child.once('exit',r));child.kill('SIGTERM');await exited;}}
  async function close(){await stop();rmSync(directory,{recursive:true,force:true});for(const key of ['SESSION','CSRF','ORIGIN']){if(prior[key]===undefined)delete process.env['OPENING_BELL_TEST_'+key];else process.env['OPENING_BELL_TEST_'+key]=prior[key];}}
  try{await start();}catch(e){await close();throw e;}
- return {url,directory,start,stop,close};
+ // Rotate only this temporary fixture's factor to avoid wall-clock waits between UI scenarios.
+ // Replay rejection is tested against a fixed secret in auth.test.mjs.
+ function authenticatorCode(){const auth=openAuthStore({directory});try{const secret=new Secret({size:20});auth.db.prepare('UPDATE owner SET totp=?,last_counter=-1 WHERE id=1').run(auth.encrypt(secret.base32));return new TOTP({secret}).generate();}finally{auth.close();}}
+ return {url,directory,start,stop,close,authenticatorCode};
 }

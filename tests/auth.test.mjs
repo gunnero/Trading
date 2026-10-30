@@ -170,16 +170,36 @@ test('public configuration requires HTTPS, secure host cookies and MFA before th
 
 import {fileURLToPath} from 'node:url';
 
-test('Transfers requires a short-lived password grant bound to the current session; summary stays available',async t=>{
+test('Transfers requires a short-lived authenticator grant bound to the current session; summary stays available',async t=>{
  const a=await app(t);await a.login();
+ assert.equal((await a.post('transfers-unlock',{password})).response.status,403);
+ const secret=new Secret({size:20});a.auth.db.prepare('UPDATE owner SET totp=? WHERE id=1').run(a.auth.encrypt(secret.base32));
+ const code=()=>new TOTP({secret}).generate({timestamp:a.now()});
  const read=(path,token,cookie=a.cookie)=>fetch(a.url+path,{headers:{Cookie:cookie,...(token?{'X-Transfers-Token':token}:{})}});
  assert.equal((await read('/api/transfers')).status,423);
  assert.equal((await read('/api/transfers/summary')).status,200);
- assert.equal((await a.post('transfers-unlock',{password:'wrong'})).response.status,403);
- assert.equal((await a.post('transfers-unlock',{password},{'X-CSRF-Token':'bad'})).response.status,403);
- const grant=(await a.post('transfers-unlock',{password})).body;assert.ok(grant.token);assert.equal((await read('/api/transfers',grant.token)).status,200);
+ assert.equal((await a.post('transfers-unlock',{code:'invalid'})).response.status,403);
+ assert.equal((await a.post('transfers-unlock',{code:code()},{'X-CSRF-Token':'bad'})).response.status,403);
+ const grant=(await a.post('transfers-unlock',{code:code()})).body;assert.ok(grant.token);assert.equal((await read('/api/transfers',grant.token)).status,200);
  const other=a.auth.newSession();assert.equal((await read('/api/transfers',grant.token,'ob_local_session='+other.token)).status,423);
  await a.post('transfers-lock',{}, {'X-Transfers-Token':grant.token});assert.equal((await read('/api/transfers',grant.token)).status,423);
- const next=(await a.post('transfers-unlock',{password})).body;a.advance(15*60_000+1);assert.equal((await read('/api/transfers',next.token)).status,423);assert.equal((await read('/api/transfers/summary')).status,200);
- const final=(await a.post('transfers-unlock',{password})).body;await a.post('logout');assert.equal((await read('/api/transfers',final.token)).status,401);
+ assert.equal((await a.post('transfers-unlock',{code:code()})).response.status,403);a.advance(30000);
+ const next=(await a.post('transfers-unlock',{code:code()})).body;a.advance(15*60_000+1);assert.equal((await read('/api/transfers',next.token)).status,423);assert.equal((await read('/api/transfers/summary')).status,200);
+ const final=(await a.post('transfers-unlock',{code:code()})).body;await a.post('logout');assert.equal((await read('/api/transfers',final.token)).status,401);
+});
+
+test('Transfers accepts only fresh enrolled TOTP, never password or recovery-code fallback',async t=>{
+ const a=await app(t);await a.login();const secret=new Secret({size:20});
+ a.auth.db.prepare('UPDATE owner SET totp=? WHERE id=1').run(a.auth.encrypt(secret.base32));
+ const recovery=a.auth.recoveryCodes()[0];
+ assert.equal((await a.post('transfers-unlock',{password})).response.status,403);
+ assert.equal((await a.post('transfers-unlock',{code:recovery})).response.status,403);
+ assert.equal(a.auth.db.prepare('SELECT count(*) n FROM recovery').get().n,10);
+ const stale=new TOTP({secret}).generate({timestamp:a.now()-120000});
+ assert.equal((await a.post('transfers-unlock',{code:stale})).response.status,403);
+ const code=new TOTP({secret}).generate({timestamp:a.now()});
+ assert.equal((await a.login({code})).response.status,200);
+ assert.equal((await a.post('transfers-unlock',{code})).response.status,403);
+ a.advance(30000);
+ assert.equal((await a.post('transfers-unlock',{code:new TOTP({secret}).generate({timestamp:a.now()})})).response.status,200);
 });

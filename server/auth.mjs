@@ -196,8 +196,10 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
         }
         if(path==='/api/auth/transfers-unlock'){
           store.throttle(ip);const user=store.owner();
-          if(!await costly(()=>passwordMatches(data.password,user.password)))throw fail(403,'Incorrect password. Try again.');
-          current(row);if(store.owner().password!==user.password)throw fail(403,'Your account changed. Sign in again.');
+          if(!user.totp)throw fail(403,'Enable two-step verification in Account settings first.');
+          const factor=store.secondFactor(user,data.code);
+          if(factor?.kind!=='totp')throw fail(403,'Enter a fresh six-digit authenticator code. If you just used it, wait for the next code.');
+          store.transaction(()=>{current(row);if(store.owner().totp!==user.totp)throw fail(403,'Your authenticator changed. Try again.');store.consumeFactor(factor);});
           for(const [key,grant] of transferGrants)if(grant.expires<=store.now()||grant.session===row.id)transferGrants.delete(key);
           const token=randomBytes(32).toString('base64url'),expires=store.now()+15*60_000;
           transferGrants.set(hash(token),{session:row.id,expires});return json(res,200,{token,expires});
