@@ -21,8 +21,6 @@ export function MarketClock({onOpen,compact=false}) {
   return <button className={`market-clock ${compact?'market-clock-compact':'market-clock-sidebar'} session-${clock.state}`} onClick={onOpen} aria-label="Market status and session hours" aria-haspopup="dialog" title={`${clock.label} · ${clock.detail}. View session hours in ${zoneLabel}.`}>
     <span className="market-clock-heading"><Bell size={29} weight="light"/><span><small>U.S. STOCK MARKET</small><strong className="market-clock-state">{clock.label}</strong><span className="market-clock-detail">{clock.detail}</span></span></span>
     <span className="market-clock-local"><span className="market-clock-date">{clockDate(clock.now)}</span><span><time dateTime={new Date(clock.now).toISOString()} className="market-clock-time">{clockTime(clock.now,!compact)}</time><small>{zoneLabel} · {formatLabel}</small></span></span>
-    {clock.transition && <span className="market-clock-next"><span>{clock.transition.label}</span><time dateTime={clock.transition.at}>{clockStamp(clock.transition.at)}</time><small>in {until(clock.transition.at,clock.now)}</small></span>}
-    {clock.nextOpen && clock.transition?.at!==clock.nextOpen && clock.state!=='open' && <span className="market-clock-opening">Regular open <time dateTime={clock.nextOpen}>{clockStamp(clock.nextOpen)}</time></span>}
   </button>;
 }
 export function MarketHours() {
