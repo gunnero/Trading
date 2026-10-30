@@ -129,6 +129,7 @@ async function body(req){
 }
 export function authMiddleware(store,{config=authConfig(),development=false}={}){
   let hashing=0;
+  const transferGrants=new Map();
   const cookie=(res,token,expires=0)=>{
     const maxAge=token?Math.max(0,Math.floor((expires-store.now())/1000)):0;
     res.setHeader('Set-Cookie',`${config.cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict${config.secure?'; Secure':''}; Max-Age=${maxAge}; Expires=${new Date(token?expires:0).toUTCString()}`);
@@ -193,6 +194,17 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
           if(path.endsWith('logout-all'))store.db.prepare('DELETE FROM sessions').run();else store.db.prepare('DELETE FROM sessions WHERE id=?').run(row.id);
           cookie(res,'');res.setHeader('Clear-Site-Data','"cache"');store.event('signed_out');return json(res,200,{authenticated:false});
         }
+        if(path==='/api/auth/transfers-unlock'){
+          store.throttle(ip);const user=store.owner();
+          if(!await costly(()=>passwordMatches(data.password,user.password)))throw fail(403,'Incorrect password. Try again.');
+          current(row);if(store.owner().password!==user.password)throw fail(403,'Your account changed. Sign in again.');
+          for(const [key,grant] of transferGrants)if(grant.expires<=store.now()||grant.session===row.id)transferGrants.delete(key);
+          const token=randomBytes(32).toString('base64url'),expires=store.now()+15*60_000;
+          transferGrants.set(hash(token),{session:row.id,expires});return json(res,200,{token,expires});
+        }
+        if(path==='/api/auth/transfers-lock'){
+          transferGrants.delete(hash(String(req.headers['x-transfers-token']||'')));return json(res,200,{locked:true});
+        }
         if(path==='/api/auth/activity'){store.db.prepare('UPDATE sessions SET active=? WHERE id=?').run(store.now(),row.id);row.active=store.now();return json(res,200,store.profile(row));}
         if(path==='/api/auth/password'){
           const user=await reauthenticate(row,data,ip);validatePassword(data.newPassword);const password=await costly(()=>passwordHash(data.newPassword));
@@ -220,6 +232,10 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
           const result=store.transaction(()=>{const recoveryCodes=store.recoveryCodes();store.db.exec('DELETE FROM sessions;');store.event('recovery_codes_replaced');return {...store.newSession(),recoveryCodes};});cookie(res,result.token,result.row.expires);return json(res,200,{...store.profile(result.row),recoveryCodes:result.recoveryCodes});
         }
         throw fail(404,'Unknown account action.');
+      }
+      if((path==='/api/transfers'||path.startsWith('/api/transfers/'))&&!(path==='/api/transfers/summary'&&req.method==='GET')){
+        const token=req.headers['x-transfers-token'],grant=typeof token==='string'&&token.length<=128?transferGrants.get(hash(token)):null;
+        if(!grant||grant.session!==row?.id||grant.expires<=store.now())throw fail(423,'Unlock Transfers & Costs with your password.');
       }
       // Source files, seed imports, databases and dotfiles never belong to the HTTP surface.
       if(path.startsWith('/data/')||path.startsWith('/server/')||path.startsWith('/@fs/')||/(^|\/)\.(?!vite\/)/.test(path))throw fail(404,'Not found.');

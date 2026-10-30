@@ -169,3 +169,17 @@ test('public configuration requires HTTPS, secure host cookies and MFA before th
 });
 
 import {fileURLToPath} from 'node:url';
+
+test('Transfers requires a short-lived password grant bound to the current session; summary stays available',async t=>{
+ const a=await app(t);await a.login();
+ const read=(path,token,cookie=a.cookie)=>fetch(a.url+path,{headers:{Cookie:cookie,...(token?{'X-Transfers-Token':token}:{})}});
+ assert.equal((await read('/api/transfers')).status,423);
+ assert.equal((await read('/api/transfers/summary')).status,200);
+ assert.equal((await a.post('transfers-unlock',{password:'wrong'})).response.status,403);
+ assert.equal((await a.post('transfers-unlock',{password},{'X-CSRF-Token':'bad'})).response.status,403);
+ const grant=(await a.post('transfers-unlock',{password})).body;assert.ok(grant.token);assert.equal((await read('/api/transfers',grant.token)).status,200);
+ const other=a.auth.newSession();assert.equal((await read('/api/transfers',grant.token,'ob_local_session='+other.token)).status,423);
+ await a.post('transfers-lock',{}, {'X-Transfers-Token':grant.token});assert.equal((await read('/api/transfers',grant.token)).status,423);
+ const next=(await a.post('transfers-unlock',{password})).body;a.advance(15*60_000+1);assert.equal((await read('/api/transfers',next.token)).status,423);assert.equal((await read('/api/transfers/summary')).status,200);
+ const final=(await a.post('transfers-unlock',{password})).body;await a.post('logout');assert.equal((await read('/api/transfers',final.token)).status,401);
+});

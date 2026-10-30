@@ -1,3 +1,4 @@
+import TransfersNet from './TransfersNet';
 import {PageHeader,PageNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
@@ -165,7 +166,7 @@ function SessionDesk({workspace}) {
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
       <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${section === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={section === id ? 'page' : undefined}><Icon size={22} weight={section === id ? 'regular' : 'light'}/><span>{title}</span></button>)}</nav>
       <div className="sidebar-account-area">
-        <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>
+        <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/><TransfersNet onOpen={()=>navigate('transfers')}/>
         <div className="sidebar-profile">
           <button className="nav-item account-nav" aria-label="Account and security" title="Account and security" onClick={()=>{setMenuOpen(false);setDialog('account');}}><UserCircle size={32}/><span className="account-nav-copy"><span className="account-nav-label">{user.username}</span><small className="account-nav-profile">Account & security</small></span><CaretRight className="account-nav-arrow" size={15}/></button>
           <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>

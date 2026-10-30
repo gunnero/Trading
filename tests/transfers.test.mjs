@@ -177,3 +177,13 @@ test('full MKD cost includes unbooked equal installments without counting the pu
  for(const other of [{...second,settlementAmount:null},row])assert.equal(bankMkdCoverage([row,other]).fullAmount,null);
  const complete=bankMkdCoverage(Array.from({length:6},(_,i)=>({...row,description:`VANQUISH TRADER ${i+1}/6`,settlementAmount:i===5?'-919':'-918'})));assert.equal(complete.fullAmount,'5509');assert.equal(complete.remaining,'0');assert.equal(complete.calculated,false);
 });
+test('sidebar summary exposes only net USD cash flow and turns positive after actual returns exceed costs',async()=>{
+ const temp=temporary(),service=createNlbConnection(temp.directory,{run:async()=>{throw Error('No bank calls');}});
+ const summary=async()=>{let result;await service.middleware({url:'/api/transfers/summary',method:'GET',headers:{}},{setHeader(){},end(value){result=JSON.parse(value);}},()=>{});return result;};
+ try{
+  const card={...source,kind:'card',key:'card:net'};service.store.ingest([{source:card,rows:[{date:'2026-10-20',description:'VANQUISH TRADER',amount:'-100.25',currency:'USD'}]}]);
+  assert.deepEqual(await summary(),{currency:'USD',net:'-100.25',entries:1});
+  service.store.ingest([{source:card,rows:[{date:'2026-10-21',description:'VANQUISH TRADER payout',amount:'120.5',currency:'USD'}]}]);const saved=service.store.read(),incoming=saved.data.rows.find(row=>row.amount==='120.5');service.store.review(incoming.id,{platform:'Vanquish',activity:'withdrawal'},false,saved.revision);
+  assert.deepEqual(await summary(),{currency:'USD',net:'20.25',entries:2});
+ }finally{await service.close();temp.remove();}
+});

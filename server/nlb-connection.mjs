@@ -5,7 +5,7 @@ import {join,dirname,resolve} from 'node:path';
 import {rm} from 'node:fs/promises';
 import {parseNlbCardTable} from './nlb-card-export.mjs';
 import {openTransfersStore} from './transfers-store.mjs';
-import {validDay,MAX_BANK_SOURCES,normalizeExport} from '../src/data/transfers.mjs';
+import {validDay,MAX_BANK_SOURCES,normalizeExport,tradingRows,transferSummary,addMoney,subtractMoney} from '../src/data/transfers.mjs';
 const require=createRequire(import.meta.url);
 const cli=join(dirname(require.resolve('nlbcli/package.json')),'dist/index.mjs');
 const day=date=>date.toISOString().slice(0,10);
@@ -94,6 +94,11 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
   const path=new URL(req.url,'http://localhost').pathname;if(!path.startsWith('/api/transfers'))return next();
   res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
   try{
+   if(req.method==='GET'&&path==='/api/transfers/summary'){
+    const totals=transferSummary(tradingRows(store.read().data.rows)).filter(total=>total.currency==='USD');
+    const net=totals.reduce((sum,total)=>addMoney(sum,subtractMoney(addMoney(total.withdrawal,total.refund),addMoney(total.cost,total.deposit))),'0');
+    res.end(JSON.stringify({currency:'USD',net,entries:totals.reduce((count,total)=>count+total.count,0)}));return;
+   }
    if(req.method==='GET'&&path==='/api/transfers'){res.end(JSON.stringify(store.read()));return;}
    if(req.method!=='POST')throw fail('Use POST for ledger actions.',405);
    if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-opening-bell-client']!=='web')throw fail('A JSON app request is required.',415);
