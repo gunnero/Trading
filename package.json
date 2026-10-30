@@ -40,13 +40,15 @@
     "test:journal-chart": "node --test tests/journal-chart.test.mjs tests/journal-review.test.mjs && node scripts/journal-chart-qa.mjs",
     "test:display-time": "node --test tests/display-time.test.mjs && node scripts/display-time-qa.mjs",
     "test:calendar": "node --test tests/economic-calendar.test.mjs tests/briefing.test.mjs && node scripts/economic-calendar-qa.mjs",
-    "test:session-review": "node --test tests/session-review.test.mjs && node scripts/session-review-qa.mjs"
+    "test:session-review": "node --test tests/session-review.test.mjs && node scripts/session-review-qa.mjs",
+    "test:transfers": "node --test tests/transfers.test.mjs && node scripts/transfers-qa.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "echarts": "^6.1.0",
     "fast-xml-parser": "^5.11.2",
+    "nlbcli": "0.1.5",
     "otpauth": "9.5.2",
     "qrcode": "1.5.4",
     "react": "19.2.0",
@@ -60,5 +62,10 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "overrides": {
+    "@effect/cli": {
+      "toml": "npm:smol-toml@1.9.1"
+    }
   }
 }

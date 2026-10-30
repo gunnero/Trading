@@ -1,0 +1,52 @@
+export const PLATFORMS=['IBKR','Trading212','Vanquish'];
+export const ACTIVITIES={deposit:'Deposit',withdrawal:'Withdrawal',cost:'Cost',refund:'Refund',exclude:'Exclude / duplicate'};
+export const validDay=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
+export function decimal(value,{nullable=false}={}){
+ if(value===null&&nullable)return null;
+ if(typeof value!=='string'||! /^-?\d{1,24}(?:\.\d{1,8})?$/.test(value))throw Error('Amounts must be exact decimal strings (up to eight decimal places).');
+ const [whole,fraction='']=value.split('.'),negative=whole.startsWith('-');
+ const digits=whole.replace('-','').replace(/^0+(?=\d)/,'');const f=fraction.replace(/0+$/,'');
+ return `${negative&&(digits!=='0'||f)?'-':''}${digits}${f?'.'+f:''}`;
+}
+const units=value=>{const text=decimal(value),negative=text.startsWith('-'),[whole,fraction='']=text.replace('-','').split('.');return BigInt(whole+fraction.padEnd(8,'0'))*(negative?-1n:1n);};
+const fromUnits=value=>decimal(`${value<0n?'-':''}${(value<0n?-value:value)/100000000n}.${((value<0n?-value:value)%100000000n).toString().padStart(8,'0')}`);
+export const addMoney=(a,b)=>fromUnits(units(a)+units(b));
+export const subtractMoney=(a,b)=>fromUnits(units(a)-units(b));
+export const magnitude=value=>decimal(value).replace('-','');
+export function moneyText(value,currency){if(value===null)return '—';const [whole,fraction='']=decimal(value).split('.');return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction.padEnd(2,'0')} ${currency||'Unknown currency'}`;}
+function optionalText(value,max){if(value===null)return null;if(typeof value!=='string'||value.length>max)throw Error('Invalid bank transaction text.');return value;}
+export function normalizeExport(rows,source){
+ if(!Array.isArray(rows)||rows.length>5000)throw Error('Expected an NLB JSON array with at most 5,000 transactions.');
+ if(!source||!['account','card'].includes(source.kind)||typeof source.key!=='string'||source.key.length>200||!source.key)throw Error('Select an account or card source.');
+ if(source.kind==='account'&&!/^[A-Z]{3}$/.test(source.currency||''))throw Error('Confirm the account currency first.');
+ const fields=source.kind==='account'?['date','recipient','description','status','amount','fee','balance']:['date','description','amount','currency'];
+ return rows.map(row=>{
+  if(!row||typeof row!=='object'||fields.some(key=>!Object.hasOwn(row,key))||Object.keys(row).some(key=>!fields.includes(key)))throw Error('This file does not match the NLB v1 transaction export.');
+  if(row.date!==null&&!validDay(row.date))throw Error('Invalid bank transaction date.');
+  if([row.amount,row.fee,row.balance].some(value=>typeof value==='string'&&value.replace('-','').split('.')[0].length>18))throw Error('Source amounts exceed the supported precision.');
+  const currency=source.kind==='account'?source.currency:row.currency;
+  if(currency!==null&&(typeof currency!=='string'||!/^[A-Z]{3}$/.test(currency)))throw Error('Invalid transaction currency.');
+  return {date:row.date,description:optionalText(row.description,2000),recipient:source.kind==='account'?optionalText(row.recipient,500):null,status:source.kind==='account'?optionalText(row.status,100):null,amount:decimal(row.amount,{nullable:true}),currency,fee:source.kind==='account'?decimal(row.fee,{nullable:true}):null,balance:source.kind==='account'?decimal(row.balance,{nullable:true}):null};
+ });
+}
+export function matchKey(row){return JSON.stringify([row.sourceKey,row.description,row.recipient,row.status,row.amount===null?null:row.amount.startsWith('-')?'-':'+']);}
+export function suggestion(row){const text=`${row.recipient||''} ${row.description||''}`.toLowerCase();if(/interactive brokers|\bibkr\b/.test(text))return 'IBKR';if(/trading\s*212/.test(text))return 'Trading212';if(/vanquish|\bvanq\b/.test(text))return 'Vanquish';return '';}
+export function validateReview(row,review){
+ if(!review||!Object.hasOwn(ACTIVITIES,review.activity))throw Error('Choose a transaction category.');
+ if(review.activity==='exclude')return {platform:'',activity:'exclude'};
+ if(!PLATFORMS.includes(review.platform))throw Error('Choose a platform.');
+ if(!row.date||row.amount===null||!row.currency||row.amount==='0')throw Error('Missing date, amount or currency: this transaction can only be excluded.');
+ const outgoing=row.amount.startsWith('-');
+ if(outgoing!==['deposit','cost'].includes(review.activity))throw Error('The category must match the source amount direction.');
+ return {platform:review.platform,activity:review.activity};
+}
+export function transferSummary(rows,platform=''){
+ const groups=new Map();
+ for(const row of rows){if(!row.review||row.review.activity==='exclude'||platform&&row.review.platform!==platform)continue;
+  const key=`${row.review.platform}:${row.currency}`,total=groups.get(key)||{platform:row.review.platform,currency:row.currency,deposit:'0',withdrawal:'0',cost:'0',refund:'0',fee:'0',missingFees:0,count:0};
+  total[row.review.activity]=addMoney(total[row.review.activity],magnitude(row.amount));
+  if(row.fee===null)total.missingFees++;else total.fee=addMoney(total.fee,row.fee);
+  total.count++;groups.set(key,total);
+ }
+ return [...groups.values()].map(g=>({...g,netContributions:subtractMoney(g.deposit,g.withdrawal),netCosts:subtractMoney(g.cost,g.refund)})).sort((a,b)=>a.platform.localeCompare(b.platform)||a.currency.localeCompare(b.currency));
+}

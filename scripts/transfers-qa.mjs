@@ -1,0 +1,33 @@
+import {chromium,expect} from '@playwright/test';
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {testRuntime} from './qa-runtime.mjs';
+import {testFetch} from '../tests/fixtures/auth.mjs';
+import {mockMarket} from '../tests/fixtures/market.mjs';
+import {mockBriefing} from '../tests/fixtures/briefing.mjs';
+import {openTransfersStore} from '../server/transfers-store.mjs';
+const runtime=await testRuntime(),dir='docs/qa/transfers';mkdirSync(dir,{recursive:true});
+const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}});
+const checks=[],errors=[];let page;const mark=s=>{checks.push(s);console.log('PASS '+s);};
+try{
+ const source={key:'account:123-1234567890-12MKD',id:'123-1234567890-12MKD',label:'Fixture MKD account',kind:'account',currency:'MKD',since:'2026-10-01'},card={key:'card:12345678/1234',id:'12345678/1234',label:'Fixture card',kind:'card',currency:null,since:'2026-10-01'};
+ const store=openTransfersStore(runtime.directory);
+ store.change(data=>({...data,sources:[source,card],candidates:[source,card]}));
+ store.ingest([{source,rows:[{date:'2026-10-20',recipient:'IBKR fixture only',description:'Interactive Brokers transfer (QA)',amount:'-100.10',fee:'0.1',balance:'1000',status:'Booked'},{date:'2026-10-21',recipient:'Trading212 fixture only',description:'Trading 212 funding (QA)',amount:'-500',fee:null,balance:'500',status:'Booked'}]},{source:card,rows:[{date:'2026-10-22',description:'VANQUISH TEST ONLY',amount:'-49',currency:'USD'}]}]);store.close();
+ const read=async()=>await(await testFetch(runtime.url+'/api/transfers')).json();const original=await read();
+ expect((await fetch(runtime.url+'/api/transfers')).status).toBe(401);
+ expect((await testFetch(runtime.url+'/api/transfers/review',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://invalid.example'},body:'{}'})).status).toBe(403);
+ page=await browser.newPage({viewport:{width:1488,height:1100}});page.on('pageerror',e=>errors.push(e.message));await mockMarket(page);await mockBriefing(page);
+ await page.goto(runtime.url+'/#transfers');await expect(page.getByRole('heading',{name:'Transfers & Costs',exact:true})).toBeVisible();await expect(page.locator('.transfer-ledger')).toContainText('3 to review');expect((await read()).revision).toBe(original.revision);
+ await page.locator('.transfer-row').filter({hasText:'VANQUISH TEST ONLY'}).getByRole('button',{name:'Review',exact:true}).click();await expect(page.getByLabel('Transaction platform')).toHaveValue('Vanquish');await page.getByLabel('Transaction category').selectOption('cost');await page.getByRole('checkbox',{name:/Remember for/}).check();await page.getByRole('button',{name:'Confirm category'}).click();await expect(page.locator('.transfer-total')).toContainText('49.00 USD');await expect(page.locator('.transfer-total')).toContainText('0.00 USD');
+ await page.locator('.transfer-row').filter({hasText:'Interactive Brokers transfer'}).getByRole('button',{name:'Review',exact:true}).click();await page.getByLabel('Transaction category').selectOption('deposit');await page.getByRole('button',{name:'Confirm category'}).click();await expect(page.locator('.transfer-total').filter({hasText:'IBKR'})).toContainText('100.10 MKD');
+ await page.getByLabel('Filter transactions').selectOption('all');await expect(page.locator('.transfer-row')).toHaveCount(3);await page.reload();await expect(page.locator('.transfer-total')).toHaveCount(2);mark('Private endpoint gates, passive reads, explicit reviews, suggestions and separate exact currency totals pass');
+ const saved=await read();expect(saved.data.rules).toHaveLength(1);expect(saved.data.rows.filter(r=>r.review)).toHaveLength(2);
+ await page.getByRole('button',{name:'Manage sources'}).click();await expect(page.getByRole('heading',{name:'Accounts and cards to read'})).toBeVisible();await page.getByRole('button',{name:'Close sources'}).click();
+ await page.locator('.transfer-tools summary').click();await page.getByLabel('JSON import source').selectOption(card.key);const choose=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Import JSON',exact:true}).click();await(await choose).setFiles({name:'fixture-only.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify([{date:'2026-10-22',description:'VANQUISH TEST ONLY',amount:'-49',currency:'USD'},{date:'2026-10-23',description:'VANQUISH TEST ONLY',amount:'-49',currency:'USD'}]))});await expect(page.locator('.transfer-total').filter({hasText:'Vanquish'})).toContainText('98.00 USD');expect((await read()).data.rows).toHaveLength(4);
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Export ledger'}).click();const backup=JSON.parse(readFileSync(await(await download).path(),'utf8'));expect(backup.data.rows).toHaveLength(4);expect(JSON.stringify(backup)).not.toContain('cookie');mark('Repeated import avoids duplicates, approved rules categorize new rows and ledger export retains history without bank sessions');
+ await page.getByLabel('Filter transactions').selectOption('all');
+ for(const width of [320,390,820,1024,1488]){await page.setViewportSize({width,height:1000});await page.evaluate(()=>scrollTo(0,0));expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);if([390,1488].includes(width))await page.screenshot({path:`${dir}/ledger-${width}.png`,fullPage:true});}
+ mark('320/390/820/1024/1488px layouts fit and desktop/phone captures saved');
+ await page.close();await runtime.stop();await runtime.start();page=await browser.newPage();await mockMarket(page);await mockBriefing(page);await page.goto(runtime.url+'/#transfers');await expect(page.locator('.transfer-total').filter({hasText:'Vanquish'})).toContainText('98.00 USD');mark('Reviewed ledger and rules survive a real server restart');
+ expect(errors).toEqual([]);writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
+}catch(e){if(page&&!page.isClosed())await page.screenshot({path:dir+'/failure.png',fullPage:true});writeFileSync(dir+'/checks.json',JSON.stringify({result:'failed',checks,errors,error:e.message},null,2)+'\n');throw e;}finally{await browser.close();await runtime.close();}

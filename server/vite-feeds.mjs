@@ -7,6 +7,7 @@ import { openWorkspaceStore, workspaceMiddleware } from './workspace.mjs';
 import {openAuthStore,authMiddleware,authConfig} from './auth.mjs';
 import {createSentimentConnection} from './sentiment-connection.mjs';
 import {dirname} from 'node:path';
+import {createNlbConnection} from './nlb-connection.mjs';
 import {journalDraftsMiddleware} from './journal-drafts.mjs';
 export function marketFeeds() {
   function attach(server){
@@ -20,6 +21,8 @@ export function marketFeeds() {
     const service=globalThis[feedKey] ||= cachedFeedService({sentimentApi:sentiment.get});
     const store=globalThis[storeKey] ||= openWorkspaceStore();
     server.middlewares.use(workspaceMiddleware(store));
+    const nlb=globalThis[Symbol.for('opening-bell.nlb-connection')] ||= createNlbConnection(dirname(store.filename));
+    server.middlewares.use(nlb.middleware);
     server.middlewares.use(journalDraftsMiddleware(dirname(store.filename)));
     const marketKey=Symbol.for('opening-bell.market-service');
     server.middlewares.use(marketDataMiddleware(globalThis[marketKey] ||= createMarketService()));
