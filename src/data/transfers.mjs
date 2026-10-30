@@ -111,3 +111,24 @@ export function bankMkdCoverage(rows){
  }
  return {amount,known:known.length,total:included.length,fullAmount:uncertain?null:addMoney(amount,remaining),remaining:uncertain?null:remaining,remainingCount:uncertain?null:remainingCount,calculated:!uncertain&&remainingCount>0};
 }
+
+// User-requested cumulative recovery model, not a statutory tax calculation.
+// Card cost equivalents include projected remaining installments; mirrored account costs are omitted.
+export function recoveryReserve(rows){
+ const selected=rows.filter(row=>row.review?.platform==='Vanquish'&&row.review.activity!=='exclude');
+ const coverage=bankMkdCoverage(selected);
+ let paid=coverage.fullAmount??'0',received='0',missing=coverage.fullAmount===null;
+ for(const row of selected){
+  if(!['deposit','withdrawal','refund'].includes(row.review.activity)||row.kind==='card'&&row.review.activity==='refund')continue;
+  const amount=row.currency==='MKD'?row.amount:row.settlementAmount;
+  if(amount==null){missing=true;continue;}
+  if(row.review.activity==='deposit')paid=addMoney(paid,magnitude(amount));
+  else received=addMoney(received,magnitude(amount));
+ }
+ if(rows.some(row=>!row.review||row.possibleDuplicate&&row.review?.automatic))missing=true;
+ if(missing)return {paid:null,received:null,remaining:null,profit:null,tax:null,calculated:coverage.calculated};
+ const delta=units(received)-units(paid),profit=delta>0n?delta:0n;
+ // Ten percent, rounded half-up to two MKD decimal places.
+ const tax=fromUnits(((profit+5000000n)/10000000n)*1000000n);
+ return {paid,received,remaining:fromUnits(delta<0n?-delta:0n),profit:fromUnits(profit),tax,calculated:coverage.calculated};
+}

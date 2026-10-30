@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {openTransfersStore} from '../server/transfers-store.mjs';
 import {createNlbConnection,runNlb} from '../server/nlb-connection.mjs';
-import {addMoney,normalizeExport,transferSummary,validateReview} from '../src/data/transfers.mjs';
+import {recoveryReserve,addMoney,normalizeExport,transferSummary,validateReview} from '../src/data/transfers.mjs';
 const source={key:'account:fixture',label:'Test account',kind:'account',currency:'MKD'};
 const row=(overrides={})=>({date:'2026-10-20',recipient:'Test broker',description:'Test funding',status:'Booked',amount:'-100.10',fee:'0.10',balance:'500.00',...overrides});
 function temporary(){const directory=mkdtempSync(join(tmpdir(),'transfers-unit-'));return {directory,remove:()=>rmSync(directory,{recursive:true,force:true})};}
@@ -186,4 +186,17 @@ test('sidebar summary exposes only net USD cash flow and turns positive after ac
   service.store.ingest([{source:card,rows:[{date:'2026-10-21',description:'VANQUISH TRADER payout',amount:'120.5',currency:'USD'}]}]);const saved=service.store.read(),incoming=saved.data.rows.find(row=>row.amount==='120.5');service.store.review(incoming.id,{platform:'Vanquish',activity:'withdrawal'},false,saved.revision);
   assert.deepEqual(await summary(),{currency:'USD',net:'20.25',entries:2});
  }finally{await service.close();temp.remove();}
+});
+
+test('MKD recovery reserve is a cumulative estimate with exact threshold, rounding and missing-data guards',()=>{
+ const cost={id:'c',kind:'card',currency:'USD',amount:'-100',settlementAmount:'-5500',review:{platform:'Vanquish',activity:'cost'}};
+ const payout=amount=>({id:'p',kind:'account',currency:'MKD',amount,review:{platform:'Vanquish',activity:'withdrawal'}});
+ assert.equal(recoveryReserve([cost]).tax,'0');
+ assert.equal(recoveryReserve([cost,payout('5500')]).tax,'0');
+ assert.equal(recoveryReserve([cost,payout('6500.05')]).tax,'100.01');
+ assert.equal(recoveryReserve([cost,payout('3000')]).remaining,'2500');
+ assert.equal(recoveryReserve([cost,{...payout('120'),currency:'USD'}]).tax,null);
+ assert.equal(recoveryReserve([{...cost,settlementAmount:null}]).tax,null);
+ assert.equal(recoveryReserve([cost,{...payout('10'),review:null}]).tax,null);
+ assert.equal(recoveryReserve([cost,{...cost,id:'mirror',kind:'account',currency:'MKD',amount:'-5500'},payout('6500')]).tax,'100');
 });
