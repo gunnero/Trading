@@ -22,12 +22,13 @@ export function normalizeExport(rows,source){
  if(source.kind==='account'&&!/^[A-Z]{3}$/.test(source.currency||''))throw Error('Confirm the account currency first.');
  const fields=source.kind==='account'?['date','recipient','description','status','amount','fee','balance']:['date','description','amount','currency'];
  return rows.map(row=>{
-  if(!row||typeof row!=='object'||fields.some(key=>!Object.hasOwn(row,key))||Object.keys(row).some(key=>!fields.includes(key)))throw Error('This file does not match the NLB v1 transaction export.');
+  if(!row||typeof row!=='object'||fields.some(key=>!Object.hasOwn(row,key))||Object.keys(row).some(key=>!fields.includes(key)&&!(source.kind==='card'&&['bookingDate','settlementAmount'].includes(key))))throw Error('This file does not match the NLB v1 transaction export.');
+  if(row.bookingDate!==undefined&&row.bookingDate!==null&&!validDay(row.bookingDate))throw Error('Invalid booking date.');
   if(row.date!==null&&!validDay(row.date))throw Error('Invalid bank transaction date.');
   if([row.amount,row.fee,row.balance].some(value=>typeof value==='string'&&value.replace('-','').split('.')[0].length>18))throw Error('Source amounts exceed the supported precision.');
   const currency=source.kind==='account'?source.currency:row.currency;
   if(currency!==null&&(typeof currency!=='string'||!/^[A-Z]{3}$/.test(currency)))throw Error('Invalid transaction currency.');
-  return {date:row.date,description:optionalText(row.description,2000),recipient:source.kind==='account'?optionalText(row.recipient,500):null,status:source.kind==='account'?optionalText(row.status,100):null,amount:decimal(row.amount,{nullable:true}),currency,fee:source.kind==='account'?decimal(row.fee,{nullable:true}):null,balance:source.kind==='account'?decimal(row.balance,{nullable:true}):null};
+  return {...(source.kind==='card'&&row.settlementAmount!==undefined?{settlementAmount:decimal(row.settlementAmount,{nullable:true}),bookingDate:row.bookingDate||null}:{}),date:row.date,description:optionalText(row.description,2000),recipient:source.kind==='account'?optionalText(row.recipient,500):null,status:source.kind==='account'?optionalText(row.status,100):null,amount:decimal(row.amount,{nullable:true}),currency,fee:source.kind==='account'?decimal(row.fee,{nullable:true}):null,balance:source.kind==='account'?decimal(row.balance,{nullable:true}):null};
  });
 }
 export function matchKey(row){return JSON.stringify([row.sourceKey,row.description,row.recipient,row.status,row.amount===null?null:row.amount.startsWith('-')?'-':'+']);}
@@ -84,4 +85,10 @@ export function groupInstallments(rows){
   for(const row of children)byId.set(row.id,entry);
  }
  const seen=new Set();return rows.flatMap(row=>{const group=byId.get(row.id);if(!group)return [row];if(seen.has(group.id))return [];seen.add(group.id);return [group];});
+}
+
+export function bankMkdCoverage(rows){
+ const included=rows.filter(row=>row.kind==='card'&&row.review?.platform==='Vanquish'&&['cost','refund'].includes(row.review.activity));
+ const known=included.filter(row=>row.settlementAmount!=null);
+ return {amount:known.reduce((sum,row)=>subtractMoney(sum,row.settlementAmount),'0'),known:known.length,total:included.length};
 }

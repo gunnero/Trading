@@ -17,7 +17,7 @@ export function openTransfersStore(directory){
   const map=new Map(data.rows.map(row=>[row.id,row])),newIds=new Set();
   for(const {source,rows} of normalized){const occurrences=new Map();for(const row of rows){
    const fingerprint=digest([source.key,row.date,row.description,row.recipient,row.amount,row.currency]),ordinal=(occurrences.get(fingerprint)||0)+1;occurrences.set(fingerprint,ordinal);
-   const id=`${fingerprint}:${ordinal}`,existing=map.get(id),next={...row,id,sourceKey:source.key,sourceLabel:source.label,kind:source.kind,firstSeen:existing?.firstSeen||new Date().toISOString(),review:existing?.review||null,possibleChange:existing?.possibleChange||false};
+   const id=`${fingerprint}:${ordinal}`,existing=map.get(id),next={...(existing?.settlementAmount!==undefined?{settlementAmount:existing.settlementAmount,bookingDate:existing.bookingDate}:{}),...row,id,sourceKey:source.key,sourceLabel:source.label,kind:source.kind,firstSeen:existing?.firstSeen||new Date().toISOString(),review:existing?.review||null,possibleChange:existing?.possibleChange||false};
    if(!existing)newIds.add(id);
    if(existing&&(existing.status!==row.status||existing.fee!==row.fee))next.review=null;
    map.set(id,next);

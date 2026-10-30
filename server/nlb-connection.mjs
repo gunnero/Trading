@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 import {join,dirname,resolve} from 'node:path';
 import {rm} from 'node:fs/promises';
+import {parseNlbCardTable} from './nlb-card-export.mjs';
 import {openTransfersStore} from './transfers-store.mjs';
 import {validDay,MAX_BANK_SOURCES,normalizeExport} from '../src/data/transfers.mjs';
 const require=createRequire(import.meta.url);
@@ -54,7 +55,7 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
    if(typeof source.label!=='string'||!source.label.trim()||source.label.length>80)throw fail('Give each source a short label.');
    const old=data.sources.find(item=>item.key===key);
    if(data.rows.some(row=>row.sourceKey===key)&&data.rows.find(row=>row.sourceKey===key)?.currency!==source.currency&&source.kind==='account')throw fail('An imported account currency cannot be changed.');
-   return {id:source.id,kind:source.kind,key,label:source.label.trim(),currency:source.kind==='account'?source.currency:null,since:source.since,lastRead:old?.since===source.since?old.lastRead:null};
+   return {id:source.id,kind:source.kind,key,label:source.label.trim(),currency:source.kind==='account'?source.currency:null,since:source.since,cardFormat:old?.cardFormat,lastRead:old?.since===source.since?old.lastRead:null};
   });return {...data,scan:sourceSignature(selected)===sourceSignature(data.sources)?data.scan:null,sources:selected,automatic,sync:{...data.sync,message:'Sources saved. Sync now to read transactions.'}};},revision);
  }
  function sync(){const initial=store.read().data;if(!initial.sources.length)throw fail('Choose your NLB sources first.');
@@ -63,9 +64,9 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
    let scan=initial.scan?.signature===signature?initial.scan:null;
    if(!scan){
     const today=bankDay(now());
-    scan={signature,today,index:0,next:null,savedAt:null,batches:initial.sources.map(source=>{
+    scan={signature,cardFormat:2,today,index:0,next:null,savedAt:null,batches:initial.sources.map(source=>{
      const overlap=day(new Date(Date.parse(bankDay(source.lastRead?new Date(source.lastRead):now()))-45*86400000));
-     return {source,start:source.lastRead&&overlap>source.since?overlap:source.since,rows:[]};
+     return {source,start:source.lastRead&&(source.kind!=='card'||source.cardFormat===2)&&overlap>source.since?overlap:source.since,rows:[]};
     })};
     store.change(data=>({...data,scan}));
    }
@@ -74,8 +75,8 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
     if(start>scan.today){scan={...scan,index:scan.index+1,next:null};store.change(data=>({...data,scan}));continue;}
     const end=day(new Date(Math.min(Date.parse(start)+29*86400000,Date.parse(scan.today))));
     updateSync({message:`Reading ${source.label}: ${start} to ${end}… Completed sections are saved.`});
-    const output=await command([source.kind==='account'?'accounts':'cards','transactions',source.id,'--start',bankDate(start),'--end',bankDate(end),'--format','json']);
-    let batch;try{batch=JSON.parse(output);}catch{throw fail('NLB returned an invalid transaction export. Retry to resume saved progress.');}
+    const output=await command([source.kind==='account'?'accounts':'cards','transactions',source.id,'--start',bankDate(start),'--end',bankDate(end),'--format',source.kind==='card'?'tab':'json']);
+    let batch;try{batch=source.kind==='card'?parseNlbCardTable(output):JSON.parse(output);}catch{throw fail('NLB returned an invalid transaction export. Retry to resume saved progress.');}
     normalizeExport(batch,source);
     if(current.rows.length+batch.length>5000)throw fail('NLB history exceeded the supported import size. Saved scan progress is retained.');
     const batches=scan.batches.map((item,index)=>index===scan.index?{...item,rows:[...item.rows,...batch]}:item);
@@ -83,7 +84,7 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
     // A validated section and its next cursor are committed in one SQLite document write.
     store.change(data=>({...data,scan}));
    }
-   store.ingest(scan.batches,data=>({...data,scan:null,sources:data.sources.map(source=>({...source,lastRead:scan.today+'T00:00:00Z'})),sync:{...data.sync,state:'connected',lastSuccess:now().toISOString(),message:'Scan complete. Matching transactions and totals are updated.'}}));
+   store.ingest(scan.batches,data=>({...data,scan:null,sources:data.sources.map(source=>({...source,cardFormat:source.kind==='card'?(scan.batches.find(batch=>batch.source.key===source.key)?.rows.every(row=>row.settlementAmount!==undefined)?2:1):undefined,lastRead:scan.today+'T00:00:00Z'})),sync:{...data.sync,state:'connected',lastSuccess:now().toISOString(),message:'Scan complete. Matching transactions and totals are updated.'}}));
   });
  }
  async function disconnect(){controller?.abort();if(job)await job;await erase();store.change(data=>({...data,automatic:false,candidates:[],sync:{...data.sync,state:'disconnected',message:'Disconnected. Your saved ledger is retained.'}}));}

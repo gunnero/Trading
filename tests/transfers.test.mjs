@@ -41,7 +41,7 @@ test('totals distinguish costs, funding, withdrawals and currencies, survive res
 });
 test('NLB bridge exposes only fixed reads, pauses on expiry, preserves data on partial failure and disconnects',async()=>{
  const temp=temporary(),calls=[];let expire=false,broken=false,erased=false;
- const run=async args=>{calls.push(args);if(args.includes('login'))return '';if(expire)throw Object.assign(Error('NLB approval is required.'),{auth:true});if(args.includes('list'))return args.includes('accounts')?'Accounts:\n123-1234567890-12MKD\n':'Cards:\n12345678/1234\n';if(broken&&args.includes('cards'))throw Error('network');return JSON.stringify(args.includes('cards')?[{date:'2026-10-20',description:'Vanquish test',amount:'-49',currency:'USD'}]:[row()]);};
+ const run=async args=>{calls.push(args);if(args.includes('login'))return '';if(expire)throw Object.assign(Error('NLB approval is required.'),{auth:true});if(args.includes('list'))return args.includes('accounts')?'Accounts:\n123-1234567890-12MKD\n':'Cards:\n12345678/1234\n';if(broken&&args.includes('cards'))throw Error('network');return args.includes('cards')?'20.10.2026\t21.10.2026\tVanquish test\t-49,00 USD\t-2.700,00 MKD\t1.000,00 MKD':JSON.stringify([row()]);};
  const service=createNlbConnection(temp.directory,{run,now:()=>new Date('2026-10-30T10:00:00Z'),removeSession:async()=>{erased=true;}});
  try{
   service.login('fixture-user');await service.wait();let state=service.store.read();assert.equal(state.data.sync.state,'connected');assert.equal(state.data.candidates.length,2);
@@ -147,4 +147,23 @@ test('invalid scan sections never advance checkpoints; history changes invalidat
   service.configure([{...configured,label:'New label'}],false,state.revision);assert.ok(service.store.read().data.scan);
   service.configure([{...configured,since:'2026-04-24'}],false,service.store.read().revision);assert.equal(service.store.read().data.scan,null);
  }finally{await service.close();temp.remove();}
+});
+
+test('full bank card table preserves actual domestic charges and excludes account settlement duplication',async()=>{
+ const {parseNlbCardTable}=await import('../server/nlb-card-export.mjs');const {tradingRows,bankMkdCoverage}=await import('../src/data/transfers.mjs');
+ const rows=parseNlbCardTable('20.10.2026\t21.10.2026\tVANQUISH TRADER\t-49,00 USD\t-2.700,25 MKD\t9.007.199.254.740.993,01 MKD\n');
+ assert.equal(rows[0].settlementAmount,'-2700.25');assert.equal(rows[0].bookingDate,'2026-10-21');assert.equal(rows[0].amount,'-49');
+ assert.throws(()=>parseNlbCardTable('20.10.2026\tBad\tVANQUISH TRADER\t-49 USD\t-2700 MKD\t0 MKD'));
+ assert.throws(()=>parseNlbCardTable('20.10.2026\t21.10.2026\tVANQUISH TRADER\t-49 USD\t2700 MKD\t0 MKD'));
+ const temp=temporary(),store=openTransfersStore(temp.directory);try{
+  const card={...source,kind:'card',key:'card:test'};store.ingest([{source:card,rows}]);let before=store.read();
+  const {settlementAmount,bookingDate,...legacy}=rows[0];store.ingest([{source:card,rows:[legacy]}]);assert.equal(store.read().data.rows.length,1);assert.equal(store.read().data.rows[0].settlementAmount,'-2700.25');
+  const selected=tradingRows([...store.read().data.rows,{...before.data.rows[0],id:'account',kind:'account',currency:'MKD',amount:'-2700.25'}]);
+  assert.deepEqual(bankMkdCoverage(selected),{amount:'2700.25',known:1,total:1});
+ }finally{store.close();temp.remove();}
+});
+test('old card imports backfill domestic amounts once then use the regular overlap',async()=>{
+ const temp=temporary(),calls=[];const card={...source,kind:'card',key:'card:test',id:'test',since:'2026-08-01',lastRead:'2026-10-29T00:00:00Z'};
+ const service=createNlbConnection(temp.directory,{run:async args=>{calls.push(args);return '';},now:()=>new Date('2026-10-30T10:00:00Z')});
+ try{service.store.change(data=>({...data,sources:[card]}));service.sync();await service.wait();assert.equal(calls[0][calls[0].indexOf('--start')+1],'01.08.2026');assert.ok(calls.every(args=>args.at(-1)==='tab'));assert.equal(service.store.read().data.sources[0].cardFormat,2);calls.length=0;service.sync();await service.wait();assert.equal(calls[0][calls[0].indexOf('--start')+1],'15.09.2026');}finally{await service.close();temp.remove();}
 });
