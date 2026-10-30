@@ -62,3 +62,25 @@ export function transferSummary(rows,platform=''){
  }
  return [...groups.values()].map(g=>({...g,netContributions:subtractMoney(g.deposit,g.withdrawal),netCosts:subtractMoney(g.cost,g.refund)})).sort((a,b)=>a.platform.localeCompare(b.platform)||a.currency.localeCompare(b.currency));
 }
+
+// Group only installments sharing the card, published date, merchant and amount.
+// Repeated installment numbers are ambiguous and remain separate.
+export function groupInstallments(rows){
+ const groups=new Map();
+ for(const row of rows){
+  const match=(row.description||'').normalize('NFKC').trim().match(/^(.*?)\s+(\d{1,2})\/(\d{1,2})$/);
+  if(row.kind!=='card'||!match||!row.date||!row.currency||!row.amount?.startsWith('-'))continue;
+  const number=Number(match[2]),count=Number(match[3]);if(number<1||count<2||number>count)continue;
+  const merchant=match[1].replace(/\s+/g,' ').trim();
+  const key=JSON.stringify([row.sourceKey,row.date,merchant.toUpperCase(),row.amount,row.currency,count]);
+  if(!groups.has(key))groups.set(key,{merchant,count,items:[]});groups.get(key).items.push({row,number});
+ }
+ const byId=new Map();
+ for(const group of groups.values()){
+  if(group.items.length<2||new Set(group.items.map(item=>item.number)).size!==group.items.length)continue;
+  const children=group.items.sort((a,b)=>a.number-b.number).map(item=>item.row);
+  const entry={...children[0],id:'installments:'+children[0].id,description:group.merchant,children,installmentCount:group.count,amount:children.reduce((total,row)=>addMoney(total,row.amount),'0')};
+  for(const row of children)byId.set(row.id,entry);
+ }
+ const seen=new Set();return rows.flatMap(row=>{const group=byId.get(row.id);if(!group)return [row];if(seen.has(group.id))return [];seen.add(group.id);return [group];});
+}
