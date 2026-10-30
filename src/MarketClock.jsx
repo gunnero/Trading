@@ -1,6 +1,6 @@
 import {useDisplayTime} from './DisplayTime';
 import {useEffect,useMemo,useState} from 'react';
-import {Bell,CaretRight,ArrowUpRight} from '@phosphor-icons/react';
+import {Bell,ArrowUpRight} from '@phosphor-icons/react';
 import {marketSession,until,MARKET_CALENDAR} from './data/market-session.mjs';
 
 function useMarketClock() {
@@ -23,7 +23,6 @@ export function MarketClock({onOpen,compact=false}) {
     <span className="market-clock-local"><span className="market-clock-date">{clockDate(clock.now)}</span><span><time dateTime={new Date(clock.now).toISOString()} className="market-clock-time">{clockTime(clock.now,!compact)}</time><small>{zoneLabel} · {formatLabel}</small></span></span>
     {clock.transition && <span className="market-clock-next"><span>{clock.transition.label}</span><time dateTime={clock.transition.at}>{clockStamp(clock.transition.at)}</time><small>in {until(clock.transition.at,clock.now)}</small></span>}
     {clock.nextOpen && clock.transition?.at!==clock.nextOpen && clock.state!=='open' && <span className="market-clock-opening">Regular open <time dateTime={clock.nextOpen}>{clockStamp(clock.nextOpen)}</time></span>}
-    <span className="market-clock-link">Session hours<CaretRight size={13}/></span>
   </button>;
 }
 export function MarketHours() {
