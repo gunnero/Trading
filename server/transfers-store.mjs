@@ -11,7 +11,7 @@ export function openTransfersStore(directory){
  if(db.prepare('PRAGMA user_version').get().user_version>1){db.close();throw Error('This ledger was created by a newer app version.');}db.exec('PRAGMA user_version=1');
  const read=()=>{const row=db.prepare('SELECT revision,document FROM transfers WHERE id=1').get();return {revision:row.revision,data:JSON.parse(row.document)};};
  function change(fn,revision){const before=read();if(revision!==undefined&&before.revision!==revision)throw Object.assign(Error('The ledger changed. Reload and review your edit again.'),{status:409});const original=JSON.stringify(before.data);const data=fn(before.data);if(JSON.stringify(data)===original)return before;if(data.rows.length>10000||Buffer.byteLength(JSON.stringify(data))>12_000_000)throw fail('The ledger reached its storage limit. Export a backup before continuing.');const result=db.prepare('UPDATE transfers SET revision=revision+1,document=? WHERE id=1 AND revision=?').run(JSON.stringify(data),before.revision);if(!result.changes)throw Object.assign(Error('The ledger changed. Reload and retry.'),{status:409});return {revision:before.revision+1,data};}
- function ingest(batches){return change(data=>{
+ function ingest(batches,finish=data=>data){return change(data=>{
   // Validate every batch before changing any rows; bank reads never delete history.
   const normalized=batches.map(({source,rows})=>({source,rows:normalizeExport(rows,source)}));
   const map=new Map(data.rows.map(row=>[row.id,row])),newIds=new Set();
@@ -35,7 +35,7 @@ export function openTransfersStore(directory){
    if(rule&&!possibleDuplicate){try{row.review=validateReview(row,rule.review);}catch{/* Incomplete rows stay in review. */}}
    if(!row.review)row.review=automaticDescriptionReview(row);
   }
-  return {...data,rows:all.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||a.id.localeCompare(b.id))};
+  return finish({...data,rows:all.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||a.id.localeCompare(b.id))});
  });}
  function review(id,value,remember,revision){return change(data=>{const row=data.rows.find(row=>row.id===id);if(!row)throw fail('Transaction not found.');const reviewed=validateReview(row,value);row.review=reviewed;row.possibleDuplicate=false;row.possibleChange=false;if(remember){if(!row.description&&!row.recipient)throw fail('A repeat rule needs a description or counterparty.');const key=matchKey(row);data.rules=data.rules.filter(rule=>rule.key!==key);if(data.rules.length>=200)throw fail('At most 200 matching rules are supported.');data.rules.push({key,review:reviewed,label:row.description||row.recipient});}return data;},revision);}
  return {read,change,ingest,review,close:()=>db.close()};

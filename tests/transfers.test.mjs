@@ -124,3 +124,27 @@ test('installment purchases count once without merging separate or ambiguous pur
  for(const extra of [{sourceKey:'card:other'},{date:'2026-08-20'},{amount:'-79.2'},{currency:'EUR'},{description:'MIAMI VANQUISH TRADER 3/12'},{description:'MIAMI VANQUISH TRADER 2/6'}])assert.equal(groupInstallments([rows[0],{...rows[1],...extra}]).length,2);
  assert.equal(groupInstallments([rows[0]])[0].children,undefined);
 });
+test('scan checkpoints survive failure and restart, resume across sources, and commit all occurrences once',async()=>{
+ const temp=temporary(),calls=[];let failRead=true;
+ const sources=[{...source,id:'fixture-a',since:'2026-08-01'},{...source,key:'account:b',id:'fixture-b',since:'2026-10-01'}];
+ const run=async args=>{const start=args[args.indexOf('--start')+1];calls.push([args[args.indexOf('transactions')+1],start]);if(start==='31.08.2026'&&failRead)throw Error('network');return JSON.stringify([row()]);};
+ let service=createNlbConnection(temp.directory,{run,now:()=>new Date('2026-10-30T10:00:00Z')});
+ try{
+  service.store.change(data=>({...data,sources}));service.sync();await service.wait();let saved=service.store.read().data;
+  assert.equal(saved.sync.state,'unavailable');assert.equal(saved.scan.next,'2026-08-31');assert.equal(saved.scan.batches[0].rows.length,1);assert.equal(saved.rows.length,0);
+  await service.close();failRead=false;calls.length=0;service=createNlbConnection(temp.directory,{run,now:()=>new Date('2026-10-30T11:00:00Z')});service.sync();await service.wait();saved=service.store.read().data;
+  assert.equal(calls[0][1],'31.08.2026');assert.ok(!calls.some(call=>call[1]==='01.08.2026'));assert.equal(saved.scan,null);assert.equal(saved.sync.state,'connected');
+  // Four account-a windows and one account-b window: repeated original dates across booking windows retain occurrences.
+  assert.equal(saved.rows.length,5);assert.ok(saved.sync.lastSuccess);
+ }finally{await service.close();temp.remove();}
+});
+test('invalid scan sections never advance checkpoints; history changes invalidate saved scan cursors',async()=>{
+ const temp=temporary();let reads=0;
+ const service=createNlbConnection(temp.directory,{run:async()=>++reads===1?'[]':'[{"unexpected":true}]',now:()=>new Date('2026-10-30T10:00:00Z')});
+ try{
+  const configured={...source,id:'fixture',since:'2026-08-01'};service.store.change(data=>({...data,sources:[configured],candidates:[configured]}));service.sync();await service.wait();
+  let state=service.store.read();assert.equal(state.data.scan.next,'2026-08-31');assert.equal(state.data.scan.batches[0].rows.length,0);assert.equal(state.data.rows.length,0);
+  service.configure([{...configured,label:'New label'}],false,state.revision);assert.ok(service.store.read().data.scan);
+  service.configure([{...configured,since:'2026-04-24'}],false,service.store.read().revision);assert.equal(service.store.read().data.scan,null);
+ }finally{await service.close();temp.remove();}
+});

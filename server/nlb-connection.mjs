@@ -4,17 +4,18 @@ import {createHash} from 'node:crypto';
 import {join,dirname,resolve} from 'node:path';
 import {rm} from 'node:fs/promises';
 import {openTransfersStore} from './transfers-store.mjs';
-import {validDay,MAX_BANK_SOURCES} from '../src/data/transfers.mjs';
+import {validDay,MAX_BANK_SOURCES,normalizeExport} from '../src/data/transfers.mjs';
 const require=createRequire(import.meta.url);
 const cli=join(dirname(require.resolve('nlbcli/package.json')),'dist/index.mjs');
 const day=date=>date.toISOString().slice(0,10);
 const bankDay=date=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Skopje',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 const bankDate=date=>date.split('-').reverse().join('.');
+const sourceSignature=sources=>JSON.stringify(sources.map(s=>[s.key,s.id,s.kind,s.currency,s.since]));
 const fail=(message,status=400)=>Object.assign(Error(message),{status});
 export function runNlb(args,{signal}={}){
  // No shell and no caller-controlled command names. Raw CLI output/errors never go to logs.
  return new Promise((resolve,reject)=>execFile(process.execPath,[cli,...args],{timeout:args.includes('login')?155000:60000,maxBuffer:3_000_000,signal,env:{...process.env,NO_COLOR:'1',FORCE_COLOR:'0'}},(error,stdout)=>{
-  if(error){const auth=error.code===3;reject(Object.assign(Error(auth?'NLB approval is required. Reconnect and approve on your phone.':'NLB could not complete the read. Saved transactions are unchanged; try again later.'),{auth}));}else resolve(stdout);
+  if(error){const auth=error.code===3,timeout=error.killed&&error.signal==='SIGTERM';reject(Object.assign(Error(auth?'NLB approval is required. Reconnect and approve on your phone.':timeout?'NLB did not respond before the read timed out. Retry to resume saved progress.':'NLB could not complete the read. Retry to resume saved progress.'),{auth}));}else resolve(stdout);
  }));
 }
 export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),removeSession}={}){
@@ -23,10 +24,10 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
  const erase=removeSession||(()=>rm(sessionPath,{force:true}));
  let job=null,controller=null,closed=false;
  // A process restart never reports a lost background job as still running.
- if(['connecting','syncing'].includes(store.read().data.sync.state))store.change(data=>({...data,sync:{...data.sync,state:'unavailable',message:'The previous operation was interrupted. Retry to continue.'}}));
+ if(['connecting','syncing'].includes(store.read().data.sync.state))store.change(data=>({...data,sync:{...data.sync,state:'unavailable',message:'The previous operation was interrupted. Sync NLB resumes saved scan progress.'}}));
  const updateSync=patch=>store.change(data=>({...data,sync:{...data.sync,...patch}}));
  const command=(args,interactive=false)=>run(['--profile',profile,...(interactive?[]:['--non-interactive']),...args],{signal:controller?.signal});
- function launch(state,message,work){if(job)throw fail('An NLB operation is already running.',409);controller=new AbortController();updateSync({state,message,lastAttempt:now().toISOString()});job=(async()=>{try{await work();}catch(error){if(!closed)updateSync({state:error.auth?'approval-required':'unavailable',message:error.message?.startsWith('NLB ')?error.message:'The NLB response could not be imported. Saved transactions are unchanged.'});}finally{job=null;controller=null;}})();}
+ function launch(state,message,work){if(job)throw fail('An NLB operation is already running.',409);controller=new AbortController();updateSync({state,message,lastAttempt:now().toISOString()});job=(async()=>{try{await work();}catch(error){if(!closed)updateSync({state:error.auth?'approval-required':'unavailable',message:error.message?.startsWith('NLB ')?error.message:'The NLB response could not be imported. Completed scan sections are saved; retry to resume.'});}finally{job=null;controller=null;}})();}
  function login(username){
   if(typeof username!=='string'||!username.trim()||username.length>100||/[\x00-\x1f]/.test(username))throw fail('Enter your NLB Klik username.');
   const last=store.read().data.sync.lastLogin;if(last&&now()-new Date(last)<60000)throw fail('Wait one minute before requesting another phone approval.',429);
@@ -54,21 +55,35 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
    const old=data.sources.find(item=>item.key===key);
    if(data.rows.some(row=>row.sourceKey===key)&&data.rows.find(row=>row.sourceKey===key)?.currency!==source.currency&&source.kind==='account')throw fail('An imported account currency cannot be changed.');
    return {id:source.id,kind:source.kind,key,label:source.label.trim(),currency:source.kind==='account'?source.currency:null,since:source.since,lastRead:old?.since===source.since?old.lastRead:null};
-  });return {...data,sources:selected,automatic,sync:{...data.sync,message:'Sources saved. Sync now to read transactions.'}};},revision);
+  });return {...data,scan:sourceSignature(selected)===sourceSignature(data.sources)?data.scan:null,sources:selected,automatic,sync:{...data.sync,message:'Sources saved. Sync now to read transactions.'}};},revision);
  }
  function sync(){const initial=store.read().data;if(!initial.sources.length)throw fail('Choose your NLB sources first.');
   launch('syncing','Reading NLB transactions…',async()=>{
-   const batches=[],today=bankDay(now());
-   for(const source of initial.sources){
-    const overlap=day(new Date(Date.parse(bankDay(source.lastRead?new Date(source.lastRead):now()))-45*86400000));let start=source.lastRead&&overlap>source.since?overlap:source.since;const rows=[];
-    while(start<=today){const end=day(new Date(Math.min(Date.parse(start)+89*86400000,Date.parse(today))));updateSync({message:`Reading ${source.label}: ${start} to ${end}…`});
-     const output=await command([source.kind==='account'?'accounts':'cards','transactions',source.id,'--start',bankDate(start),'--end',bankDate(end),'--format','json']);
-     let batch;try{batch=JSON.parse(output);}catch{throw fail('NLB returned an invalid transaction export.');}if(!Array.isArray(batch)||rows.length+batch.length>5000)throw fail('NLB history exceeded the supported import size.');rows.push(...batch);start=day(new Date(Date.parse(end)+86400000));
-    }
-    batches.push({source,rows});
+   const signature=sourceSignature(initial.sources);
+   let scan=initial.scan?.signature===signature?initial.scan:null;
+   if(!scan){
+    const today=bankDay(now());
+    scan={signature,today,index:0,next:null,savedAt:null,batches:initial.sources.map(source=>{
+     const overlap=day(new Date(Date.parse(bankDay(source.lastRead?new Date(source.lastRead):now()))-45*86400000));
+     return {source,start:source.lastRead&&overlap>source.since?overlap:source.since,rows:[]};
+    })};
+    store.change(data=>({...data,scan}));
    }
-   store.ingest(batches);
-   store.change(data=>({...data,sources:data.sources.map(source=>({...source,lastRead:now().toISOString()})),sync:{...data.sync,state:'connected',lastSuccess:now().toISOString(),message:'Transactions imported. Review new matches before they enter totals.'}}));
+   while(scan.index<scan.batches.length){
+    const current=scan.batches[scan.index],source=current.source,start=scan.next||current.start;
+    if(start>scan.today){scan={...scan,index:scan.index+1,next:null};store.change(data=>({...data,scan}));continue;}
+    const end=day(new Date(Math.min(Date.parse(start)+29*86400000,Date.parse(scan.today))));
+    updateSync({message:`Reading ${source.label}: ${start} to ${end}… Completed sections are saved.`});
+    const output=await command([source.kind==='account'?'accounts':'cards','transactions',source.id,'--start',bankDate(start),'--end',bankDate(end),'--format','json']);
+    let batch;try{batch=JSON.parse(output);}catch{throw fail('NLB returned an invalid transaction export. Retry to resume saved progress.');}
+    normalizeExport(batch,source);
+    if(current.rows.length+batch.length>5000)throw fail('NLB history exceeded the supported import size. Saved scan progress is retained.');
+    const batches=scan.batches.map((item,index)=>index===scan.index?{...item,rows:[...item.rows,...batch]}:item);
+    scan={...scan,batches,next:day(new Date(Date.parse(end)+86400000)),savedAt:now().toISOString()};
+    // A validated section and its next cursor are committed in one SQLite document write.
+    store.change(data=>({...data,scan}));
+   }
+   store.ingest(scan.batches,data=>({...data,scan:null,sources:data.sources.map(source=>({...source,lastRead:scan.today+'T00:00:00Z'})),sync:{...data.sync,state:'connected',lastSuccess:now().toISOString(),message:'Scan complete. Matching transactions and totals are updated.'}}));
   });
  }
  async function disconnect(){controller?.abort();if(job)await job;await erase();store.change(data=>({...data,automatic:false,candidates:[],sync:{...data.sync,state:'disconnected',message:'Disconnected. Your saved ledger is retained.'}}));}
