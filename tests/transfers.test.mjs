@@ -104,3 +104,12 @@ test('Vanquish Opis matches changing prefixes across three cards and ignores unr
   assert.equal(tradingRows([{kind:'card',date:'2026-10-20',amount:'-49',currency:'USD',description:'OLD-REF VANQUISH TRADER',review:null}])[0].review.activity,'cost');
  }finally{store.close();temp.remove();}
 });
+
+test('Vanquish account charges count automatically while exclusions and ambiguous records remain protected',async()=>{
+ const {tradingRows}=await import('../src/data/transfers.mjs');
+ const row={id:'fixture',kind:'account',date:'2026-10-26',description:'REF VANQUISH TRADER',amount:'-2155',currency:'MKD',fee:'0',review:null};
+ assert.equal(tradingRows([row])[0].review.activity,'cost');
+ assert.equal(transferSummary(tradingRows([row]))[0].netCosts,'2155');
+ for(const extra of [{possibleDuplicate:true},{possibleChange:true},{amount:null},{currency:null},{amount:'49'}])assert.equal(tradingRows([{...row,...extra}])[0].review,null);
+ assert.equal(tradingRows([{...row,review:{platform:'',activity:'exclude'}}])[0].review.activity,'exclude');
+});

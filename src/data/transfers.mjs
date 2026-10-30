@@ -39,7 +39,7 @@ export function descriptionPlatform(row){
  return '';
 }
 export function automaticDescriptionReview(row){
- if(row.review||row.possibleDuplicate||row.possibleChange||row.kind!=='card'||descriptionPlatform(row)!=='Vanquish'||!row.amount?.startsWith('-'))return null;
+ if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||descriptionPlatform(row)!=='Vanquish'||!row.amount?.startsWith('-'))return null;
  try{return {...validateReview(row,{platform:'Vanquish',activity:'cost'}),automatic:true};}catch{return null;}
 }
 export function tradingRows(rows){return rows.filter(row=>descriptionPlatform(row)).map(row=>({...row,review:row.review||automaticDescriptionReview(row)}));}
