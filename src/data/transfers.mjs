@@ -90,5 +90,24 @@ export function groupInstallments(rows){
 export function bankMkdCoverage(rows){
  const included=rows.filter(row=>row.kind==='card'&&row.review?.platform==='Vanquish'&&['cost','refund'].includes(row.review.activity));
  const known=included.filter(row=>row.settlementAmount!=null);
- return {amount:known.reduce((sum,row)=>subtractMoney(sum,row.settlementAmount),'0'),known:known.length,total:included.length};
+ const amount=known.reduce((sum,row)=>subtractMoney(sum,row.settlementAmount),'0');
+ let remaining='0',remainingCount=0,uncertain=known.length!==included.length;
+ const plans=new Map();
+ for(const row of included){
+  const match=(row.description||'').normalize('NFKC').trim().match(/^(.*?)\s+(\d{1,2})\/(\d{1,2})$/);
+  if(!match||Number(match[3])<=1||row.review.activity!=='cost')continue;
+  const number=Number(match[2]),count=Number(match[3]);
+  if(number<1||number>count){uncertain=true;continue;}
+  const key=JSON.stringify([row.sourceKey,row.date,match[1].replace(/\s+/g,' ').toUpperCase(),row.amount,row.currency,count]);
+  if(!plans.has(key))plans.set(key,{count,items:[]});plans.get(key).items.push({row,number});
+ }
+ for(const {count,items} of plans.values()){
+  if(new Set(items.map(item=>item.number)).size!==items.length){uncertain=true;continue;}
+  if(items.length===count)continue;
+  if(items.some(item=>item.row.settlementAmount==null||!item.row.settlementAmount.startsWith('-')||item.row.possibleDuplicate||item.row.possibleChange)){uncertain=true;continue;}
+  const latest=items.reduce((a,b)=>a.number>b.number?a:b).row.settlementAmount;
+  const missing=count-items.length;remainingCount+=missing;
+  for(let i=0;i<missing;i++)remaining=subtractMoney(remaining,latest);
+ }
+ return {amount,known:known.length,total:included.length,fullAmount:uncertain?null:addMoney(amount,remaining),remaining:uncertain?null:remaining,remainingCount:uncertain?null:remainingCount,calculated:!uncertain&&remainingCount>0};
 }

@@ -159,11 +159,21 @@ test('full bank card table preserves actual domestic charges and excludes accoun
   const card={...source,kind:'card',key:'card:test'};store.ingest([{source:card,rows}]);let before=store.read();
   const {settlementAmount,bookingDate,...legacy}=rows[0];store.ingest([{source:card,rows:[legacy]}]);assert.equal(store.read().data.rows.length,1);assert.equal(store.read().data.rows[0].settlementAmount,'-2700.25');
   const selected=tradingRows([...store.read().data.rows,{...before.data.rows[0],id:'account',kind:'account',currency:'MKD',amount:'-2700.25'}]);
-  assert.deepEqual(bankMkdCoverage(selected),{amount:'2700.25',known:1,total:1});
+  assert.deepEqual(bankMkdCoverage(selected),{amount:'2700.25',known:1,total:1,fullAmount:'2700.25',remaining:'0',remainingCount:0,calculated:false});
  }finally{store.close();temp.remove();}
 });
 test('old card imports backfill domestic amounts once then use the regular overlap',async()=>{
  const temp=temporary(),calls=[];const card={...source,kind:'card',key:'card:test',id:'test',since:'2026-08-01',lastRead:'2026-10-29T00:00:00Z'};
  const service=createNlbConnection(temp.directory,{run:async args=>{calls.push(args);return '';},now:()=>new Date('2026-10-30T10:00:00Z')});
  try{service.store.change(data=>({...data,sources:[card]}));service.sync();await service.wait();assert.equal(calls[0][calls[0].indexOf('--start')+1],'01.08.2026');assert.ok(calls.every(args=>args.at(-1)==='tab'));assert.equal(service.store.read().data.sources[0].cardFormat,2);calls.length=0;service.sync();await service.wait();assert.equal(calls[0][calls[0].indexOf('--start')+1],'15.09.2026');}finally{await service.close();temp.remove();}
+});
+
+test('full MKD cost includes unbooked equal installments without counting the purchase twice',async()=>{
+ const {bankMkdCoverage}=await import('../src/data/transfers.mjs');
+ const row={kind:'card',sourceKey:'card:fixture',date:'2026-10-01',description:'VANQUISH TRADER 1/6',amount:'-100',currency:'USD',settlementAmount:'-918',review:{platform:'Vanquish',activity:'cost'}};
+ const result=bankMkdCoverage([row]);assert.equal(result.amount,'918');assert.equal(result.fullAmount,'5508');assert.equal(result.remaining,'4590');assert.equal(result.remainingCount,5);assert.equal(result.calculated,true);
+ const second={...row,description:'VANQUISH TRADER 2/6'};const next=bankMkdCoverage([row,second]);assert.equal(next.fullAmount,'5508');assert.equal(next.amount,'1836');assert.equal(next.remaining,'3672');
+ assert.equal(bankMkdCoverage([row,{...second,settlementAmount:'-919'}]).fullAmount,'5513');
+ for(const other of [{...second,settlementAmount:null},row])assert.equal(bankMkdCoverage([row,other]).fullAmount,null);
+ const complete=bankMkdCoverage(Array.from({length:6},(_,i)=>({...row,description:`VANQUISH TRADER ${i+1}/6`,settlementAmount:i===5?'-919':'-918'})));assert.equal(complete.fullAmount,'5509');assert.equal(complete.remaining,'0');assert.equal(complete.calculated,false);
 });
