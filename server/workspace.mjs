@@ -34,6 +34,7 @@ export function validateWorkspace(value) {
   if(value.preferences.focus!==undefined){if(!['QQQ','SPY','hot','custom'].includes(value.preferences.focus))throw bad('Invalid focus tab.');preferences.focus=value.preferences.focus;}
   if(value.preferences.customSymbol!==undefined){if(value.preferences.customSymbol!==''&&!isEquityKey(value.preferences.customSymbol))throw bad('Invalid custom listing.');preferences.customSymbol=value.preferences.customSymbol;}
   if(value.preferences.setupInterval!==undefined){if(!SETUP_INTERVALS.includes(value.preferences.setupInterval))throw bad('Invalid setup interval.');preferences.setupInterval=value.preferences.setupInterval;}
+  if(value.preferences.showTradingNet!==undefined){if(typeof value.preferences.showTradingNet!=='boolean')throw bad('Invalid trading net visibility.');preferences.showTradingNet=value.preferences.showTradingNet;}
   let displayTime;
   if(value.displayTime!==undefined){try{displayTime=validateDisplayTime(value.displayTime);}catch(e){throw bad(e.message);}}
   const ids=new Set();

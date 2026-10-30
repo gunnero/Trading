@@ -37,6 +37,9 @@ try{
  await settingsNav.getByRole('link',{name:'Account',exact:true}).click();await expect(page.locator('.settings-content')).toContainText('owner@example.com');await page.getByRole('button',{name:'Manage account security'}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Close account settings'}).click();await page.screenshot({path:dir+'/account-desktop.png'});
  await settingsNav.getByRole('link',{name:'Workspace',exact:true}).click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloadPromise;const backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(JSON.stringify(backup)).not.toContain('isolated-unsaved-key-fixture');await expect(page.locator('.settings-content')).toContainText('Europe/Skopje');
  mark('Account controls reuse the protected security dialog with focus return; Workspace exposes time settings and a credential-free backup');
+ await expect(page.locator('.sidebar-transfer-net')).toBeVisible();
+ const netSwitch=page.getByRole('switch',{name:'Show Trading net'});await netSwitch.uncheck();await save();await expect(page.locator('.sidebar-transfer-net')).toHaveCount(0);await page.reload();await expect(netSwitch).not.toBeChecked();await expect(page.locator('.sidebar-transfer-net')).toHaveCount(0);await netSwitch.check();await save();await page.reload();await expect(netSwitch).toBeChecked();await expect(page.locator('.sidebar-transfer-net')).toBeVisible();
+ mark('Trading net visibility saves and survives reload in both hidden and shown states');
  for(const width of [320,390,820,1024,1488]){
   await page.setViewportSize({width,height:900});
   for(const category of ['Watchlist','Charts','Connections','Account','Workspace']){

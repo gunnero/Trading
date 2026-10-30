@@ -99,3 +99,5 @@
 @media(min-width:761px) and (max-width:950px){.sidebar-account-area .sidebar-sentiment{padding:10px 4px}.sidebar-sentiment>.sidebar-sentiment-heading{justify-content:center}.sidebar-sentiment-heading .sidebar-sentiment-label,.sidebar-sentiment .sidebar-sentiment-heading>svg:last-child,.sidebar-sentiment-score small,.sidebar-sentiment-rating{display:none}.sidebar-sentiment-reading{justify-content:center;margin-top:7px}.sidebar-sentiment-score strong{font-size:14px;letter-spacing:-.4px}.sidebar-sentiment-status{font-size:8px;text-align:center}.sidebar-sentiment-meter{margin-top:8px}}
 
 .settings-watchlist-page{max-width:none}
+
+.settings-net-toggle{display:flex;align-items:center;gap:12px;cursor:pointer}.settings-net-toggle input{width:18px;height:18px;accent-color:var(--teal,#28bfa7)}
