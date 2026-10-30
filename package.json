@@ -41,7 +41,8 @@
     "test:display-time": "node --test tests/display-time.test.mjs && node scripts/display-time-qa.mjs",
     "test:calendar": "node --test tests/economic-calendar.test.mjs tests/briefing.test.mjs && node scripts/economic-calendar-qa.mjs",
     "test:session-review": "node --test tests/session-review.test.mjs && node scripts/session-review-qa.mjs",
-    "test:transfers": "node --test tests/transfers.test.mjs && node scripts/transfers-qa.mjs"
+    "test:transfers": "node --test tests/transfers.test.mjs && node scripts/transfers-qa.mjs",
+    "test:chart-grid": "node --test tests/chart-grid.test.mjs && node scripts/chart-grid-qa.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

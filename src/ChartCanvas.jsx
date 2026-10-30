@@ -124,3 +124,28 @@ export function TreasuryHistoryChart({points}) {
   },navigation.setView);
   return <>{config.panel==='indicators'&&<div className="chart-settings-panel">Treasury daily observations · hover the plot to inspect a published yield. Candlestick indicators are not applied.</div>}{config.panel==='navigation'&&<ChartNavigation navigation={navigation} count={visible.length} label="observations" priceScale={priceScale} onReset={settings.reset} compact/>}<TouchChart scope="US2Y|D" panel={config.panel}><DrawingChart scope="US2Y|D" symbol="US 2Y" timeframe="D" times={points.map(point=>Date.parse(point.date)/1000)} instance={instance} formatValue={value=>`${value.toFixed(2)}%`} top={18} bottom={62}><div ref={ref} className="price-chart" role="img" tabIndex={0} {...priceScale.handlers} {...priceScale.attributes} onKeyDown={event=>{if(event.key==='Home'||event.key==='0'){event.preventDefault();settings.reset();}else if(!priceScale.onKeyDown(event))navigation.onKeyDown(event);}} data-view-start={navigation.view.start.toFixed(2)} data-view-end={navigation.view.end.toFixed(2)} aria-label={`US 2Y U.S. Treasury daily yield chart. ${points.length} published observations from ${points[0].date} to ${points.at(-1).date}. Last yield ${points.at(-1).price} percent. Drag the price axis to scale; double-click it to restore auto. Use plus/minus to zoom time, Shift plus/minus to scale price, arrows to pan, Home to reset.`}/></DrawingChart></TouchChart></>;
 }
+
+// Read-only overview: independent of full-chart saved axes, panels and drawings.
+export function GridChart({symbol,timeframe,candles,indicators,instrument,provider}){
+  const {clockStamp,zoneLabel}=useDisplayTime();
+  const low=Math.min(...candles.map(row=>row.ohlc[2])),high=Math.max(...candles.map(row=>row.ohlc[3]));
+  const padding=Math.max((high-low)*.12,high*.001),min=low-padding,max=high+padding;
+  const zones=instrument?.zones.filter(zone=>zone.low<=max&&zone.high>=min)||[];
+  const overlays=[['ema9','EMA 9','#b9c7cd'],['ema21','EMA 21','#748990'],['vwap','VWAP','#ffffff']].flatMap(([id,name,color])=>{
+    const values=indicators?.series?.[id];if(!values?.some(validIndicator))return [];
+    if(id!=='vwap')return [{id,name,type:'line',data:values,showSymbol:false,connectNulls:false,lineStyle:{color,width:1.2},silent:true}];
+    const groups=new Map();values.forEach((value,index)=>{const session=indicators.sessions?.[index]||candles[index]?.date;if(!groups.has(session))groups.set(session,Array(candles.length).fill(null));groups.get(session)[index]=value;});
+    return [...groups].map(([session,data])=>({id:`vwap-${session}`,name,type:'line',data,showSymbol:false,connectNulls:false,lineStyle:{color,width:1.2},silent:true}));
+  });
+  const {ref}=useChart({animation:false,textStyle:{fontFamily:'Inter, sans-serif'},grid:[{left:8,right:58,top:12,bottom:36},{left:8,right:58,bottom:36,height:28}],
+    tooltip:{show:false},
+    xAxis:[{type:'category',data:candles.map(row=>row.timestamp),boundaryGap:true,axisLabel:{show:false},axisTick:{show:false},axisLine:{show:false}},
+      {type:'category',gridIndex:1,data:candles.map(row=>candles[0].date===candles.at(-1).date?clockStamp(row.timestamp*1000).split(' · ').at(-1):clockStamp(row.timestamp*1000).replace(' · ','\n')),axisLabel:{color:'#91a5af',fontSize:10,lineHeight:13,hideOverlap:true,interval:Math.max(1,Math.floor(candles.length/4))},axisTick:{show:false},axisLine:{lineStyle:{color:'#293940'}}}],
+    yAxis:[{type:'value',position:'right',min,max,splitNumber:4,axisLabel:{color:'#aebfc8',fontSize:10,formatter:value=>value.toFixed(2)},splitLine:{lineStyle:{color:'#233239'}}},{type:'value',gridIndex:1,show:false}],
+    series:[{id:'candles',type:'candlestick',data:candles.map(row=>row.ohlc),itemStyle:{color:colors.green,color0:colors.red,borderColor:colors.green,borderColor0:colors.red},barMaxWidth:10,
+      markArea:{silent:true,data:zones.filter(zone=>zone.low!==zone.high).map(zone=>[{yAxis:zone.low,itemStyle:{color:zone.type==='S'?'#ef747324':zone.type==='D'?'#29c5b029':'#efbd4e24'}},{yAxis:zone.high}])},
+      markLine:{silent:true,symbol:['none','none'],label:{show:false},data:zones.filter(zone=>zone.low===zone.high).map(zone=>({yAxis:zone.low,lineStyle:{color:zone.type==='S'?colors.red:zone.type==='D'?colors.green:colors.amber,width:1}}))}},
+      {id:'volume',type:'bar',xAxisIndex:1,yAxisIndex:1,silent:true,data:candles.map(row=>({value:row.volume,itemStyle:{color:row.ohlc[1]>=row.ohlc[0]?'#27cbb03d':'#f46f734a'}}))},...overlays],
+  });
+  return <div ref={ref} className="grid-mini-chart" role="img" aria-label={`${symbol} ${timeframe} ${provider} chart · ${candles.length} available candles · ${zoneLabel} time · EMA 9/21 and VWAP when available`}/>;
+}

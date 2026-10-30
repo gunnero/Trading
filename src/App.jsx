@@ -27,6 +27,8 @@ import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay,entryState,isExtend
 import {marketDay} from './data/calendar.mjs';
 import {FocusTabs,SetupControls,RetestPanel} from './RetestDesk';
 import {useRetestScan} from './useRetestScan';
+import ChartGrid,{GridDetail} from './ChartGrid';
+import {GRID_DEFAULTS} from './data/chart-grid.mjs';
 import {chartableEntry} from './data/instruments.mjs';
 import {CompanyDetail} from './CompanyDetail';
 import {LevelSetup} from './LevelSetup';
@@ -80,6 +82,9 @@ function SessionDesk({workspace}) {
   const setWatchText=watchText=>workspace.update(current=>replaceWatchlist(current,parseWatchlist(watchText)));
   const setFocus=focus=>workspace.update(current=>({...current,preferences:{...current.preferences,focus,...(['QQQ','SPY'].includes(focus)?{symbol:focus}:{})}}));
   const setCustom=customSymbol=>workspace.update(current=>({...current,preferences:{...current.preferences,customSymbol,focus:'custom'}}));
+  const gridConfig={...GRID_DEFAULTS,...preferences.chartGrid};
+  const gridActive=focus==='hot'&&gridConfig.view==='grid';
+  const setGridConfig=change=>workspace.update(current=>({...current,preferences:{...current.preferences,chartGrid:{...GRID_DEFAULTS,...current.preferences.chartGrid,...change}}}));
   const setSetupInterval=setupInterval=>workspace.update(current=>({...current,preferences:{...current.preferences,setupInterval}}));
   const setPlans=change=>workspace.update(current=>({...current,plans:typeof change==='function'?change(current.plans):change}));
   const setManual=manualSentiment=>workspace.update({manualSentiment});
@@ -123,7 +128,7 @@ function SessionDesk({workspace}) {
   const marketKey=['QQQ','SPY'].includes(focus)?focus:selectedStock?quoteKey(selectedStock):null;
   const [timeframe,setTimeframe]=useSavedTimeframe(marketKey,{primary:true});
   const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
-  const chart=useMarketChart(marketKey,timeframe,section==='overview');
+  const chart=useMarketChart(marketKey,timeframe,section==='overview'&&!gridActive);
   const quoteResult=quotes[marketKey],quote=quoteResult?.quote;
   const setup=scan.byKey[marketKey]||{stage:scan.status==='loading'?'loading':symbol?'no-levels':'waiting-break',timeframe:setupInterval};
   const [planSnapshot,setPlanSnapshot]=useState(null);
@@ -191,6 +196,8 @@ function SessionDesk({workspace}) {
           <BriefingStrip briefing={briefing} watchlist={watchlist} onOpen={() => navigate('briefing')} onNews={() => navigate('news')} onEarnings={()=>navigate('earnings')} onSentiment={()=>navigate('sentiment')}/>
           <FocusTabs focus={focus} onFocus={setFocus} quotes={quotes} qqqRoles={qqqRoles} spyRoles={spyRoles} sheet={sheet} scan={scan} customEntry={customEntry}/>
           <SetupControls focus={focus} watchlist={watchlist} customKey={customKey} onCustom={setCustom} interval={setupInterval} onInterval={setSetupInterval} scan={scan} sheetDate={sheet.date}/>
+          {focus==='hot'&&<div className="desk-view-controls"><div className="segmented" aria-label="Top / Hot view">{[['single','Single chart'],['grid','Grid']].map(([view,label])=><button key={view} aria-pressed={gridConfig.view===view} className={gridConfig.view===view?'selected':''} onClick={()=>setGridConfig({view})}>{label}</button>)}</div></div>}
+          {gridActive?<ChartGrid watchlist={watchlist} sheet={sheet} scan={scan} config={gridConfig} onChange={setGridConfig} onOpen={entry=>{setSelectedEntry(entry);setDialog('grid-chart');}}/>:<>
           <div className="market-data-caption" role="status"><span>{quote?`${symbol} · ${quoteStamp(quote)} · ${quote.session||'Regular session'} ${isExtendedQuote(quote)?'chart price · level context only':'quote'}`:!symbol?(focus==='hot'?'No qualifying Top/Hot setup in your watchlist.':'Choose your custom stock from the watchlist.'):quoteResult?.status==='loading'?'Loading Yahoo prices…':'Yahoo prices unavailable · retrying automatically'}{quoteResult?.status==='stale'&&' · Cached / old reading'}</span><button onClick={()=>setDialog('market-data')}>Source & delays <Info size={13}/></button></div>
           <div className="workspace-grid">
             <section className="chart-panel" aria-label={`${symbol||'Stock'} chart`}><ChartHeader symbol={symbol} marketKey={marketKey} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles}/>
@@ -201,6 +208,7 @@ function SessionDesk({workspace}) {
             <RetestPanel symbol={symbol} result={setup} canPlan={!!context&&!!(context.supply||context.demand||setup.zone)} onPlan={startPlan}/>
 
           </div>
+          </>}
           <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
@@ -215,6 +223,7 @@ function SessionDesk({workspace}) {
         <footer className="app-footer"><span>OPENING BELL <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
       </main></PageNavigation.Provider>
     </div>
+      {dialog === 'grid-chart' && selectedEntry && <Modal title={`${selectedEntry.symbol} chart`} subtitle={`${selectedEntry.exchange} · full chart and saved drawing tools`} onClose={()=>setDialog(null)} wide className="market-chart-modal"><GridDetail entry={selectedEntry} sheet={sheet} interval={gridConfig.interval} setup={scan.byKey[quoteKey(selectedEntry)]}/></Modal>}
       {dialog === 'macro-chart' && <Modal title={`${macro.find(([key])=>key===macroSymbol)?.[1]} chart`} subtitle="Market context · source history" onClose={()=>setDialog(null)} wide className="market-chart-modal"><MarketContextChart key={macroSymbol} symbol={macroSymbol} quotes={quotes} sheet={viewedSheet} historical={!!levelView?.historical} onSelect={setMacroSymbol}/></Modal>}
     {dialog === 'level-setup' && selectedEntry && <Modal title={`${selectedEntry.symbol} ${levelView?.historical?'historical levels':'setup'}`} subtitle={levelView?.historical?`Saved list · ${formatDate(viewedSheet.date)}`:"Your levels, chart and break & retest checks"} onClose={()=>setDialog(null)} wide className="level-setup-modal"><LevelSetup key={selectedEntry.id} entry={selectedEntry} sheet={viewedSheet} historical={!!levelView?.historical} result={quotes[quoteKey(selectedEntry)]} initialInterval={setupInterval} onPlan={snapshot=>{setPlanSnapshot(snapshot);setDialog('plan');}}/></Modal>}
     {dialog === 'level-link' && selectedLevel && <LevelLinkDialog instrument={selectedLevel} destination={levelDestination(selectedLevel,watchlist)} historical={!!levelView?.historical} onChoose={openLevelSetup} onAdd={()=>setDialog('level-add')} onClose={()=>setDialog(null)}/>}
