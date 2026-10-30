@@ -54,7 +54,8 @@ export function validateReview(row,review){
 }
 export function transferSummary(rows,platform=''){
  const groups=new Map();
- for(const row of rows){if(!row.review||row.review.activity==='exclude'||platform&&row.review.platform!==platform)continue;
+ const purchases=groupInstallments(rows).flatMap(group=>{if(!group.children)return [group];const included=group.children.filter(row=>row.review&&row.review.activity!=='exclude');return included.every(row=>row.review.platform==='Vanquish'&&row.review.activity==='cost')?included.slice(0,1):group.children;});
+ for(const row of purchases){if(!row.review||row.review.activity==='exclude'||platform&&row.review.platform!==platform)continue;
   const key=`${row.review.platform}:${row.currency}`,total=groups.get(key)||{platform:row.review.platform,currency:row.currency,deposit:'0',withdrawal:'0',cost:'0',refund:'0',fee:'0',missingFees:0,count:0};
   total[row.review.activity]=addMoney(total[row.review.activity],magnitude(row.amount));
   if(row.fee===null)total.missingFees++;else total.fee=addMoney(total.fee,row.fee);
@@ -69,7 +70,7 @@ export function groupInstallments(rows){
  const groups=new Map();
  for(const row of rows){
   const match=(row.description||'').normalize('NFKC').trim().match(/^(.*?)\s+(\d{1,2})\/(\d{1,2})$/);
-  if(row.kind!=='card'||!match||!row.date||!row.currency||!row.amount?.startsWith('-'))continue;
+  if(descriptionPlatform(row)!=='Vanquish'||row.kind!=='card'||!match||!row.date||!row.currency||!row.amount?.startsWith('-'))continue;
   const number=Number(match[2]),count=Number(match[3]);if(number<1||count<2||number>count)continue;
   const merchant=match[1].replace(/\s+/g,' ').trim();
   const key=JSON.stringify([row.sourceKey,row.date,merchant.toUpperCase(),row.amount,row.currency,count]);
@@ -79,7 +80,7 @@ export function groupInstallments(rows){
  for(const group of groups.values()){
   if(group.items.length<2||new Set(group.items.map(item=>item.number)).size!==group.items.length)continue;
   const children=group.items.sort((a,b)=>a.number-b.number).map(item=>item.row);
-  const entry={...children[0],id:'installments:'+children[0].id,description:group.merchant,children,installmentCount:group.count,amount:children.reduce((total,row)=>addMoney(total,row.amount),'0')};
+  const entry={...children[0],id:'installments:'+children[0].id,description:group.merchant,children,installmentCount:group.count,amount:children[0].amount,rawAmount:children.reduce((total,row)=>addMoney(total,row.amount),'0')};
   for(const row of children)byId.set(row.id,entry);
  }
  const seen=new Set();return rows.flatMap(row=>{const group=byId.get(row.id);if(!group)return [row];if(seen.has(group.id))return [];seen.add(group.id);return [group];});

@@ -114,12 +114,13 @@ test('Vanquish account charges count automatically while exclusions and ambiguou
  assert.equal(tradingRows([{...row,review:{platform:'',activity:'exclude'}}])[0].review.activity,'exclude');
 });
 
-test('installment display groups matching card rows without changing ledger totals or merging ambiguous purchases',async()=>{
+test('installment purchases count once without merging separate or ambiguous purchases',async()=>{
  const {groupInstallments}=await import('../src/data/transfers.mjs');
  const row={kind:'card',sourceKey:'card:fixture',date:'2026-09-14',description:'MIAMI VANQUISH TRADER 2/6',amount:'-59.4',currency:'USD',fee:null,review:{platform:'Vanquish',activity:'cost'}};
  const rows=[{...row,id:'a'},{...row,id:'b',description:'MIAMI VANQUISH TRADER 3/6'}];
- const before=JSON.stringify(rows),groups=groupInstallments(rows);assert.equal(groups.length,1);assert.equal(groups[0].amount,'-118.8');assert.equal(groups[0].children.length,2);assert.equal(groups[0].installmentCount,6);assert.equal(JSON.stringify(rows),before);
- assert.deepEqual(transferSummary(groups.flatMap(group=>group.children||[group])),transferSummary(rows));
+ const before=JSON.stringify(rows),groups=groupInstallments(rows);assert.equal(groups.length,1);assert.equal(groups[0].amount,'-59.4');assert.equal(groups[0].rawAmount,'-118.8');assert.equal(groups[0].children.length,2);assert.equal(groups[0].installmentCount,6);assert.equal(JSON.stringify(rows),before);
+ assert.equal(transferSummary(rows)[0].netCosts,'59.4');assert.equal(transferSummary(rows)[0].count,1);
+ assert.equal(transferSummary([rows[0],{...rows[1],review:{platform:'',activity:'exclude'}}])[0].netCosts,'59.4');
  for(const extra of [{sourceKey:'card:other'},{date:'2026-08-20'},{amount:'-79.2'},{currency:'EUR'},{description:'MIAMI VANQUISH TRADER 3/12'},{description:'MIAMI VANQUISH TRADER 2/6'}])assert.equal(groupInstallments([rows[0],{...rows[1],...extra}]).length,2);
  assert.equal(groupInstallments([rows[0]])[0].children,undefined);
 });
