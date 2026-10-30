@@ -16,7 +16,7 @@
 .sidebar-logout:hover{color:#ffb3b8;background:#ef777c0c}
 .sidebar-logout-error{font-size:11px;color:var(--red);padding:0 10px;overflow-wrap:anywhere}
 .settings-private-label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
-.settings-page{max-width:1120px;margin:0 auto;min-width:0}
+.settings-page{width:100%;max-width:none;margin:0;min-width:0}
 .settings-intro{padding:10px 0 28px}
 .settings-intro h2{font-size:28px;letter-spacing:-.8px;margin:8px 0}
 .settings-intro p{font-size:13px;color:var(--muted);line-height:1.7;margin:0}
