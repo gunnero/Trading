@@ -32,6 +32,17 @@ export function normalizeExport(rows,source){
 }
 export function matchKey(row){return JSON.stringify([row.sourceKey,row.description,row.recipient,row.status,row.amount===null?null:row.amount.startsWith('-')?'-':'+']);}
 export function suggestion(row){const text=`${row.recipient||''} ${row.description||''}`.toLowerCase();if(/interactive brokers|\bibkr\b/.test(text))return 'IBKR';if(/trading\s*212/.test(text))return 'Trading212';if(/vanquish|\bvanq\b/.test(text))return 'Vanquish';return '';}
+// Match the merchant wording in Opis, not variable reference prefixes or account IDs.
+export function descriptionPlatform(row){
+ const text=(row.description||'').normalize('NFKC').replace(/\s+/g,' ').trim();
+ if(/\bVANQUISH TRADER\b/i.test(text))return 'Vanquish';
+ return '';
+}
+export function automaticDescriptionReview(row){
+ if(row.review||row.possibleDuplicate||row.possibleChange||row.kind!=='card'||descriptionPlatform(row)!=='Vanquish'||!row.amount?.startsWith('-'))return null;
+ try{return {...validateReview(row,{platform:'Vanquish',activity:'cost'}),automatic:true};}catch{return null;}
+}
+export function tradingRows(rows){return rows.filter(row=>descriptionPlatform(row)).map(row=>({...row,review:row.review||automaticDescriptionReview(row)}));}
 export function validateReview(row,review){
  if(!review||!Object.hasOwn(ACTIVITIES,review.activity))throw Error('Choose a transaction category.');
  if(review.activity==='exclude')return {platform:'',activity:'exclude'};

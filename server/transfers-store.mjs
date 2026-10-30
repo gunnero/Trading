@@ -2,7 +2,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {mkdirSync,chmodSync} from 'node:fs';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {normalizeExport,matchKey,validateReview} from '../src/data/transfers.mjs';
+import {normalizeExport,matchKey,validateReview,automaticDescriptionReview} from '../src/data/transfers.mjs';
 const fail=message=>Object.assign(Error(message),{status:400});
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function openTransfersStore(directory){
@@ -27,11 +27,13 @@ export function openTransfersStore(directory){
   for(const row of all){const key=variantKey(row);if(!variants.has(key))variants.set(key,[]);variants.get(key).push(row);}
   for(const group of variants.values()){if(new Set(group.map(row=>row.amount)).size>1&&group.some(row=>newIds.has(row.id))){for(const row of group){row.review=null;row.possibleChange=true;}}}
   for(const row of all){if(!row.date||row.amount===null||!row.currency)continue;const key=JSON.stringify([row.date,row.amount,row.currency]);if(!overlaps.has(key))overlaps.set(key,new Set());overlaps.get(key).add(row.sourceKey);}
-  for(const row of all){if(row.review)continue;
-   const possibleDuplicate=!!row.possibleChange||(overlaps.get(JSON.stringify([row.date,row.amount,row.currency]))?.size||0)>1;
+  for(const row of all){if(row.review&&!row.review.automatic)continue;
+   if(row.review?.automatic)row.review=null;
+   const possibleDuplicate=!!row.possibleChange||((overlaps.get(JSON.stringify([row.date,row.amount,row.currency]))?.size||0)>1&&all.some(other=>other.date===row.date&&other.amount===row.amount&&other.currency===row.currency&&(other.kind==='account'||row.kind==='account')));
    row.possibleDuplicate=possibleDuplicate;
    const rule=data.rules.find(rule=>rule.key===matchKey(row));
    if(rule&&!possibleDuplicate){try{row.review=validateReview(row,rule.review);}catch{/* Incomplete rows stay in review. */}}
+   if(!row.review)row.review=automaticDescriptionReview(row);
   }
   return {...data,rows:all.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||a.id.localeCompare(b.id))};
  });}
