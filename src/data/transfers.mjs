@@ -1,3 +1,4 @@
+export const MAX_BANK_SOURCES=6;
 export const PLATFORMS=['IBKR','Trading212','Vanquish'];
 export const ACTIVITIES={deposit:'Deposit',withdrawal:'Withdrawal',cost:'Cost',refund:'Refund',exclude:'Exclude / duplicate'};
 export const validDay=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;

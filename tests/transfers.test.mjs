@@ -81,3 +81,12 @@ test('pinned CLI and its replacement parser work without contacting a bank',asyn
   assert.equal(value,'parser compatibility');
  }finally{temp.remove();}
 });
+test('three currency accounts and multiple cards save together; source cap is explicit and atomic',async()=>{
+ const temp=temporary(),service=createNlbConnection(temp.directory,{run:async()=>{throw Error('No bank calls permitted');},removeSession:async()=>{}});
+ try{
+  const sources=Array.from({length:7},(_,i)=>({kind:i<3?'account':'card',id:'fictional-source-'+i,label:'QA source '+i,currency:i<3?['MKD','EUR','USD'][i]:null,since:'2026-10-01'}));
+  service.store.change(data=>({...data,candidates:sources}));service.configure(sources.slice(0,5),false,service.store.read().revision);assert.equal(service.store.read().data.sources.length,5);
+  service.configure(sources.slice(0,6),false,service.store.read().revision);const saved=service.store.read();assert.equal(saved.data.sources.length,6);
+  assert.throws(()=>service.configure(sources,false,saved.revision),/between 1 and 6/);assert.deepEqual(service.store.read(),saved);
+ }finally{await service.close();temp.remove();}
+});

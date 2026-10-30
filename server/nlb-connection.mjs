@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {join,dirname,resolve} from 'node:path';
 import {rm} from 'node:fs/promises';
 import {openTransfersStore} from './transfers-store.mjs';
-import {validDay} from '../src/data/transfers.mjs';
+import {validDay,MAX_BANK_SOURCES} from '../src/data/transfers.mjs';
 const require=createRequire(import.meta.url);
 const cli=join(dirname(require.resolve('nlbcli/package.json')),'dist/index.mjs');
 const day=date=>date.toISOString().slice(0,10);
@@ -43,7 +43,8 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
  function configure(sources,automatic,revision){
   if(job)throw fail('Wait for the current NLB operation to finish.',409);
   if(!Number.isSafeInteger(revision))throw fail('A ledger revision is required.');
-  if(!Array.isArray(sources)||!sources.length||sources.length>4||typeof automatic!=='boolean')throw fail('Select one to four sources.');
+  if(!Array.isArray(sources)||!sources.length||sources.length>MAX_BANK_SOURCES)throw fail(`Select between 1 and ${MAX_BANK_SOURCES} accounts or cards.`);
+  if(typeof automatic!=='boolean')throw fail('Choose whether to enable automatic reads.');
   store.change(data=>{const seen=new Set();const selected=sources.map(source=>{
    if(!data.candidates?.some(item=>item.id===source.id&&item.kind===source.kind))throw fail('Choose an account or card returned by NLB.');
    const key=source.kind+':'+source.id;if(seen.has(key))throw fail('A source was selected twice.');seen.add(key);
