@@ -1,7 +1,7 @@
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {timeZones} from './data/display-time.mjs';
-import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,UserCircle,ArrowRight,DownloadSimple,Clock,SignOut,Tag} from '@phosphor-icons/react';
+import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,UserCircle,ArrowRight,DownloadSimple,Clock,SignOut,Tag,ArrowsLeftRight} from '@phosphor-icons/react';
 import {useAuth} from './Auth';
 import {GlobalChartSettings,useChartSettingsStore} from './ChartSettings';
 import {SentimentConnection} from './SentimentConnection';
@@ -10,7 +10,7 @@ import {sentimentDisplay,sentimentScore} from './data/sentiment.mjs';
 
 import './settings.css';
 
-const categories=[{id:'watchlist',label:'Watchlist',icon:Tag},{id:'charts',label:'Charts',icon:ChartLine},{id:'connections',label:'Connections',icon:PlugsConnected},{id:'account',label:'Account',icon:ShieldCheck},{id:'workspace',label:'Workspace',icon:HardDrives}];
+const categories=[{id:'transfers',label:'Transfers & Costs',icon:ArrowsLeftRight},{id:'watchlist',label:'Watchlist',icon:Tag},{id:'charts',label:'Charts',icon:ChartLine},{id:'connections',label:'Connections',icon:PlugsConnected},{id:'account',label:'Account',icon:ShieldCheck},{id:'workspace',label:'Workspace',icon:HardDrives}];
 export const settingsCategory=route=>{const id=route.split('/')[1];return categories.some(item=>item.id===id)?id:'charts';};
 function Connections(){
   const {briefingTime,zoneLabel}=useDisplayTime();
@@ -23,12 +23,13 @@ function Connections(){
     <section className="panel settings-card"><header><div><h2>Market data sources</h2><p>The desk currently uses these automatic sources.</p></div></header><dl className="settings-facts"><div><dt>Stocks, futures & charts</dt><dd>Yahoo Finance <small>Interim source · delays vary by instrument</small></dd></div><div><dt>U.S. 2-year yield</dt><dd>U.S. Treasury <small>Daily published observations</small></dd></div></dl></section>
   </>;
 }
-export function SettingsPage({category,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
+export function SettingsPage({category,transfersContent,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
   const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
   return <><PageHeader title="Settings" description="Manage your watchlist, charts, data connections and account in one place."/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
 
     <div className="settings-layout"><nav className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>
       <div className="settings-content" key={category}>
+        {category==='transfers'&&transfersContent}
         {category==='watchlist'&&watchlistContent}
         {category==='charts'&&<><GlobalChartSettings initial={settings.defaults} onSave={saveDefaults} embedded/><p className="settings-footnote">{Object.keys(settings.charts).length} saved chart {Object.keys(settings.charts).length===1?'setup':'setups'}. Each chart keeps its own view until you reset it or apply defaults to all charts.</p></>}
         {category==='connections'&&<Connections/>}

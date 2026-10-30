@@ -37,9 +37,10 @@ import {WATCH_GROUPS, WATCH_EXCHANGES, overviewWatchlist, readWatchlist, newWatc
 import {DrawingProvider} from './ChartDrawings';
 import {ChartSettingsProvider,ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 
-const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'transfers', title: 'Transfers & Costs', icon: ArrowDownRight }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
+const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
 function currentRoute() {
   const route = window.location.hash.slice(1);
+  if (route.split('/')[0] === 'transfers') return 'settings/transfers';
   if (route.split('/')[0] === 'watchlist') return 'settings/watchlist';
   return sections.some(section => section.id === route.split('/')[0]) ? route : 'overview';
 }
@@ -139,7 +140,7 @@ function SessionDesk({workspace}) {
   const startPlan=()=>{setPlanSnapshot({symbol,marketKey,setup,quote,context:setup.zone?{...context,zone:setup.zone}:context});setDialog('plan');};
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 5000); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => {
-    const canonicalize = () => { if(window.location.hash.slice(1).split('/')[0]==='watchlist') window.history.replaceState(window.history.state,'','#settings/watchlist'); };
+    const canonicalize = () => { if(window.location.hash.slice(1).split('/')[0]==='transfers') window.history.replaceState(window.history.state,'','#settings/transfers'); if(window.location.hash.slice(1).split('/')[0]==='watchlist') window.history.replaceState(window.history.state,'','#settings/watchlist'); };
     canonicalize();
     const syncSection = () => { canonicalize(); setRoute(currentRoute()); setMenuOpen(false); setDialog(null); window.scrollTo(0, 0); };
     window.addEventListener('hashchange', syncSection);
@@ -166,7 +167,7 @@ function SessionDesk({workspace}) {
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
       <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${section === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={section === id ? 'page' : undefined}><Icon size={22} weight={section === id ? 'regular' : 'light'}/><span>{title}</span></button>)}</nav>
       <div className="sidebar-account-area">
-        <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('transfers')}/>}
+        <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">
           <button className="nav-item account-nav" aria-label="Account and security" title="Account and security" onClick={()=>{setMenuOpen(false);setDialog('account');}}><UserCircle size={32}/><span className="account-nav-copy"><span className="account-nav-label">{user.username}</span><small className="account-nav-profile">Account & security</small></span><CaretRight className="account-nav-arrow" size={15}/></button>
           <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>
@@ -205,8 +206,7 @@ function SessionDesk({workspace}) {
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={route.split('/')[1]==='plans'?'plans':'trades'} tradeId={route.split('/')[2]} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}
-        {section === 'transfers' && <React.Suspense fallback={<p role="status">Loading transfers…</p>}><TransfersPage/></React.Suspense>}
-        {section === 'settings' && <SettingsPage category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
+        {section === 'settings' && <SettingsPage transfersContent={<React.Suspense fallback={<p role="status">Loading transfers…</p>}><TransfersPage/></React.Suspense>} category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
         {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news} marketContext={marketContext}/>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel}/ >}
         {section === 'review' && <React.Suspense fallback={<p role="status">Loading session review…</p>}><SessionReview workspace={workspace} selectedDay={route.split('/')[1]} onDay={day=>navigate(`review/${day}`)} onJournal={()=>navigate('journal/trades')} onTrade={id=>navigate(`journal/trades/${encodeURIComponent(id)}`)}/></React.Suspense>}
