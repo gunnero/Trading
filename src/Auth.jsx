@@ -70,10 +70,9 @@ export function AuthGate({children}){
   </AuthContext.Provider>;
 }
 
-export function AccountDialog({onClose,workspace}){
-  const {user,session,accept,signOut}=useAuth(),ref=useRef(null);
+export function AccountSettings({workspace}){
+  const {user,session,accept,signOut}=useAuth();
   const [password,setPassword]=useState(''),[code,setCode]=useState(''),[nextPassword,setNextPassword]=useState(''),[repeat,setRepeat]=useState(''),[enrollment,setEnrollment]=useState(null),[recovery,setRecovery]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
-  useEffect(()=>{const trigger=document.activeElement,dialog=ref.current,overflow=document.body.style.overflow;document.body.style.overflow='hidden';dialog.showModal();return()=>{dialog.close();document.body.style.overflow=overflow;if(trigger?.isConnected)trigger.focus({preventScroll:true});};},[]);
   async function action(kind){
     if(busy)return;setBusy(true);setError('');setNotice('');
     try{
@@ -88,8 +87,8 @@ export function AccountDialog({onClose,workspace}){
     setBusy(true);setError('');try{await signOut(all);}catch(e){setError(e.message);setBusy(false);}
   }
   function downloadCodes(){const url=URL.createObjectURL(new Blob([`Opening Bell recovery codes\n${user.email}\nEach code works once with your password. Keep this file private.\n\n${recovery.join('\n')}\n`],{type:'text/plain'})),link=document.createElement('a');link.href=url;link.download='opening-bell-recovery-codes.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  return <dialog ref={ref} className="modal account-modal" aria-labelledby="account-title" onCancel={onClose}><div className="modal-inner">
-    <header className="modal-header"><div><span className="eyebrow">PRIVATE ACCESS</span><h2 id="account-title">Account & security</h2></div><button className="icon-button" aria-label="Close account settings" onClick={onClose}><X size={22}/></button></header>
+  return <section className="panel account-settings" aria-labelledby="account-title">
+    <header className="modal-header"><div><span className="eyebrow">PRIVATE ACCESS</span><h2 id="account-title">Account & security</h2></div></header>
     <div className="account-profile"><ShieldCheck size={29}/><div><strong>{user.name}</strong><span>{user.email}</span><small>@{user.username}</small></div></div>
     <p className={`account-security-state ${user.mfaEnabled?'green':'amber'}`}>{user.mfaEnabled?'Two-step verification enabled':'Two-step verification is off'}<small>{user.mfaEnabled?'Your password and an authenticator or recovery code are required at sign-in.':'Enable it before this app goes public.'}</small></p>
     {notice&&<p className="auth-notice" role="status">{notice}</p>}{error&&<p className="auth-error" role="alert">{error}</p>}
@@ -100,5 +99,5 @@ export function AccountDialog({onClose,workspace}){
       <details className="account-section"><summary>Change password</summary><form onSubmit={e=>{e.preventDefault();action('password');}}><Password id="account-new-password" label="New password" autoComplete="new-password" value={nextPassword} onChange={e=>setNextPassword(e.target.value)} minLength={15} maxLength={128} required/><Password id="account-repeat-password" label="Confirm new password" autoComplete="new-password" value={repeat} onChange={e=>setRepeat(e.target.value)} minLength={15} maxLength={128} required/><button className="button outline" disabled={busy||!password} type="submit">Change password</button><p className="auth-hint">15–128 characters. Other signed-in devices will be signed out.</p></form></details>
     </>}
     <section className="account-section"><h3>Sessions</h3><p>{session.sessionCount} active {session.sessionCount===1?'session':'sessions'}. Stay signed in for 30 days from sign-in, including after closing your browser. Signing out or changing account security ends sessions earlier.</p><div className="account-actions"><button className="button outline" disabled={busy} onClick={()=>logout(false)}><SignOut size={18}/>Sign out</button><button className="text-button" disabled={busy} onClick={()=>logout(true)}>Sign out all devices</button></div></section>
-  </div></dialog>;
+  </section>;
 }

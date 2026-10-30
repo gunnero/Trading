@@ -26,20 +26,20 @@ try{
   const setup=store.issueSetup();await page.goto(runtime.url+'/#activate='+setup.token);
   await expect(page.getByRole('heading',{name:'Set up your account'})).toBeVisible();expect(page.url()).not.toContain(setup.token);
   await page.getByLabel('Create password',{exact:true}).fill(password);await page.getByLabel('Confirm password',{exact:true}).fill(password);await page.getByRole('button',{name:'Activate account'}).click();
-  const account=page.getByRole('dialog',{name:'Account & security'});await expect(account).toBeVisible();await expect(account).toContainText('Workspace owner');await expect(account).toContainText('owner@example.com');
+  const account=page.getByRole('region',{name:'Account & security'});await expect(account).toBeVisible();await expect(account).toContainText('Workspace owner');await expect(account).toContainText('owner@example.com');
   await account.getByLabel('Current password',{exact:true}).fill(password);await account.getByRole('button',{name:'Set up two-step verification'}).click();await expect(account.getByAltText('Authenticator enrollment QR code')).toBeVisible();
   const secret=await account.locator('.account-enrollment code').textContent(),totp=new TOTP({secret:Secret.fromBase32(secret)});
   await account.getByLabel('Authenticator code',{exact:true}).fill(totp.generate());await account.getByRole('button',{name:'Enable two-step verification'}).click();
   await expect(account.getByRole('heading',{name:'Save these recovery codes'})).toBeVisible();const codes=await account.locator('.account-recovery code').allTextContents();expect(codes.length).toBe(10);
   await account.getByRole('button',{name:'I have saved my codes'}).click();await expect(account).toContainText('Two-step verification enabled');
-  await account.getByRole('button',{name:'Close account settings'}).click();await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
+  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Overview',exact:true}).click();await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
   mark('Private one-use activation, exact owner profile, local QR enrollment and recovery-code confirmation work');
   // Existing workspace edits still autosave through the protected API.
   await page.getByRole('button',{name:'Key levels',exact:true}).first().click();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await page.reload();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Account and security'}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   await login(page,'');await expect(page.getByRole('alert')).toContainText('Check your sign-in details');
-  await login(page,codes[0]);await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
+  await login(page,codes[0]);await expect(account).toBeVisible();
   mark('Sign-out hides private content; password-only login fails with MFA; recovery sign-in restores the saved page');
   // Expiry locks the mounted workspace rather than destroying pending editor state.
   await page.getByRole('button',{name:'Account and security'}).click();await account.getByLabel('Current password',{exact:true}).fill('unsaved-field-preserved');
@@ -52,8 +52,8 @@ try{
   mark('Sign out all devices revokes server sessions and clears private content in other tabs');
   for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/login-${width}.png`});}
   await login(page,codes[2]);await expect(page.locator('main')).toBeVisible();await page.getByRole('button',{name:'Account and security'}).click();
-  for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});expect(await account.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await account.evaluate(el=>{el.scrollTop=1200;});await expect(account.getByRole('button',{name:'Close account settings'})).toBeInViewport();}
-  mark('Login and security settings fit 320px, phone, tablet and desktop widths; close remains accessible');
+  for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});expect(await account.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await account.getByRole('button',{name:'Sign out',exact:true}).scrollIntoViewIfNeeded();await expect(account.getByRole('button',{name:'Sign out',exact:true})).toBeInViewport();}
+  mark('Login and security settings fit 320px, phone, tablet and desktop widths; session controls remain accessible');
   await expect(account).toContainText('Stay signed in for 30 days');
   // Real persistent browser profile: no cookie injection or saved storage-state restoration.
   remembered=await chromium.launchPersistentContext(profile,launch);
@@ -69,7 +69,7 @@ try{
   await expect(reopened.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session').value).toBe(savedCookie.value);
   await reopened.getByRole('button',{name:'Account and security'}).click();
-  await reopened.getByRole('dialog',{name:'Account & security'}).getByRole('button',{name:'Sign out',exact:true}).click();
+  await reopened.getByRole('region',{name:'Account & security'}).getByRole('button',{name:'Sign out',exact:true}).click();
   await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session')).toBeUndefined();
   mark('A 30-day HttpOnly cookie survives closing and relaunching the browser; explicit sign-out removes it');

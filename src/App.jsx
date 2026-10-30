@@ -4,7 +4,7 @@ import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
-import {useAuth,AccountDialog} from './Auth';
+import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';
 const SentimentPage=React.lazy(()=>import('./SentimentPage'));
 const EarningsPage=React.lazy(()=>import('./EarningsPage'));
@@ -83,7 +83,8 @@ function SessionDesk({workspace}) {
   const setSetupInterval=setupInterval=>workspace.update(current=>({...current,preferences:{...current.preferences,setupInterval}}));
   const setPlans=change=>workspace.update(current=>({...current,plans:typeof change==='function'?change(current.plans):change}));
   const setManual=manualSentiment=>workspace.update({manualSentiment});
-  const [dialog, setDialog] = useState(()=>user.mfaEnabled?null:'account');
+  const [dialog, setDialog] = useState(null);
+  useEffect(()=>{if(!user.mfaEnabled)navigate('settings/account');},[]);
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const sidebarRef=useRef(null);
@@ -169,7 +170,7 @@ function SessionDesk({workspace}) {
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">
-          <button className="nav-item account-nav" aria-label="Account and security" title="Account and security" onClick={()=>{setMenuOpen(false);setDialog('account');}}><UserCircle size={32}/><span className="account-nav-copy"><span className="account-nav-label">{user.username}</span><small className="account-nav-profile">Account & security</small></span><CaretRight className="account-nav-arrow" size={15}/></button>
+          <button className="nav-item account-nav" aria-label="Account and security" title="Account and security" onClick={()=>{setMenuOpen(false);navigate('settings/account');}}><UserCircle size={32}/><span className="account-nav-copy"><span className="account-nav-label">{user.username}</span><small className="account-nav-profile">Account & security</small></span><CaretRight className="account-nav-arrow" size={15}/></button>
           <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>
           <button className="sidebar-logout" aria-label="Log out" title="Log out" disabled={logoutBusy} onClick={logout}><SignOut size={19}/><span>{logoutBusy?'Logging out…':'Log out'}</span></button>
           {logoutError&&<p className="sidebar-logout-error" role="alert">{logoutError}</p>}
@@ -181,7 +182,7 @@ function SessionDesk({workspace}) {
     <div className="main-shell" inert={menuOpen||undefined}>
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
       <PageNavigation.Provider value={{expanded:menuOpen,open:()=>setMenuOpen(true)}}><main>
-        {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>setDialog('account')}>Set up security <CaretRight size={15}/></button></div>}
+        {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>navigate('settings/account')}>Set up security <CaretRight size={15}/></button></div>}
 
         {section === 'overview' && <>
           <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session."/>
@@ -206,7 +207,7 @@ function SessionDesk({workspace}) {
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={route.split('/')[1]==='plans'?'plans':'trades'} tradeId={route.split('/')[2]} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}
-        {section === 'settings' && <SettingsPage transfersContent={<React.Suspense fallback={<p role="status">Loading transfers…</p>}><TransfersPage/></React.Suspense>} category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>setDialog('account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
+        {section === 'settings' && <SettingsPage transfersContent={<React.Suspense fallback={<p role="status">Loading transfers…</p>}><TransfersPage/></React.Suspense>} category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>navigate('settings/account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
         {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news} marketContext={marketContext}/>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel}/ >}
         {section === 'review' && <React.Suspense fallback={<p role="status">Loading session review…</p>}><SessionReview workspace={workspace} selectedDay={route.split('/')[1]} onDay={day=>navigate(`review/${day}`)} onJournal={()=>navigate('journal/trades')} onTrade={id=>navigate(`journal/trades/${encodeURIComponent(id)}`)}/></React.Suspense>}
@@ -214,7 +215,6 @@ function SessionDesk({workspace}) {
         <footer className="app-footer"><span>OPENING BELL <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
       </main></PageNavigation.Provider>
     </div>
-    {dialog === 'account' && <AccountDialog workspace={workspace} onClose={()=>setDialog(null)}/>}
       {dialog === 'macro-chart' && <Modal title={`${macro.find(([key])=>key===macroSymbol)?.[1]} chart`} subtitle="Market context · source history" onClose={()=>setDialog(null)} wide className="market-chart-modal"><MarketContextChart key={macroSymbol} symbol={macroSymbol} quotes={quotes} sheet={viewedSheet} historical={!!levelView?.historical} onSelect={setMacroSymbol}/></Modal>}
     {dialog === 'level-setup' && selectedEntry && <Modal title={`${selectedEntry.symbol} ${levelView?.historical?'historical levels':'setup'}`} subtitle={levelView?.historical?`Saved list · ${formatDate(viewedSheet.date)}`:"Your levels, chart and break & retest checks"} onClose={()=>setDialog(null)} wide className="level-setup-modal"><LevelSetup key={selectedEntry.id} entry={selectedEntry} sheet={viewedSheet} historical={!!levelView?.historical} result={quotes[quoteKey(selectedEntry)]} initialInterval={setupInterval} onPlan={snapshot=>{setPlanSnapshot(snapshot);setDialog('plan');}}/></Modal>}
     {dialog === 'level-link' && selectedLevel && <LevelLinkDialog instrument={selectedLevel} destination={levelDestination(selectedLevel,watchlist)} historical={!!levelView?.historical} onChoose={openLevelSetup} onAdd={()=>setDialog('level-add')} onClose={()=>setDialog(null)}/>}
