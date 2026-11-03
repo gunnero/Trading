@@ -1,3 +1,4 @@
+import {PORTFOLIO_RANGES,portfolioRangeStart} from '../src/data/portfolio-history.mjs';
 import {XMLParser} from 'fast-xml-parser';
 import {readFileSync, mkdirSync, writeFileSync, renameSync} from 'node:fs';
 import {dirname} from 'node:path';
@@ -144,6 +145,22 @@ export function quoteIsOld(quote,now=Date.now()){
   return false;
 }
 const unavailable=message=>({status:'unavailable',message,quote:null});
+const PRICE_RANGES={'1D':['5m','5d','5m'],'1W':['15m','1mo','15m'],'1M':['1h','3mo','1h'],'3M':['1d','5y','D'],YTD:['1d','5y','D'],'1Y':['1d','5y','D'],MAX:['1d','max','D']};
+export const supportsPriceHistory=(symbol,range)=>(isEquityKey(symbol)||['QQQ','SPY'].includes(symbol))&&PORTFOLIO_RANGES.includes(range);
+export function parsePriceHistory(payload,asset,range,now=Date.now()){
+  if(!PRICE_RANGES[range]||asset?.kind!=='equity')throw Error('Unsupported stock price history.');
+  const granularity=payload?.chart?.result?.[0]?.meta?.dataGranularity;
+  if(granularity&&granularity!==PRICE_RANGES[range][0])throw Error('Source price interval does not match the requested history.');
+  const quote=parseYahoo(payload,asset,now),cutoff=Math.min(now,Date.parse(quote.observedAt));
+  const rows=parseCandles(payload,asset,PRICE_RANGES[range][2],cutoff,{full:true}).filter(r=>r.timestamp*1000<=cutoff);
+  const selected=range==='MAX'?rows:range==='1D'?rows.filter(r=>r.sessionDate===quote.sessionDate):rows.filter(r=>r.timestamp*1000>=portfolioRangeStart(range,now));
+  const points=[...new Map(selected.map(r=>[Math.min(r.end*1000,cutoff),r.ohlc[1]])).entries()].map(([at,value])=>({at,value}));
+  if(!points.length)throw Error('No prices in the selected period.');
+  if(cutoff>=points.at(-1).at){if(cutoff===points.at(-1).at)points.at(-1).value=quote.price;else points.push({at:cutoff,value:quote.price});}
+  const baseline=range==='1D'?quote.previousClose:points[0].value;
+  const change=baseline>0?quote.price-baseline:null;
+  return {quote,points,change,changePercent:change===null?null:change/baseline*100,from:points[0].at,to:cutoff,basis:range==='1D'?'Previous regular-session close':'First available price in this range',range,interval:PRICE_RANGES[range][0]};
+}
 export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=null}={}){
   const cache=new Map(),failures=new Map(),pending=new Map();let blockedUntil=0,active=0,saveTimer;const queue=[];
   if(cachePath)try{const data=JSON.parse(readFileSync(cachePath,'utf8'));if(data.version===1){for(const [k,v] of data.entries.slice(-192))if(now()-v.fetchedAt<86400000)cache.set(k,v);for(const [k,v] of (data.failures||[]).slice(-192))if(v>now())failures.set(k,v);blockedUntil=Math.min(now()+86400000,Number(data.blockedUntil)||0);}}catch{}
@@ -183,6 +200,19 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
     // Validate provider metadata even for entries returned from the shared cache.
     if(asset.earnings&&result.quote&&(result.quote.currency!=='USD'||result.quote.instrumentType!=='EQUITY'||!['NMS','NGM','NCM','NYQ','ASE','BTS','BATS','PCX','CBOE'].includes(result.quote.exchangeName)))return unavailable('The source did not verify a U.S. stock listing for this earnings symbol.');
     return result;
+  }
+  async function priceHistory(symbol,range){
+    if(!supportsPriceHistory(symbol,range))return {...unavailable('Unsupported stock or period.'),symbol,range};
+    const asset=resolveSymbol(symbol),[interval,sourceRange]=PRICE_RANGES[range];
+    // Yahoo silently changes range=max to quarterly bars. Explicit dates retain daily history.
+    const period=sourceRange==='max'?`period1=-2208988800&period2=${Math.floor(now()/1000)}`:`range=${sourceRange}`;
+    const raw=await get(`history:${asset.symbol}:${interval}:${sourceRange==='max'?'full-daily':sourceRange}`,60000,async()=>{
+      const payload=JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=${interval}&${period}&includePrePost=false`));
+      parsePriceHistory(payload,asset,range,now());return {payload};
+    });
+    if(!raw.payload)return {...raw,symbol,range,points:[]};
+    try{return markAge({...parsePriceHistory(raw.payload,asset,range,Math.min(now(),Date.parse(raw.fetchedAt))),status:raw.status,message:raw.message,fetchedAt:raw.fetchedAt,symbol});}
+    catch{return {...unavailable('Stock price history is unavailable for this period.'),symbol,range,points:[]};}
   }
   async function chart(symbol,frame){
     if(!supportsChart(symbol,frame))return unavailable('Unsupported chart.');
@@ -277,7 +307,7 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
       return {status:raw.status,message:raw.message,provider:'Yahoo Finance',symbol,timeframe:frame,from,to,currency:'USD',fetchedAt:raw.fetchedAt,observedThrough:cutoff/1000,candles,indicators};
     }catch{return {...unavailable('No valid historical candles cover these trade dates.'),symbol,timeframe:frame,from,to};}
   }
-  return {quote,chart,levelHistory,setupHistory,tradeHistory};
+  return {quote,chart,priceHistory,levelHistory,setupHistory,tradeHistory};
 }
 export function marketDataMiddleware(service=createMarketService({cachePath:new URL('../.cache/market-data.json',import.meta.url).pathname})){
   return async(req,res,next)=>{
@@ -289,6 +319,11 @@ export function marketDataMiddleware(service=createMarketService({cachePath:new 
       const keys=[...new Set((url.searchParams.get('symbols')||'').split(','))];
       if(keys.length>8||keys.some(k=>!k||k.length>32||!/^[A-Z0-9:.!_-]+$/.test(k)))return send(400,{message:'Request 1–8 instrument identifiers.'});
       return send(200,{quotes:Object.fromEntries(await Promise.all(keys.map(async k=>[k,await service.quote(k)])))});
+    }
+    if(url.pathname==='/api/market/price-history'){
+      const symbol=url.searchParams.get('symbol'),range=url.searchParams.get('range');
+      if(!supportsPriceHistory(symbol,range))return send(400,{message:'Choose a supported stock and period.'});
+      return send(200,await service.priceHistory(symbol,range));
     }
     if(url.pathname==='/api/market/chart'){
       const symbol=url.searchParams.get('symbol'),frame=url.searchParams.get('interval');

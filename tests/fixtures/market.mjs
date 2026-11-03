@@ -28,8 +28,14 @@ export function fixtureQuote(key){
  const price=prices[key]||100;
  return {status:'ok',fetchedAt:new Date(NOW).toISOString(),quote:{provider:asset.kind==='treasury'?'U.S. Treasury':'Yahoo Finance',providerSymbol:asset.symbol,price,change:1,changePercent:key==='NASDAQ:NVDA'?6:1,kind:asset.kind,sessionDate:'2026-10-23',observedAt:asset.kind==='treasury'?null:'2026-10-23T20:00:00.000Z',delayMinutes:asset.delayMinutes,trend:[price-2,price-1,price-1.2,price],name:`Test fixture ${key}`,volume:100000}};
 }
+export function priceHistoryFixture(symbol,range){
+ const q=fixtureQuote(symbol),end=Date.parse('2026-10-23T20:00:00Z'),days={'1D':.27,'1W':7,'1M':30,'3M':90,'1Y':365,MAX:3650}[range]||365,price=q.quote.price;
+ const points=[.83,.88,.87,.91,.85,.94,.96,1].map((factor,i)=>({at:end-days*86400000*(7-i)/7,value:price*factor}));
+ return {...q,quote:{...q.quote,currency:'USD'},symbol,range,points,from:points[0].at,to:end,change:price-points[0].value,changePercent:(price/points[0].value-1)*100};
+}
 export async function mockMarket(page){
  await authenticateTestPage(page);
+ await page.route('**/api/market/price-history?*',route=>{const u=new URL(route.request().url());return route.fulfill({json:priceHistoryFixture(u.searchParams.get('symbol'),u.searchParams.get('range'))});});
  await page.route('**/api/company?*',route=>route.fulfill({json:companyFixture(new URL(route.request().url()).searchParams.get('symbol'))}));
  await page.route('**/api/market/setup?*',route=>{const u=new URL(route.request().url()),symbol=u.searchParams.get('symbol');return route.fulfill({json:{...fixtureQuote(symbol),symbol,timeframe:u.searchParams.get('interval'),from:u.searchParams.get('from'),bars:[],through:null,dailyStatus:'ok'}});});
  await page.route('**/api/market/level-history?*',route=>{const u=new URL(route.request().url());return route.fulfill({json:{status:'ok',symbol:u.searchParams.get('symbol'),timeframe:u.searchParams.get('interval'),from:u.searchParams.get('from'),bars:[],through:null}});});

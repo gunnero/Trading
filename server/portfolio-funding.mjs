@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {portfolioNumber,portfolioText,portfolioCurrency} from '../src/data/portfolio.mjs';
-import {accountPerformance} from '../src/data/portfolio-history.mjs';
+import {accountPerformance,portfolioRangeStart} from '../src/data/portfolio-history.mjs';
 
 const FIRST='/equity/history/transactions?limit=50';
 export function fundingHistoryPath(path){
@@ -48,7 +48,8 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     const covered=valuations.filter(v=>v.at<=s.coveredThrough).sort((a,b)=>a.at-b.at);
     const rows=broker&&s.completedScan?db.prepare('SELECT at,amount,currency,type FROM portfolio_cashflows WHERE account_id=? AND scan=? ORDER BY at').all(id,s.completedScan):[];
     const performance=broker&&s.completedScan?accountPerformance(covered,rows,currency,range,now()):{amount:null,points:[],coverage:'unavailable',netDeposits:null,totalReturn:null,ratePercent:null,accountValue:snap?.accountValue??null,reason:broker?'Complete deposit and withdrawal history is required.':'Connect an account to calculate return from its funding history.'};
-    return {...performance,trackingFrom:covered[0]?.at||null,fetchedAt:s.completedAt||null,status:s.completedScan&&broker?'ready':'unavailable',updating:connected&&!!s.scan&&!s.error,pages:s.pages||0,error:broker?s.error||null:null,connected};
+    const chartFrom=portfolioRangeStart(range,now()),valuePoints=valuations.filter(v=>v.at<=now()&&v.at>=chartFrom).sort((a,b)=>a.at-b.at).map(v=>({at:v.at,value:v.value}));
+    return {...performance,valuePoints,valuationTrackingFrom:valuations.length?Math.min(...valuations.map(v=>v.at)):null,trackingFrom:covered[0]?.at||null,fetchedAt:s.completedAt||null,status:s.completedScan&&broker?'ready':'unavailable',updating:connected&&!!s.scan&&!s.error,pages:s.pages||0,error:broker?s.error||null:null,connected};
   }
   async function sync(id){
     account(id);const record=credential(id);if(!record||pending.has(id))return;
@@ -57,8 +58,8 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     try{
       if(!s.scan||s.generation!==record.generation){db.prepare('DELETE FROM portfolio_cashflows WHERE account_id=? AND scan<>?').run(id,s.completedScan||'');const snapshot=account(id).snapshot;
         s={...s,scan:randomUUID(),generation:record.generation,cursor:FIRST,paths:[],pages:0,error:null,startedAt:now(),valuation:snapshot?.source==='api'&&Number.isFinite(snapshot.accountValue)?{at:Date.parse(snapshot.fetchedAt),value:snapshot.accountValue,currency:snapshot.currency}:null};}
-      s.retryAt=now()+60000;save(id,s);const secret=decode(record,id);
-      for(let page=0;page<2;page++){
+      s.retryAt=now()+60000;save(id,s);const secret=decode(record,id),deadline=Date.now()+18000;
+      for(let page=0;page<10&&(page===0||Date.now()<deadline);page++){
         if(s.pages>=200)throw Error('Funding history exceeds the 10,000-transaction import limit. No incomplete total was published.');
         const path=fundingHistoryPath(s.cursor);if(s.paths.includes(path))throw Error('The broker repeated a funding cursor.');
         const body=await request(path,secret);if(!current())return;

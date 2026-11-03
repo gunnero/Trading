@@ -26,7 +26,7 @@ const rows=items=>normalizeFundingHistory({items,nextPagePath:null},NOW).rows;
 test('account-wide return removes funding and preserves effects of dividends, interest, fees and withdrawals',()=>{
  const movements=rows([transaction('deposit',1000),transaction('withdrawal',-100,'WITHDRAW'),transaction('interest',10,'INTEREST_ON_FREE_CASH'),transaction('fee',-5,'FEE')]);
  const p=accountPerformance([{at:NOW,value:1250}],movements,'USD','MAX',NOW);
- assert.equal(p.accountValue,1250);assert.equal(p.netDeposits,900);assert.equal(p.amount,350);assert.equal(p.ratePercent,null);
+ assert.equal(p.accountValue,1250);assert.equal(p.netDeposits,900);assert.equal(p.amount,350);assert.ok(Math.abs(p.ratePercent-350/900*100)<1e-8);
  assert.equal(accountPerformance([{at:NOW,value:850}],movements,'USD','MAX',NOW).amount,-50);
  const positiveWithdrawal=movements.map(t=>t.type==='WITHDRAW'?{...t,amount:100}:t);
  assert.equal(accountPerformance([{at:NOW,value:1250}],positiveWithdrawal,'USD','MAX',NOW).amount,350);
@@ -52,8 +52,8 @@ test('transaction cursors stay on fixed read-only endpoint and validate types, t
  assert.throws(()=>normalizeFundingHistory({items:[]},NOW));
 });
 test('resumable funding scan only publishes complete history, deduplicates references and survives restart',async t=>{
- const f=fixture(t,async url=>url.includes('cursor=b')?json({items:[transaction('d',1000),transaction('w',100,'WITHDRAW')],nextPagePath:'/api/v0/equity/history/transactions?cursor=c&limit=50'}):url.includes('cursor=c')?json({items:[transaction('interest',5,'INTEREST_ON_FREE_CASH')],nextPagePath:null}):json({items:[transaction('d',1000)],nextPagePath:'/api/v0/equity/history/transactions?cursor=b&limit=50'}));
- await f.connect();await f.service.funding.sync(f.id);let p=f.service.history.read(f.id,'MAX').accountReturn;assert.equal(p.amount,null);assert.equal(p.pages,2);
+ const f=fixture(t,async url=>{const page=+(new URL(url).searchParams.get('cursor')||1);return json({items:[page===1?transaction('d',1000):page===2?transaction('w',100,'WITHDRAW'):transaction('interest-'+page,5,'INTEREST_ON_FREE_CASH')],nextPagePath:page===11?null:`/api/v0/equity/history/transactions?cursor=${page+1}&limit=50`});});
+ await f.connect();await f.service.funding.sync(f.id);let p=f.service.history.read(f.id,'MAX').accountReturn;assert.equal(p.amount,null);assert.equal(p.pages,10);assert.deepEqual(p.valuePoints,[{at:NOW,value:1250}]);
  f.restart();f.advance(61000);await f.service.funding.sync(f.id);p=f.service.history.read(f.id,'MAX').accountReturn;assert.equal(p.amount,350);assert.equal(p.netDeposits,900);assert.equal(p.updating,false);assert.equal(p.to,NOW);
  for(const call of f.calls){assert.equal(call.options.method,'GET');assert.equal(call.options.redirect,'error');assert.ok(call.url.startsWith('https://live.trading212.com/api/v0/equity/'));}
  const count=f.calls.length;await f.service.funding.sync(f.id);assert.equal(f.calls.length,count);assert.ok(!JSON.stringify(p).includes(credentials.apiSecret));
@@ -69,7 +69,7 @@ test('newer balances wait for funding coverage so an unimported deposit cannot i
 });
 test('funding permission failures keep holdings connected and preserve the last reconciled return',async t=>{
  let mode='denied';const f=fixture(t,async()=>mode==='denied'?new Response('',{status:403}):mode==='cycle'?json({items:[transaction('fake',999)],nextPagePath:'/equity/history/transactions?limit=50'}):json({items:[transaction('d',1000)],nextPagePath:null}));
- await f.connect();await f.service.funding.sync(f.id);assert.match(f.service.history.read(f.id,'MAX').accountReturn.error,/History: Transactions/);assert.equal(f.service.read().data.accounts[0].connected,true);assert.equal(f.service.read().data.accounts[0].error,null);
+ await f.connect();await f.service.funding.sync(f.id);assert.match(f.service.history.read(f.id,'MAX').accountReturn.error,/History: Transactions/);assert.equal(f.service.read().data.accounts[0].connected,true);assert.equal(f.service.read().data.accounts[0].error,null);assert.deepEqual(f.service.history.read(f.id,'MAX').accountReturn.valuePoints,[{at:NOW,value:1250}]);
  mode='ok';f.advance(301000);await f.service.funding.sync(f.id);assert.equal(f.service.history.read(f.id,'MAX').accountReturn.amount,250);
  mode='cycle';f.advance(61000);await f.service.funding.sync(f.id);const p=f.service.history.read(f.id,'MAX').accountReturn;assert.equal(p.amount,250);assert.match(p.error,/repeated/);
 });

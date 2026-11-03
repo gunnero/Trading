@@ -4,7 +4,7 @@ import {testRuntime} from './qa-runtime.mjs';
 import {testFetch} from '../tests/fixtures/auth.mjs';
 import {mockMarket} from '../tests/fixtures/market.mjs';
 import {mockBriefing} from '../tests/fixtures/briefing.mjs';
-import {sampledPerformance,realizedPerformance,accountPerformance} from '../src/data/portfolio-history.mjs';
+import {sampledPerformance,realizedPerformance,accountPerformance,portfolioRangeStart} from '../src/data/portfolio-history.mjs';
 
 const runtime=await testRuntime(),dir='docs/qa/portfolio-history';mkdirSync(dir,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}});
@@ -20,7 +20,7 @@ try{
  root=await change('/accounts',{personId:person.id,platform:'Trading 212',label:'Secondary'});const second=root.data.accounts[1].id;
  root=await change(`/accounts/${second}/snapshot`,{snapshot:{...snapshot,accountValue:1900,currency:'EUR',holdings:[]}});
  const endpoint=runtime.url+`/api/portfolio/accounts/${first}/history`;
- expect((await fetch(endpoint)).status).toBe(401);
+ expect((await fetch(endpoint)).status).toBe(401);expect((await fetch(runtime.url+'/api/market/price-history?symbol=NASDAQ:AMD&range=MAX')).status).toBe(401);
  expect((await testFetch(endpoint+'/sync',{method:'POST',headers:{'content-type':'application/json','x-opening-bell-client':'web','X-CSRF-Token':'invalid'},body:'{}'})).status).toBe(403);
  expect((await testFetch(endpoint+'?range=bad')).status).toBe(400);
  expect((await read(`/api/portfolio/accounts/${first}/history`)).sampled.coverage).toBe('unavailable');
@@ -37,40 +37,35 @@ try{
    if(delay)await delay;
    const rows=accountId===first?samples:[{at:now,pnl:900}];
    const accountReturn={...accountPerformance(rows.map(r=>({at:r.at,value:r.pnl+1000+(accountId===first?175:0)})),[{at:now-400*day,amount:1000,currency,type:'DEPOSIT'}],currency,range,now),trackingFrom:rows[0].at,fetchedAt:now,status:'ready',updating:false,pages:1};
-   if(historyMode==='funding-denied')Object.assign(accountReturn,{amount:null,points:[],netDeposits:null,error:'Enable History: Transactions read permission on the Trading 212 key to load net deposits and account return.',status:'unavailable'});
+   accountReturn.valuePoints=rows.filter(r=>r.at>=portfolioRangeStart(range,now)).map(r=>({at:r.at,value:r.pnl+1000+(accountId===first?175:0)}));accountReturn.valuationTrackingFrom=rows[0].at;
+   if(historyMode==='funding-loading')Object.assign(accountReturn,{amount:null,ratePercent:null,netDeposits:null,updating:true,pages:10,reason:null});
+   if(historyMode==='funding-denied')Object.assign(accountReturn,{amount:null,ratePercent:null,points:[],netDeposits:null,error:'Enable History: Transactions read permission on the Trading 212 key to load net deposits and account return.',status:'unavailable'});
    const result={accountId,range,currency,accountReturn,trackingFrom:rows[0].at,fetchedAt:now,sampled:sampledPerformance(rows,range,now),realized:{...realizedPerformance(fills,range,now),status:'ready',error:null,updating:false,pages:1}};
    if(historyMode==='denied')result.realized={...result.realized,amount:null,points:[],error:'History access is unavailable. Enable History: Orders read permission on the Trading 212 key, then retry.',status:'unavailable'};
    if(historyMode==='partial')result.realized={...result.realized,amount:null,points:[],status:'unavailable',updating:true,pages:2};
    await route.fulfill({json:result}).catch(()=>{});
  });
- await page.goto(runtime.url+'/#portfolio');const panel=page.getByRole('region',{name:'Portfolio profit and loss'}),value=panel.locator('.pm-history-value strong');
- await expect(panel.getByRole('button',{name:'Account return',exact:true})).toHaveAttribute('aria-pressed','true');await expect(panel.getByRole('button',{name:'Max',exact:true})).toHaveAttribute('aria-pressed','true');await expect(value).toHaveText('$250.00');await expect(panel.locator('.pm-account-performance')).toContainText('$1,000.00');await expect(panel).toContainText('Not supplied by API');
- await panel.getByRole('button',{name:'Day',exact:true}).click();await expect(value).toHaveText('$35.00');
- historyMode='funding-denied';await expect(panel.getByRole('button',{name:'Refresh portfolio history'})).toBeEnabled();await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(value).toHaveText('—');await expect(panel).toContainText('History: Transactions');
- historyMode='normal';await expect(panel.getByRole('button',{name:'Refresh portfolio history'})).toBeEnabled();await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(value).toHaveText('$35.00');
- mark('Account-wide return is default, net deposits are visible, unavailable MWRR and funding permission states are explicit');
+ await page.goto(runtime.url+'/#portfolio');const panel=page.getByRole('region',{name:'Account summary'}),value=panel.locator('.pm-return-pair dd').first(),rate=panel.locator('.pm-return-pair dd').last();
+ await expect(panel.getByRole('button',{name:'MAX',exact:true})).toHaveAttribute('aria-pressed','true');await expect(panel.locator('.pm-account-value')).toContainText('$1,250.00');await expect(value).toHaveText('$250.00');await expect(rate).toHaveText('+25.00%');await expect(panel.locator('.pm-net-deposits')).toContainText('$1,000.00');await expect(panel.getByRole('img',{name:'Account value history'})).toBeVisible();
+ for(const label of ['Account return','Open + sold trades','Realized trades'])await expect(panel.getByRole('button',{name:label,exact:true})).toHaveCount(0);
+ await panel.getByRole('button',{name:'1D',exact:true}).click();await expect(value).toHaveText('$35.00');
+ const refresh=async()=>{await expect(panel.getByRole('button',{name:'Refresh portfolio history'})).toBeEnabled();await panel.getByRole('button',{name:'Refresh portfolio history'}).click();};
+ for(const mode of ['funding-loading','funding-denied']){historyMode=mode;await refresh();await expect(value).toHaveText('—');await expect(rate).toHaveText('—');await expect(panel).toContainText(mode==='funding-loading'?'Calculating return':'History: Transactions');await expect(panel.getByRole('img',{name:'Account value history'})).toBeVisible();await expect(panel.locator('.pm-account-value')).toContainText('$1,250.00');}
+ historyMode='normal';await refresh();await expect(value).toHaveText('$35.00');
+ mark('One account view defaults to MAX; funding-aware return and calculated percentage render; loading or denied funding preserves the account value chart');
  await expect(page.locator('.pm-table')).toContainText('SoFi Technologies');await expect(page.locator('.pm-table')).toContainText('SOFI');await expect(page.locator('.pm-table')).not.toContainText('IPOE_US_EQ');
  await page.getByLabel('Search holdings').fill('SOFI');await expect(page.getByRole('button',{name:'View SoFi Technologies holding details'})).toBeVisible();await page.getByLabel('Search holdings').fill('');
- await page.getByRole('button',{name:'View SoFi Technologies holding details'}).click();const dialog=page.getByRole('dialog');await expect(dialog.getByRole('img',{name:/SOFI Yahoo Finance/})).toBeVisible();await expect(dialog.locator('.pm-broker-identity p')).toBeHidden();await dialog.getByText('Broker instrument',{exact:true}).click();await expect(dialog.locator('.pm-broker-identity p')).toBeVisible();await expect(dialog.locator('.pm-broker-identity')).toContainText('IPOE_US_EQ');await page.keyboard.press('Escape');
- mark('Company names and SOFI replace raw codes in holdings; search and current-ticker chart work; broker identity stays in details');
- await panel.getByRole('button',{name:'Open + sold trades',exact:true}).click();
- for(const [label,expected,coverage] of [['Week','—','no account observation'],['Month','—','no account observation'],['3 months','—','no account observation'],['YTD','—','no account observation'],['Year','—','no account observation'],['Max','$75.00','Total shown above']]){
-   await panel.getByRole('button',{name:label,exact:true}).click();await expect(value).toHaveText(expected);await expect(panel).toContainText(coverage);
- }
- await panel.getByRole('button',{name:'Day',exact:true}).click();await expect(value).toHaveText('$35.00');await expect(panel.getByRole('img',{name:/Return from recorded account/})).toBeVisible();
- const slider=panel.getByRole('slider',{name:'Performance chart observation'});await slider.focus();await page.keyboard.press('Home');await expect(panel.locator('.pm-history-readout b')).toHaveText('$0.00');await page.keyboard.press('End');await expect(panel.locator('.pm-history-readout b')).toHaveText('$35.00');
- await panel.getByRole('button',{name:'Realized trades',exact:true}).click();await expect(value).toHaveText('-$25.00');await panel.getByRole('button',{name:'Week',exact:true}).click();await expect(value).toHaveText('$25.00');
- const path=await panel.locator('svg path[data-stepped]').getAttribute('d');expect(path).toContain('H ');expect(path).toContain('V ');expect(path).not.toContain('L ');await panel.screenshot({path:dir+'/realized-steps.png'});
- mark('All seven periods withhold unavailable baselines; realized loss chart has zero baseline and flat intervals; keyboard inspection passes');
- for(const mode of ['denied','partial']){
-   historyMode=mode;await expect(panel.getByRole('button',{name:'Refresh portfolio history'})).toBeEnabled();await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(value).toHaveText('—');await expect(panel).toContainText(mode==='denied'?'History: Orders':'2 pages checked');await expect(page.locator('.pm-table')).toContainText('SoFi Technologies');
- }
- historyMode='normal';await expect(panel.getByRole('button',{name:'Refresh portfolio history'})).toBeEnabled();await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(value).toHaveText('$25.00');
- await panel.getByRole('button',{name:'Open + sold trades',exact:true}).click();await panel.getByRole('button',{name:'Max',exact:true}).click();await expect(value).toHaveText('$75.00');
- let release;delay=new Promise(r=>release=r);await page.getByRole('button',{name:/Performance Fixture Trading 212 · Secondary/}).click();await expect(value).toHaveText('—');await expect(panel).toContainText('Loading performance history');release();delay=null;await expect(value).toHaveText('€900.00');await expect(panel.getByRole('button',{name:'Account return',exact:true})).toHaveAttribute('aria-pressed','true');
- mark('Missing history permission and incomplete scans preserve holdings; switching accounts clears old results and currency before loading');
+ await page.getByRole('button',{name:'View SoFi Technologies holding details'}).click();const dialog=page.getByRole('dialog');await expect(dialog.getByRole('img',{name:'SOFI share price history'})).toBeVisible();await expect(dialog.getByRole('heading',{name:'Your investment'})).toBeVisible();await expect(dialog.locator('.pm-broker-identity p')).toBeHidden();await dialog.getByText('Broker instrument',{exact:true}).click();await expect(dialog.locator('.pm-broker-identity p')).toBeVisible();await expect(dialog.locator('.pm-broker-identity')).toContainText('IPOE_US_EQ');await page.keyboard.press('Escape');
+ mark('Holding opens its simple price history and investment card; company names replace raw codes, with original broker identity in details');
+ for(const label of ['1W','1M','3M','YTD','1Y']){await panel.getByRole('button',{name:label,exact:true}).click();await expect(value).toHaveText('—');await expect(panel).toContainText('Earlier account values');await expect(panel.getByRole('img',{name:'Account value history'})).toBeVisible();}
+ await panel.getByRole('button',{name:'1D',exact:true}).click();await expect(value).toHaveText('$35.00');
+ const slider=panel.getByRole('slider',{name:'Chart observation'});await slider.focus();await page.keyboard.press('Home');await expect(panel.locator('.pm-history-readout b')).toHaveText('$1,255.00');await page.keyboard.press('End');await expect(panel.locator('.pm-history-readout b')).toHaveText('$1,250.00');
+ mark('Period changes retain real value observations without inventing earlier returns; keyboard chart inspection shows actual balances');
+ await panel.getByRole('button',{name:'MAX',exact:true}).click();await expect(value).toHaveText('$250.00');
+ let release;delay=new Promise(r=>release=r);await page.getByRole('button',{name:/Performance Fixture Trading 212 · Secondary/}).click();await expect(value).toHaveText('—');await expect(panel.locator('.pm-account-value')).toContainText('€1,900.00');await expect(panel.getByRole('img',{name:'Account value history'})).toHaveCount(0);release();delay=null;await expect(value).toHaveText('€900.00');
+ mark('Switching accounts clears old chart, return and currency while showing the selected account balance');
  await page.getByRole('button',{name:/Performance Fixture Trading 212 · Primary/}).click();await expect(value).toHaveText('$250.00');
  for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:1000});await panel.scrollIntoViewIfNeeded();expect(await panel.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await panel.screenshot({path:`${dir}/performance-${width}.png`});}
- expect(await read('/api/workspace')).toEqual(before);expect(errors).toEqual([]);mark('Performance controls/chart fit 320–1488px; view interactions leave saved workspace unchanged');
+ expect(await read('/api/workspace')).toEqual(before);expect(errors).toEqual([]);mark('Account controls/chart fit 320–1488px; view interactions leave saved workspace unchanged');
  writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
 }finally{await browser.close();await runtime.close();}

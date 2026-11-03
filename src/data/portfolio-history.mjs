@@ -1,3 +1,4 @@
+import {moneyWeightedReturn} from './portfolio-rate.mjs';
 export const PORTFOLIO_RANGES=['1D','1W','1M','3M','YTD','1Y','MAX'];
 export function portfolioRangeStart(range,now=Date.now()){
   if(!PORTFOLIO_RANGES.includes(range))throw Error('Choose a supported performance range.');
@@ -41,7 +42,11 @@ export function accountPerformance(valuations,transactions,currency,range,now=Da
     while(index<funding.length&&funding[index].at<=valuation.at){const movement=funding[index++];netDeposits+=movement.type==='DEPOSIT'?movement.amount:-Math.abs(movement.amount);}
     rows.push({at:valuation.at,pnl:valuation.value-netDeposits});
   }
-  return {...sampledPerformance(rows,range,now),netDeposits,totalReturn:latest.value-netDeposits,accountValue:latest.value,ratePercent:null,reason:null};
+  const performance=sampledPerformance(rows,range,now),startAt=range==='MAX'?funding[0].at:performance.baselineAt;
+  const startValue=range==='MAX'?0:valuations.find(v=>v.at===startAt)?.value;
+  const flows=funding.filter(t=>range==='MAX'||t.at>startAt).map(t=>({at:t.at,amount:t.type==='DEPOSIT'?t.amount:-Math.abs(t.amount)}));
+  const ratePercent=Number.isFinite(performance.amount)?moneyWeightedReturn({startAt,endAt:latest.at,startValue,endValue:latest.value,flows}):null;
+  return {...performance,netDeposits,totalReturn:latest.value-netDeposits,accountValue:latest.value,ratePercent,rateMethod:ratePercent===null?null:'calculated-mwrr',reason:null};
 }
 // The graph holds realized P/L constant between executions, including the
 // period boundary and the current observation time. These are calculated
