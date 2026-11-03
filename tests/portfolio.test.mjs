@@ -46,6 +46,23 @@ test('average overlays need the instrument currency and exact chart symbol, inde
  assert.equal(portfolioAverageLine(h,{...q,providerSymbol:'AAPL'},entry),null);
  assert.equal(portfolioAverageLine(h,{},entry),null);
 });
+test('Netflix and QQQ select their own chart identities, and exact watchlist tickers match automatically',()=>{
+ const entry=(symbol,exchange='NASDAQ',group='STOCKS')=>({id:`${exchange}:${symbol}`,symbol,ticker:symbol,exchange,group});
+ const qqq=entry('QQQ','NASDAQ','FUND'),msft=entry('MSFT'),ko=entry('KO','NYSE'),brk=entry('BRK.B','NYSE');
+ const holding=(ticker,extra={})=>({ticker:ticker+'_US_EQ',instrumentCurrency:'USD',...extra});
+ assert.equal(portfolioListing(holding('NFLX',{isin:'US64110L1061'}),[qqq]).id,'NASDAQ:NFLX');
+ assert.equal(portfolioListing(holding('QQQ')).group,'FUND');assert.equal(portfolioListing(holding('SPY')).id,'NYSEARCA:SPY');
+ assert.equal(portfolioListing(holding('MSFT'),[qqq,msft]).id,'NASDAQ:MSFT');
+ assert.equal(portfolioListing(holding('KO'),[qqq,ko]).id,'NYSE:KO');
+ assert.equal(portfolioListing(holding('BRK.B'),[brk]).id,'NYSE:BRK.B');assert.equal(portfolioListing(holding('BRK'),[brk]),null);
+ assert.equal(portfolioListing(holding('MSFT'),[qqq]),null);
+ assert.equal(portfolioListing(holding('MSFT'),[msft,entry('MSFT','NYSE')]),null);
+ assert.equal(portfolioListing(holding('MSFT',{instrumentCurrency:'EUR'}),[msft]),null);
+ assert.equal(portfolioListing(holding('NFLX',{isin:'US0079031078'}),[entry('NFLX')]),null);
+ assert.equal(portfolioListing(holding('MSFT',{isin:'US0079031078'}),[msft]),null);
+ assert.equal(portfolioListing({ticker:'MSFT_DE_EQ',instrumentCurrency:'USD'},[msft]),null);
+ assert.equal(portfolioListing(holding('MSFT'),[entry('MSFT','XETR')]),null);
+});
 function fixture(t,fetcher=async url=>json(url.endsWith('/summary')?summary:positions)){
   const directory=mkdtempSync(join(tmpdir(),'opening-bell-portfolio-')),auth=openAuthStore({directory});let time=Date.parse('2026-11-03T15:00:00Z');
   let service=createPortfolioService(auth,directory,{fetcher,now:()=>time});

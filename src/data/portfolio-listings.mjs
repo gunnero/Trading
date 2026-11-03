@@ -6,16 +6,32 @@ const listings=[
   ['AMD','US0079031078'],['AAPL','US0378331005'],['TSLA','US88160R1014'],
   ['GOOG','US02079K1079'],['GOOGL','US02079K3059'],['META','US30303M1027'],
   ['SOFI','US83406F1021'],
+  ['NFLX','US64110L1061'],
+  ['QQQ','US46090E1038','NASDAQ','FUND'],
+  ['SPY','US78462F1030','NYSEARCA','FUND'],
 ];
-export function portfolioListing(holding) {
+export function portfolioListing(holding,watchlist=[]) {
   if(!holding||holding.instrumentCurrency!=='USD')return null;
-  const ticker=holding.ticker.replace(/_US_EQ$/,''),symbol=ticker==='FB'?'META':ticker==='IPOE'?'SOFI':ticker;
-  const known=listings.find(([id,isin])=>id===symbol&&(!holding.isin||holding.isin===isin));
-  if(!known)return null;
-  return {id:`NASDAQ:${symbol}`,symbol,ticker:symbol,exchange:'NASDAQ',group:'STOCKS'};
+  const match=/^([A-Z][A-Z0-9.]{0,9})(?:_US_EQ)?$/.exec(holding.ticker);
+  if(!match)return null;
+  const ticker=match[1],symbol=ticker==='FB'?'META':ticker==='IPOE'?'SOFI':ticker;
+  const known=listings.find(([id])=>id===symbol);
+  if(known){
+    if(holding.isin&&holding.isin!==known[1])return null;
+    const exchange=known[2]||'NASDAQ',group=known[3]||'STOCKS';
+    return {id:`${exchange}:${symbol}`,symbol,ticker:symbol,exchange,group};
+  }
+  // For other US broker tickers, use the owner's exact saved listing. Never
+  // treat the watchlist's first row (often QQQ) as the default for a stock.
+  if(!holding.ticker.endsWith('_US_EQ')||listings.some(([id,isin])=>holding.isin&&holding.isin===isin&&id!==symbol))return null;
+  const matches=portfolioListingChoices(watchlist).filter(e=>e.symbol===symbol&&e.ticker===symbol&&e.id===`${e.exchange}:${symbol}`);
+  if(matches.length!==1)return null;
+  const entry=matches[0];
+  if(holding.isin&&entry.isin&&holding.isin!==entry.isin)return null;
+  return entry;
 }
-export function portfolioHoldingLabel(holding){
-  return {name:holding.name,symbol:portfolioListing(holding)?.symbol||null,brokerId:holding.ticker};
+export function portfolioHoldingLabel(holding,watchlist=[]){
+  return {name:holding.name,symbol:portfolioListing(holding,watchlist)?.symbol||null,brokerId:holding.ticker};
 }
 export function portfolioListingChoices(watchlist) {
   return [...new Map(watchlist.filter(chartableEntry).map(entry=>[entry.id,entry])).values()];

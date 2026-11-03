@@ -44,6 +44,18 @@ try{
  await open.click();await expect(dialog.getByRole('img',{name:/AMD Yahoo Finance/})).toHaveAttribute('aria-label',/Average paid reference 450 USD/);
  await change(`/accounts/${first.id}/snapshot`,{snapshot:{...snapshot,holdings:[{...amd,averagePrice:460},meta,unknown]}});await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(dialog.getByRole('img',{name:/AMD Yahoo Finance/})).toHaveAttribute('aria-label',/Average paid reference 460 USD/);
  await change(`/accounts/${first.id}/snapshot`,{snapshot:{...snapshot,holdings:[meta,unknown]}});await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(dialog).toContainText('no longer in the latest account snapshot');await expect(dialog.locator('.price-chart')).toHaveCount(0);await page.keyboard.press('Escape');
+ const netflix={...amd,ticker:'NFLX_US_EQ',name:'Netflix match fixture',isin:'US64110L1061',averagePrice:80};
+ const nvidia={...amd,ticker:'NVDA_US_EQ',name:'Nvidia watchlist fixture',isin:'',averagePrice:90};
+ const qqq={...amd,ticker:'QQQ_US_EQ',name:'QQQ fund fixture',isin:'US46090E1038',averagePrice:500};
+ await change(`/accounts/${first.id}/snapshot`,{snapshot:{...snapshot,holdings:[netflix,nvidia,qqq,unknown]}});await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+ for(const [holding,symbol,average] of [[netflix,'NFLX',80],[nvidia,'NVDA',90],[qqq,'QQQ',500]]){
+   await page.getByRole('button',{name:`View ${holding.name} holding details`}).click();await expect(dialog.getByLabel('Holding chart listing')).toHaveCount(0);await expect(dialog.locator('.pm-auto-listing')).toContainText(`NASDAQ:${symbol}`);
+   await expect(dialog.getByRole('img',{name:new RegExp(`${symbol} Yahoo Finance`)})).toHaveAttribute('aria-label',new RegExp(`Average paid reference ${average} USD`));
+   if(symbol==='NFLX')await dialog.screenshot({path:dir+'/netflix-automatic.png'});
+   await page.keyboard.press('Escape');
+ }
+ await page.getByRole('button',{name:'View Unmapped fixture holding details'}).click();await expect(dialog.getByLabel('Holding chart listing')).toHaveValue('');await expect(dialog.locator('.price-chart')).toHaveCount(0);await expect(dialog).toContainText('QQQ is a separate ETF');await page.keyboard.press('Escape');
+ mark('Netflix matches directly, Nvidia uses its exact watchlist listing, QQQ keeps its own chart, and unmatched holdings never default to QQQ');
  await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');const after=await workspace();expect(after.data.levelText).toEqual(before.data.levelText);expect(after.data.drawings).toEqual(before.data.drawings);expect(after.data.preferences).toEqual(before.data.preferences);expect(after.data.chartSettings.charts['NASDAQ:AMD|4h']).not.toHaveProperty('referenceLine');expect(errors).toEqual([]);
  mark('Holding refresh updates the average, removed holdings close the chart, and portfolio overlays never mutate levels, drawings or the selected trading instrument');
  writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
