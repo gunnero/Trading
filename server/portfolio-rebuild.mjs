@@ -45,7 +45,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
         const next=body.nextPagePath===null||body.nextPagePath===''?null:validatePath(kind,body.nextPagePath);
         if(next&&(next===path||s.paths.includes(kind+':'+next)))throw Error('The broker repeated a history cursor.');
         db.exec('BEGIN IMMEDIATE');try{
-          for(const item of body.items){const key=kind==='orders'?item.fill?.id??item.order?.id:item.reference;if((typeof key!=='string'&&typeof key!=='number')||String(key).length>200)throw Error('A historical record has no reliable identity.');const detail=JSON.stringify(item);if(detail.length>20000)throw Error('A historical record is oversized.');db.prepare('INSERT INTO portfolio_rebuild_items VALUES(?,?,?,?,?) ON CONFLICT DO UPDATE SET detail=excluded.detail').run(id,s.scan,kind,String(key),detail);}
+          for(const item of body.items){const key=kind==='orders'?item?.fill?.id??item?.order?.id:item?.reference;if((typeof key!=='string'&&typeof key!=='number')||String(key).length>200)throw Error('A historical record has no reliable identity.');const identity=kind==='orders'?(item.fill?'fill:':'order:')+key:String(key),detail=JSON.stringify(item);if(detail.length>20000)throw Error('A historical record is oversized.');db.prepare('INSERT INTO portfolio_rebuild_items VALUES(?,?,?,?,?) ON CONFLICT DO UPDATE SET detail=excluded.detail').run(id,s.scan,kind,identity,detail);}
           s={...s,pages:s.pages+1,paths:[...s.paths,kind+':'+path],cursor:next,kind:next?s.kind:s.kind+1};
           if(!next&&s.kind<kinds.length)s.cursor='/equity/history/'+kinds[s.kind]+'?limit=50';save(id,s);db.exec('COMMIT');
         }catch(e){db.exec('ROLLBACK');throw e;}

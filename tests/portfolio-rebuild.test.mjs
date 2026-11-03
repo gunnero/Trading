@@ -64,3 +64,7 @@ test('daily price service uses fixed Yahoo daily history, a bounded shared cache
  assert.equal((await service.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW)).points.length,2);await service.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW);assert.equal(calls.length,1);const url=new URL(calls[0]);assert.equal(url.host,'query1.finance.yahoo.com');assert.equal(url.searchParams.get('interval'),'1d');assert.equal(url.searchParams.get('events'),'splits');
  const failed=createMarketService({now:()=>NOW,fetcher:async()=>new Response('',{status:429})});await assert.rejects(()=>failed.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW),/unavailable/);
 });
+
+test('unfilled order identifiers cannot overwrite an execution with the same numeric identifier',async t=>{
+ const f=fixture(t);f.input.orders.push({order:{id:1,status:'CANCELLED',side:'BUY',instrument}});f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').at(-1).value,1093);
+});
