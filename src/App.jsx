@@ -3,13 +3,14 @@ import {PageHeader,PageNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
+import { Briefcase, Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
 import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';
 const SentimentPage=React.lazy(()=>import('./SentimentPage'));
 const EarningsPage=React.lazy(()=>import('./EarningsPage'));
 const TradeJournal=React.lazy(()=>import('./TradeJournal'));
 const TransfersPage=React.lazy(()=>import('./TransfersPage'));
+const PortfolioManager=React.lazy(()=>import('./PortfolioManager'));
 const SessionReview=React.lazy(()=>import('./SessionReview'));
 import { PriceChart, Sparkline } from './Charts';
 import { TIMEFRAMES } from './data/candles';
@@ -39,7 +40,7 @@ import {WATCH_GROUPS, WATCH_EXCHANGES, overviewWatchlist, readWatchlist, newWatc
 import {DrawingProvider} from './ChartDrawings';
 import {ChartSettingsProvider,ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 
-const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
+const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'portfolio', title: 'Portfolio Manager', icon: Briefcase }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
 function currentRoute() {
   const route = window.location.hash.slice(1);
   if (route.split('/')[0] === 'transfers') return 'settings/transfers';
@@ -127,7 +128,7 @@ function SessionDesk({workspace}) {
   const symbol=['QQQ','SPY'].includes(focus)?focus:selectedStock?.symbol;
   const marketKey=['QQQ','SPY'].includes(focus)?focus:selectedStock?quoteKey(selectedStock):null;
   const [timeframe,setTimeframe]=useSavedTimeframe(marketKey,{primary:true});
-  const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
+  const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['portfolio','transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
   const chart=useMarketChart(marketKey,timeframe,section==='overview'&&!gridActive);
   const quoteResult=quotes[marketKey],quote=quoteResult?.quote;
   const setup=scan.byKey[marketKey]||{stage:scan.status==='loading'?'loading':symbol?'no-levels':'waiting-break',timeframe:setupInterval};
@@ -183,7 +184,7 @@ function SessionDesk({workspace}) {
       </div>
     </aside>
     {menuOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
-    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['transfers','levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
+    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['portfolio','transfers','levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
     <div className="main-shell" inert={menuOpen||undefined}>
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
       <PageNavigation.Provider value={{expanded:menuOpen,open:()=>setMenuOpen(true)}}><main>
@@ -212,6 +213,7 @@ function SessionDesk({workspace}) {
           <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
+        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager/></React.Suspense>}
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={route.split('/')[1]==='plans'?'plans':'trades'} tradeId={route.split('/')[2]} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}
