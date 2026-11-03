@@ -1,10 +1,11 @@
-export const PORTFOLIO_RANGES=['1D','1W','1M','1Y','MAX'];
+export const PORTFOLIO_RANGES=['1D','1W','1M','3M','YTD','1Y','MAX'];
 export function portfolioRangeStart(range,now=Date.now()){
   if(!PORTFOLIO_RANGES.includes(range))throw Error('Choose a supported performance range.');
   if(range==='MAX')return 0;
+  if(range==='YTD')return Date.UTC(new Date(now).getUTCFullYear(),0,1);
   if(range==='1D'||range==='1W')return now-(range==='1D'?1:7)*86400000;
   const date=new Date(now),day=date.getUTCDate();date.setUTCDate(1);
-  if(range==='1M')date.setUTCMonth(date.getUTCMonth()-1);else date.setUTCFullYear(date.getUTCFullYear()-1);
+  if(range==='1M'||range==='3M')date.setUTCMonth(date.getUTCMonth()-(range==='3M'?3:1));else date.setUTCFullYear(date.getUTCFullYear()-1);
   const last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate();date.setUTCDate(Math.min(day,last));return +date;
 }
 function compact(points,limit=240){
@@ -16,12 +17,40 @@ export function sampledPerformance(samples,range,now=Date.now()){
   const from=portfolioRangeStart(range,now),rows=samples.filter(r=>r.at<=now).sort((a,b)=>a.at-b.at),latest=rows.at(-1);
   if(!latest)return {amount:null,points:[],coverage:'unavailable',from,to:null,baselineAt:null};
   if(range==='MAX')return {amount:latest.pnl,points:compact(rows.map(r=>({at:r.at,value:r.pnl}))),coverage:'recorded',from:rows[0].at,to:latest.at,baselineAt:null};
-  const boundary=rows.filter(r=>r.at<=from).at(-1),inside=rows.filter(r=>r.at>=from);
+  const boundary=rows.filter(r=>r.at<=from).at(-1);
   // A recorded point near the boundary can approximate a rolling window. Long
   // gaps remain explicit; never call an old Friday value a Monday baseline.
-  const baseline=boundary&&from-boundary.at<=(range==='1Y'?36*3600000:30*60000)?boundary:inside[0];
-  if(!baseline||latest.at<=baseline.at)return {amount:null,points:[],coverage:'insufficient',from,to:latest.at,baselineAt:baseline?.at||null};
-  return {amount:latest.pnl-baseline.pnl,points:compact(rows.filter(r=>r.at>=baseline.at).map(r=>({at:r.at,value:r.pnl-baseline.pnl}))),coverage:baseline===boundary?'sampled':'partial',from,to:latest.at,baselineAt:baseline.at};
+  const baseline=boundary&&from-boundary.at<=(['3M','1Y','YTD'].includes(range)?36*3600000:30*60000)?boundary:null;
+  if(!baseline)return {amount:null,points:[],coverage:'partial',from,to:latest.at,baselineAt:null,trackingFrom:rows[0].at};
+  if(latest.at<=baseline.at)return {amount:null,points:[],coverage:'insufficient',from,to:latest.at,baselineAt:baseline?.at||null};
+  return {amount:latest.pnl-baseline.pnl,points:compact(rows.filter(r=>r.at>=baseline.at).map(r=>({at:r.at,value:r.pnl-baseline.pnl}))),coverage:'sampled',from,to:latest.at,baselineAt:baseline.at};
+}
+export function accountPerformance(valuations,transactions,currency,range,now=Date.now()){
+  const latest=valuations.filter(v=>v.at<=now).sort((a,b)=>a.at-b.at).at(-1);
+  const unavailable={amount:null,points:[],coverage:'unavailable',netDeposits:null,totalReturn:null,ratePercent:null,accountValue:latest?.value??null,reason:null};
+  if(!latest)return {...unavailable,reason:'No account valuation has been recorded.'};
+  const movements=transactions.filter(t=>t.at<=latest.at);
+  // TRANSFER does not identify external funding vs internal movement. Unknown
+  // transaction types and foreign funding must never be counted as profit.
+  if(movements.some(t=>!['DEPOSIT','WITHDRAW','FEE','INTEREST_ON_FREE_CASH','LENDING_INTEREST'].includes(t.type)))return {...unavailable,reason:'Funding history contains transfers or unsupported movements. Their effect on net deposits cannot be verified.'};
+  const funding=movements.filter(t=>['DEPOSIT','WITHDRAW'].includes(t.type)).sort((a,b)=>a.at-b.at);
+  if(!funding.length)return {...unavailable,reason:'No deposits or withdrawals were supplied; net deposits cannot be verified.'};
+  if(funding.some(t=>t.currency!==currency))return {...unavailable,reason:'Deposits or withdrawals use another currency. The API does not supply the conversion needed to verify net deposits.'};
+  let index=0,netDeposits=0;const rows=[];
+  for(const valuation of valuations.filter(v=>v.at>=funding[0].at&&v.at<=now).sort((a,b)=>a.at-b.at)){
+    while(index<funding.length&&funding[index].at<=valuation.at){const movement=funding[index++];netDeposits+=movement.type==='DEPOSIT'?movement.amount:-Math.abs(movement.amount);}
+    rows.push({at:valuation.at,pnl:valuation.value-netDeposits});
+  }
+  return {...sampledPerformance(rows,range,now),netDeposits,totalReturn:latest.value-netDeposits,accountValue:latest.value,ratePercent:null,reason:null};
+}
+// The graph holds realized P/L constant between executions, including the
+// period boundary and the current observation time. These are calculated
+// balance points, not extra trades or invented market observations.
+export function realizedChartPoints(result){
+  if(!Number.isFinite(result?.amount)||!Number.isFinite(result.from)||!Number.isFinite(result.to))return [];
+  const points=[{at:result.from,value:0},...result.points];
+  if(points.at(-1).at<result.to)points.push({at:result.to,value:result.amount});
+  return points;
 }
 export function realizedPerformance(fills,range,now=Date.now()){
   const from=portfolioRangeStart(range,now),rows=fills.filter(r=>r.at>=from&&r.at<=now).sort((a,b)=>a.at-b.at);
@@ -29,5 +58,5 @@ export function realizedPerformance(fills,range,now=Date.now()){
   if(missing)return {amount:null,points:[],missing,count:rows.length,from,to:now};
   let total=0;const points=[];
   for(const row of rows){total+=row.pnl;const previous=points.at(-1);if(previous?.at===row.at)previous.value=total;else points.push({at:row.at,value:total});}
-  return {amount:total,points:compact(points),missing:0,count:rows.length,from:range==='MAX'?(rows[0]?.at||null):from,to:now};
+  return {amount:total,points,missing:0,count:rows.length,from:range==='MAX'?(rows[0]?.at||null):from,to:now};
 }

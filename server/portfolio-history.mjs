@@ -32,7 +32,7 @@ export function normalizeOrderHistory(body,now=Date.now()){
   return {rows,next};
 }
 
-export function createPortfolioHistory(db,{now,request,credential,decode,account,isClosed}){
+export function createPortfolioHistory(db,{now,request,credential,decode,account,isClosed,funding}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_samples(account_id TEXT NOT NULL,slot INTEGER NOT NULL,at INTEGER NOT NULL,currency TEXT NOT NULL,pnl REAL NOT NULL,PRIMARY KEY(account_id,slot));
     CREATE TABLE IF NOT EXISTS portfolio_history_state(account_id TEXT PRIMARY KEY,state TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_fills(account_id TEXT NOT NULL,scan TEXT NOT NULL,fill_id TEXT NOT NULL,at INTEGER NOT NULL,currency TEXT NOT NULL,pnl REAL,ticker TEXT NOT NULL,PRIMARY KEY(account_id,scan,fill_id));`);
@@ -47,6 +47,7 @@ export function createPortfolioHistory(db,{now,request,credential,decode,account
     const previous=state(id),environment=account(id).environment;
     if(previous.brokerId&&(previous.brokerId!==snapshot.brokerId||previous.environment!==environment))remove(id);
     if(previous.brokerId!==snapshot.brokerId||previous.environment!==environment)save(id,{...state(id),brokerId:snapshot.brokerId,environment});
+    funding?.record(id,snapshot);
     if(!Number.isFinite(snapshot.realized)||!Number.isFinite(snapshot.unrealized)||!Number.isFinite(at)||at>now()+300000)return;
     // Preserve the first observation in each 15-minute bucket. The latest live
     // snapshot is also included by read(), without claiming extra stored history.
@@ -64,7 +65,7 @@ export function createPortfolioHistory(db,{now,request,credential,decode,account
     const fills=broker&&s.completedScan&&currency?db.prepare('SELECT at,pnl,currency FROM portfolio_fills WHERE account_id=? AND scan=? AND at>=? ORDER BY at').all(id,s.completedScan,portfolioRangeStart(range,now())):[];
     const currencies=[...new Set(fills.map(f=>f.currency))],mixed=currencies.some(c=>c!==currency);
     const realized=broker&&s.completedScan&&!mixed?realizedPerformance(fills,range,now()):{amount:null,points:[],missing:0,count:0};
-    return {accountId:id,range,currency,fetchedAt:s.completedAt||null,trackingFrom:samples[0]?.at||null,sampled:sampledPerformance(samples,range,now()),
+    return {accountId:id,range,currency,accountReturn:funding?.read(id,range),fetchedAt:s.completedAt||null,trackingFrom:samples[0]?.at||null,sampled:sampledPerformance(samples,range,now()),
       realized:{...realized,status:broker&&s.completedScan?'ready':'unavailable',mixedCurrencies:mixed,updating:connected&&!!s.scan&&!s.error,pages:s.pages||0,error:broker?s.error||null:null,retryAt:s.retryAt||null,connected}};
   }
   async function sync(id){
@@ -99,6 +100,6 @@ export function createPortfolioHistory(db,{now,request,credential,decode,account
     }catch(error){if(current()){s.error=error.historyPermission?'History access is unavailable. Enable History: Orders read permission on the Trading 212 key, then retry.':error.status?'Order history is temporarily unavailable. Your holdings connection is unchanged.':error.message;s.retryAt=now()+Math.max(60000,error.retryMs||300000);save(id,s);}}
     finally{if(pending.get(id)===token)pending.delete(id);}
   }
-  function remove(id){pending.delete(id);for(const table of ['portfolio_samples','portfolio_history_state','portfolio_fills'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
+  function remove(id){pending.delete(id);funding?.remove(id);for(const table of ['portfolio_samples','portfolio_history_state','portfolio_fills'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
   return {record,read,sync,remove};
 }

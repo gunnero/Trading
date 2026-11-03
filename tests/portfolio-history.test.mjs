@@ -37,7 +37,7 @@ test('open plus sold periods use P/L deltas, do not count deposits, and expose p
  const from=NOW-86400000,rows=[{at:from-60000,pnl:100},{at:NOW-3600000,pnl:130},{at:NOW,pnl:120}];
  const p=sampledPerformance(rows,'1D',NOW);assert.equal(p.amount,20);assert.equal(p.coverage,'sampled');assert.equal(p.points.at(-1).value,20);
  assert.equal(sampledPerformance(rows,'MAX',NOW).amount,120);
- assert.equal(sampledPerformance(rows.slice(1),'1D',NOW).coverage,'partial');assert.equal(sampledPerformance(rows.slice(1),'1D',NOW).amount,-10);
+ assert.equal(sampledPerformance(rows.slice(1),'1D',NOW).coverage,'partial');assert.equal(sampledPerformance(rows.slice(1),'1D',NOW).amount,null);
  assert.equal(sampledPerformance(rows.slice(-1),'1D',NOW).amount,null);
  assert.equal(sampledPerformance([],'MAX',NOW).amount,null);
  assert.equal(sampledPerformance([{at:from-3*86400000,pnl:10},...rows.slice(1)],'1D',NOW).coverage,'partial');
@@ -83,7 +83,7 @@ test('disconnecting during a pending scan stops progress and prevents the late r
 });
 test('snapshot history keeps genuine timestamps and balances across refresh/restart without workspace edits',async t=>{
  const f=fixture(t,async()=>json({items:[],nextPagePath:null}));await f.connect();f.advance(16*60000);summary.investments.unrealizedProfitLoss=125;
- try{await f.service.sync(f.id);assert.equal(f.service.history.read(f.id).sampled.amount,25);f.restart();assert.equal(f.service.history.read(f.id).sampled.amount,25);assert.equal(f.service.history.read(f.id,'MAX').sampled.amount,175);}finally{summary.investments.unrealizedProfitLoss=100;}
+ try{await f.service.sync(f.id);assert.equal(f.service.history.read(f.id).sampled.amount,null);f.restart();assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.service.history.read(f.id,'MAX').sampled.amount,175);}finally{summary.investments.unrealizedProfitLoss=100;}
 });
 test('background sampling records combined P/L without a browser and stops after disconnect',async t=>{
  t.mock.timers.enable({apis:['setInterval']});
@@ -91,7 +91,7 @@ test('background sampling records combined P/L without a browser and stops after
  f.advance(900001);summary.investments.unrealizedProfitLoss=120;
  try{
    t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
-   assert.equal(f.service.history.read(f.id).sampled.amount,20);assert.equal(f.calls.length,4);
+   assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.calls.length,4);
    f.service.disconnect(f.id,f.service.read().revision);f.advance(900001);t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));assert.equal(f.calls.length,4);
  }finally{summary.investments.unrealizedProfitLoss=100;}
 });

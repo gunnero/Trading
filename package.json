@@ -43,7 +43,7 @@
     "test:session-review": "node --test tests/session-review.test.mjs && node scripts/session-review-qa.mjs",
     "test:transfers": "node --test tests/transfers.test.mjs && node scripts/transfers-qa.mjs",
     "test:chart-grid": "node --test tests/chart-grid.test.mjs && node scripts/chart-grid-qa.mjs",
-    "test:portfolio": "node --test tests/portfolio.test.mjs tests/portfolio-history.test.mjs && node scripts/portfolio-qa.mjs && node scripts/portfolio-details-qa.mjs && node scripts/portfolio-history-qa.mjs"
+    "test:portfolio": "node --test tests/portfolio.test.mjs tests/portfolio-history.test.mjs tests/portfolio-funding.test.mjs && node scripts/portfolio-qa.mjs && node scripts/portfolio-details-qa.mjs && node scripts/portfolio-history-qa.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

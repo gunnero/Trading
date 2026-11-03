@@ -4,11 +4,12 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {PORTFOLIO_LIMITS,portfolioText,portfolioNumber,portfolioCurrency,normalizePortfolioSnapshot} from '../src/data/portfolio.mjs';
 import {createPortfolioHistory,orderHistoryPath} from './portfolio-history.mjs';
+import {createPortfolioFunding,fundingHistoryPath} from './portfolio-funding.mjs';
 
 const fail=(status,message,retryMs=0)=>Object.assign(new Error(message),{status,retryMs});
 const TTL=60000;
 const BASES={live:'https://live.trading212.com/api/v0',demo:'https://demo.trading212.com/api/v0'};
-// Only account/position reads and strictly validated historical-order GETs can
+// Only account/position reads and strictly validated order/funding-history GETs can
 // receive broker credentials. No trading endpoints are used.
 const PATHS=['/equity/account/summary','/equity/positions'];
 export function normalizeTrading212(summary,positions,checkedAt) {
@@ -78,8 +79,8 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   function removeAccount(id,revision){find(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);return result;}
   function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
   async function request(path,secret){
-    const historical=path.startsWith('/equity/history/orders?');
-    if((!PATHS.includes(path)&&(!historical||orderHistoryPath(path)!==path))||!BASES[secret.environment])throw Error('Invalid broker endpoint.');
+    const validator=path.startsWith('/equity/history/orders?')?orderHistoryPath:path.startsWith('/equity/history/transactions?')?fundingHistoryPath:null,historical=!!validator;
+    if((!PATHS.includes(path)&&(!validator||validator(path)!==path))||!BASES[secret.environment])throw Error('Invalid broker endpoint.');
     try{
       const response=await fetcher(BASES[secret.environment]+path,{method:'GET',headers:{Accept:'application/json',Authorization:'Basic '+Buffer.from(secret.apiKey+':'+secret.apiSecret).toString('base64')},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
       if(!response.ok){
@@ -159,7 +160,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-opening-bell-client']!=='web')throw fail(415,'Use a JSON app request.');
       let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>2000000)throw fail(413,'Snapshot is too large (maximum 2 MB).');chunks.push(chunk);}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw fail(400,'Invalid JSON request.');}
-      if(historyMatch&&req.method==='POST'&&historyMatch[2]){const range=input?.range||'1D';history.read(historyMatch[1],range);await history.sync(historyMatch[1]);res.end(JSON.stringify(history.read(historyMatch[1],range)));return;}
+      if(historyMatch&&req.method==='POST'&&historyMatch[2]){const range=input?.range||'1D';history.read(historyMatch[1],range);await Promise.all([history.sync(historyMatch[1]),funding.sync(historyMatch[1])]);res.end(JSON.stringify(history.read(historyMatch[1],range)));return;}
       const match=path.match(/^\/api\/portfolio\/(people|accounts)(?:\/([a-f0-9-]{36})(?:\/(snapshot|connect|disconnect|sync))?)?$/);
       if(!match)throw fail(404,'Portfolio endpoint not found.');
       const [,kind,id,action]=match,revision=input?.revision;
@@ -181,7 +182,8 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));
     }catch(error){res.statusCode=error.status||500;res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.'}));}
   }
-  const history=createPortfolioHistory(db,{now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed});
+  const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
+  const funding=createPortfolioFunding(db,historyOptions),history=createPortfolioHistory(db,{...historyOptions,funding});
   for(const a of read().data.accounts)history.record(a.id,a.snapshot);
   // Visible pages refresh each minute; a bounded 15-minute sampler maintains
   // history when the page is closed. It uses the same account locks/backoff.
@@ -190,5 +192,5 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     const worker=async()=>{while(queue.length&&!closed){const a=queue.shift();try{await sync(a.id);}catch{ /* A removed/disconnected account needs no background retry. */ }}};
     await Promise.all([worker(),worker()]);
   },900000):null;sampler?.unref();
-  return {read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,middleware,close(){closed=true;clearInterval(sampler);db.close();}};
+  return {read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,funding,middleware,close(){closed=true;clearInterval(sampler);db.close();}};
 }
