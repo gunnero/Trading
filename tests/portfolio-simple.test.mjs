@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {moneyWeightedReturn} from '../src/data/portfolio-rate.mjs';
 import {parsePriceHistory,resolveSymbol,createMarketService,marketDataMiddleware} from '../server/market-data.mjs';
 import {NOW,yahooPayload} from './fixtures/market.mjs';
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
+test('full-history date formatting preserves New York dates within a bounded memory budget',()=>{
+ const calendar=new URL('../src/data/calendar.mjs',import.meta.url).href;
+ const result=JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',`
+   import assert from 'node:assert/strict';
+   import {marketDay} from ${JSON.stringify(calendar)};
+   const before=process.resourceUsage().maxRSS;
+   for(let i=0;i<10000;i++){
+     const at=Date.UTC(1990,0,1)+i*86400000;
+     assert.equal(marketDay(at),new Date(at-86400000).toISOString().slice(0,10));
+   }
+   for(const [at,day] of [['2026-03-08T04:59:00Z','2026-03-07'],['2026-03-08T05:00:00Z','2026-03-08'],['2026-11-01T03:59:00Z','2026-10-31'],['2026-11-01T04:00:00Z','2026-11-01']])assert.equal(marketDay(at),day);
+   console.log(JSON.stringify({growthKiB:process.resourceUsage().maxRSS-before}));
+ `],{encoding:'utf8',env:{...process.env,TZ:'Pacific/Kiritimati'},timeout:30000}));
+ assert.ok(result.growthKiB<128*1024,`Historical dates grew peak memory by ${result.growthKiB} KiB`);
+});
 test('calculated money-weighted rate accounts for flow timing, gains, losses and withdrawals',()=>{
  close(moneyWeightedReturn({startAt:0,endAt:1000,endValue:1100,flows:[{at:0,amount:1000}]}),10);
  close(moneyWeightedReturn({startAt:0,endAt:1000,endValue:2310,flows:[{at:0,amount:1000},{at:500,amount:1000}]}),21);

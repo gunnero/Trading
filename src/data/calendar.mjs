@@ -1,5 +1,7 @@
 // Calendar dates are civil dates in New York, independent of the browser zone.
-export const marketDay = value => new Intl.DateTimeFormat('en-CA', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(value));
+// Reuse the formatter: full stock histories can contain thousands of dates.
+const marketDateFormat = new Intl.DateTimeFormat('en-CA', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' });
+export const marketDay = value => marketDateFormat.format(new Date(value));
 export const validDay = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0,10) === value;
 export const addDays = (day, count) => new Date(Date.parse(`${day}T12:00:00Z`) + count * 86400000).toISOString().slice(0,10);
 export function weekRange(day) {

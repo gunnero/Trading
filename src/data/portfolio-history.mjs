@@ -42,7 +42,15 @@ export function accountPerformance(valuations,transactions,currency,range,now=Da
     while(index<funding.length&&funding[index].at<=valuation.at){const movement=funding[index++];netDeposits+=movement.type==='DEPOSIT'?movement.amount:-Math.abs(movement.amount);}
     rows.push({at:valuation.at,pnl:valuation.value-netDeposits});
   }
-  const performance=sampledPerformance(rows,range,now),startAt=range==='MAX'?funding[0].at:performance.baselineAt;
+  let performance=sampledPerformance(rows,range,now);
+  // When the period boundary predates our usable history, report only the
+  // recorded part of that period. Keep partial coverage and the actual start
+  // explicit; older points outside the window cannot stand in for its start.
+  if(range!=='MAX'&&performance.coverage==='partial'){
+    const observed=rows.filter(r=>r.at>=performance.from),first=observed[0],last=observed.at(-1);
+    if(first&&last.at>first.at)performance={...performance,amount:last.pnl-first.pnl,points:compact(observed.map(r=>({at:r.at,value:r.pnl-first.pnl}))),baselineAt:first.at};
+  }
+  const startAt=range==='MAX'?funding[0].at:performance.baselineAt;
   const startValue=range==='MAX'?0:valuations.find(v=>v.at===startAt)?.value;
   const flows=funding.filter(t=>range==='MAX'||t.at>startAt).map(t=>({at:t.at,amount:t.type==='DEPOSIT'?t.amount:-Math.abs(t.amount)}));
   const ratePercent=Number.isFinite(performance.amount)?moneyWeightedReturn({startAt,endAt:latest.at,startValue,endValue:latest.value,flows}):null;

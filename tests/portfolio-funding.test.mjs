@@ -31,18 +31,46 @@ test('account-wide return removes funding and preserves effects of dividends, in
  const positiveWithdrawal=movements.map(t=>t.type==='WITHDRAW'?{...t,amount:100}:t);
  assert.equal(accountPerformance([{at:NOW,value:1250}],positiveWithdrawal,'USD','MAX',NOW).amount,350);
 });
-test('deposits during a period cannot look like profit, and incomplete periods show no made-up change',()=>{
+test('deposits during full and partial periods cannot look like profit',()=>{
  const movements=rows([transaction('new',500,'DEPOSIT','2026-11-03T15:00Z'),transaction('old',1000)]);
  const valuations=[{at:NOW-DAY-60000,value:1100},{at:NOW,value:1625}];
  const p=accountPerformance(valuations,movements,'USD','1D',NOW);assert.equal(p.amount,25);assert.equal(p.netDeposits,1500);assert.equal(p.totalReturn,125);assert.equal(p.points[0].value,0);
- for(const range of ['1W','1M','3M','YTD','1Y']){const p=accountPerformance(valuations,movements,'USD',range,NOW);assert.equal(p.amount,null);assert.equal(p.coverage,'partial');assert.deepEqual(p.points,[]);}
+ for(const range of ['1W','1M','3M','YTD','1Y']){const partial=accountPerformance(valuations,movements,'USD',range,NOW);assert.equal(partial.amount,25);assert.equal(partial.coverage,'partial');assert.equal(partial.baselineAt,valuations[0].at);assert.equal(partial.ratePercent,p.ratePercent);assert.deepEqual(partial.points,p.points);}
  assert.equal(accountPerformance(valuations,movements,'USD','MAX',NOW).amount,125);
  assert.equal(new Date(portfolioRangeStart('3M',Date.parse('2026-05-31T15:30Z'))).toISOString(),'2026-02-28T15:30:00.000Z');
  assert.equal(portfolioRangeStart('YTD',NOW),Date.parse('2026-01-01T00:00Z'));
 });
+test('newly connected accounts show only their recorded return and rate until a full baseline exists',()=>{
+ const movements=rows([transaction('old',1000)]),start=NOW-3600000;
+ for(const endValue of [1100,1000,900])for(const range of ['1D','1W','1M','3M','YTD','1Y']){
+   const p=accountPerformance([{at:start,value:1000},{at:NOW,value:endValue}],movements,'USD',range,NOW);
+   assert.equal(p.coverage,'partial');assert.equal(p.baselineAt,start);assert.equal(p.to,NOW);assert.equal(p.amount,endValue-1000);assert.ok(Math.abs(p.ratePercent-(endValue-1000)/10)<1e-8);
+ }
+ const valuations=[{at:start,value:1000},{at:NOW,value:1100},{at:start+DAY,value:1120}];
+ const full=accountPerformance(valuations,movements,'USD','1D',start+DAY);
+ assert.equal(full.coverage,'sampled');assert.equal(full.baselineAt,start);assert.equal(full.amount,120);assert.ok(Math.abs(full.ratePercent-12)<1e-8);
+});
+test('partial MWRR uses dated funding only after the recorded starting balance',()=>{
+ const start=NOW-3600000,movements=rows([transaction('old',1000),transaction('at-start',200,'DEPOSIT',new Date(start).toISOString()),transaction('midpoint',500,'DEPOSIT',new Date(start+1800000).toISOString())]);
+ // An exact 4% period return: the halfway deposit grows by sqrt(1.04).
+ const endValue=1200*1.04+500*Math.sqrt(1.04);
+ const p=accountPerformance([{at:start,value:1200},{at:NOW,value:endValue}],movements,'USD','1D',NOW);
+ assert.equal(p.coverage,'partial');assert.ok(Math.abs(p.amount-(endValue-1700))<1e-8);assert.ok(Math.abs(p.ratePercent-4)<1e-8);
+ movements.push(...rows([transaction('withdraw',200,'WITHDRAW',new Date(NOW-900000).toISOString())]));
+ const flat=accountPerformance([{at:start,value:1200},{at:NOW,value:1500}],movements,'USD','1D',NOW);
+ assert.equal(flat.amount,0);assert.equal(flat.ratePercent,0);
+});
+test('partial returns stay inside the requested window and need two distinct recorded balances',()=>{
+ const movements=rows([transaction('old',1000)]);
+ const p=accountPerformance([{at:NOW-2*DAY,value:1000},{at:NOW-3600000,value:1200},{at:NOW,value:1150},{at:NOW+60000,value:9999}],movements,'USD','1D',NOW);
+ assert.equal(p.coverage,'partial');assert.equal(p.amount,-50);assert.equal(p.baselineAt,NOW-3600000);assert.equal(p.to,NOW);assert.equal(p.points.length,2);
+ for(const valuations of [[],[{at:NOW,value:1000}],[{at:NOW-2*DAY,value:1000},{at:NOW,value:1100}],[{at:NOW-3*DAY,value:1000},{at:NOW-2*DAY,value:1100}]]){
+   const result=accountPerformance(valuations,movements,'USD','1D',NOW);assert.equal(result.amount,null);assert.equal(result.ratePercent,null);
+ }
+});
 test('foreign funding, ambiguous transfers, unknown movements and missing deposits are withheld',()=>{
  for(const items of [[transaction('eur',1000,'DEPOSIT',undefined,'EUR')],[transaction('dep',1000),transaction('transfer',50,'TRANSFER')],[transaction('dep',1000),transaction('unknown',10,'UNKNOWN')],[]]){
-   const p=accountPerformance([{at:NOW,value:1250}],rows(items),'USD','MAX',NOW);assert.equal(p.amount,null);assert.equal(p.netDeposits,null);assert.ok(p.reason);
+   for(const range of ['MAX','1D','1W']){const p=accountPerformance([{at:NOW-3600000,value:1200},{at:NOW,value:1250}],rows(items),'USD',range,NOW);assert.equal(p.amount,null);assert.equal(p.ratePercent,null);assert.equal(p.netDeposits,null);assert.ok(p.reason);}
  }
 });
 test('transaction cursors stay on fixed read-only endpoint and validate types, timestamps and required fields',()=>{

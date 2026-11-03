@@ -35,7 +35,7 @@ try{
  await page.route(/\/api\/portfolio\/accounts\/[^/]+\/history(?:\/sync|\?.*)?$/,async route=>{
    const url=new URL(route.request().url()),range=url.searchParams.get('range')||route.request().postDataJSON()?.range||'1D',accountId=url.pathname.split('/')[4],currency=accountId===first?'USD':'EUR';
    if(delay)await delay;
-   const rows=accountId===first?samples:[{at:now,pnl:900}];
+   const rows=accountId===first?(historyMode==='new-account'?[{at:now-1200000,pnl:80},{at:now,pnl:75}]:samples):[{at:now,pnl:900}];
    const accountReturn={...accountPerformance(rows.map(r=>({at:r.at,value:r.pnl+1000+(accountId===first?175:0)})),[{at:now-400*day,amount:1000,currency,type:'DEPOSIT'}],currency,range,now),trackingFrom:rows[0].at,fetchedAt:now,status:'ready',updating:false,pages:1};
    accountReturn.valuePoints=rows.filter(r=>r.at>=portfolioRangeStart(range,now)).map(r=>({at:r.at,value:r.pnl+1000+(accountId===first?175:0)}));accountReturn.valuationTrackingFrom=rows[0].at;
    if(historyMode==='funding-loading')Object.assign(accountReturn,{amount:null,ratePercent:null,netDeposits:null,updating:true,pages:10,reason:null});
@@ -57,12 +57,21 @@ try{
  await page.getByLabel('Search holdings').fill('SOFI');await expect(page.getByRole('button',{name:'View SoFi Technologies holding details'})).toBeVisible();await page.getByLabel('Search holdings').fill('');
  await page.getByRole('button',{name:'View SoFi Technologies holding details'}).click();const dialog=page.getByRole('dialog');await expect(dialog.getByRole('img',{name:'SOFI share price history'})).toBeVisible();await expect(dialog.getByRole('heading',{name:'Your investment'})).toBeVisible();await expect(dialog.locator('.pm-broker-identity p')).toBeHidden();await dialog.getByText('Broker instrument',{exact:true}).click();await expect(dialog.locator('.pm-broker-identity p')).toBeVisible();await expect(dialog.locator('.pm-broker-identity')).toContainText('IPOE_US_EQ');await page.keyboard.press('Escape');
  mark('Holding opens its simple price history and investment card; company names replace raw codes, with original broker identity in details');
- for(const label of ['1W','1M','3M','YTD','1Y']){await panel.getByRole('button',{name:label,exact:true}).click();await expect(value).toHaveText('—');await expect(panel).toContainText('Earlier account values');await expect(panel.getByRole('img',{name:'Account value history'})).toBeVisible();}
+ for(const [label,amount,percentage] of [['1W','35.00','2.88'],['1M','55.00','4.60'],['3M','65.00','5.49'],['YTD','65.00','5.49'],['1Y','65.00','5.49']]){await panel.getByRole('button',{name:label,exact:true}).click();await expect(value).toHaveText('$'+amount);await expect(rate).toHaveText('+'+percentage+'%');await expect(panel.locator('.pm-return-pair dt').first()).toHaveText('RETURN · PARTIAL PERIOD');await expect(panel.locator('.pm-period-coverage')).toContainText('Partial '+label);await expect(panel.getByRole('img',{name:'Account value history'})).toBeVisible();}
  await panel.getByRole('button',{name:'1D',exact:true}).click();await expect(value).toHaveText('$35.00');
+ await expect(panel.locator('.pm-return-pair dt').first()).toHaveText('1D RETURN');await expect(panel.locator('.pm-period-coverage')).toHaveCount(0);
  const slider=panel.getByRole('slider',{name:'Chart observation'});await slider.focus();await page.keyboard.press('Home');await expect(panel.locator('.pm-history-readout b')).toHaveText('$1,255.00');await page.keyboard.press('End');await expect(panel.locator('.pm-history-readout b')).toHaveText('$1,250.00');
- mark('Period changes retain real value observations without inventing earlier returns; keyboard chart inspection shows actual balances');
+ mark('Periods without a boundary show recorded change and MWRR with explicit partial coverage; full-day baseline restores the full label; keyboard inspection shows actual balances');
+ historyMode='new-account';await refresh();
+ for(const label of ['1D','1W','1M','3M','YTD','1Y']){await panel.getByRole('button',{name:label,exact:true}).click();await expect(value).toHaveText('-$5.00');await expect(rate).toHaveText('-0.40%');await expect(panel.locator('.pm-return-pair dt').first()).toHaveText('RETURN · PARTIAL PERIOD');await expect(panel.locator('.pm-period-coverage')).toContainText('Partial '+label);await expect(panel.locator('.pm-period-coverage')).toContainText('Full '+label+' history is not available yet.');}
+ historyMode='funding-denied';await refresh();await expect(value).toHaveText('—');await expect(rate).toHaveText('—');await expect(panel).toContainText('History: Transactions');
+ historyMode='new-account';await refresh();await expect(value).toHaveText('-$5.00');
+ for(const width of [320,1488]){await page.setViewportSize({width,height:1000});await panel.scrollIntoViewIfNeeded();expect(await panel.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await panel.screenshot({path:`${dir}/partial-${width}.png`});}
+ mark('New accounts show the same explicitly partial loss and percentage across longer ranges; missing funding still withholds both; partial labels fit mobile');
+ historyMode='normal';
  await panel.getByRole('button',{name:'MAX',exact:true}).click();await expect(value).toHaveText('$250.00');
  let release;delay=new Promise(r=>release=r);await page.getByRole('button',{name:/Performance Fixture Trading 212 · Secondary/}).click();await expect(value).toHaveText('—');await expect(panel.locator('.pm-account-value')).toContainText('€1,900.00');await expect(panel.getByRole('img',{name:'Account value history'})).toHaveCount(0);release();delay=null;await expect(value).toHaveText('€900.00');
+ await panel.getByRole('button',{name:'1D',exact:true}).click();await expect(value).toHaveText('—');await expect(rate).toHaveText('—');await expect(panel.locator('.pm-period-coverage')).toContainText('Waiting for two recorded balances');
  mark('Switching accounts clears old chart, return and currency while showing the selected account balance');
  await page.getByRole('button',{name:/Performance Fixture Trading 212 · Primary/}).click();await expect(value).toHaveText('$250.00');
  for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:1000});await panel.scrollIntoViewIfNeeded();expect(await panel.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await panel.screenshot({path:`${dir}/performance-${width}.png`});}
