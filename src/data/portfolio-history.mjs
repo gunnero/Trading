@@ -21,7 +21,7 @@ export function sampledPerformance(samples,range,now=Date.now()){
   const boundary=rows.filter(r=>r.at<=from).at(-1);
   // A recorded point near the boundary can approximate a rolling window. Long
   // gaps remain explicit; never call an old Friday value a Monday baseline.
-  const baseline=boundary&&from-boundary.at<=(['3M','1Y','YTD'].includes(range)?36*3600000:30*60000)?boundary:null;
+  const baseline=boundary&&from-boundary.at<=((boundary.estimated||['3M','1Y','YTD'].includes(range))?36*3600000:30*60000)?boundary:null;
   if(!baseline)return {amount:null,points:[],coverage:'partial',from,to:latest.at,baselineAt:null,trackingFrom:rows[0].at};
   if(latest.at<=baseline.at)return {amount:null,points:[],coverage:'insufficient',from,to:latest.at,baselineAt:baseline?.at||null};
   return {amount:latest.pnl-baseline.pnl,points:compact(rows.filter(r=>r.at>=baseline.at).map(r=>({at:r.at,value:r.pnl-baseline.pnl}))),coverage:'sampled',from,to:latest.at,baselineAt:baseline.at};
@@ -40,7 +40,7 @@ export function accountPerformance(valuations,transactions,currency,range,now=Da
   let index=0,netDeposits=0;const rows=[];
   for(const valuation of valuations.filter(v=>v.at>=funding[0].at&&v.at<=now).sort((a,b)=>a.at-b.at)){
     while(index<funding.length&&funding[index].at<=valuation.at){const movement=funding[index++];netDeposits+=movement.type==='DEPOSIT'?movement.amount:-Math.abs(movement.amount);}
-    rows.push({at:valuation.at,pnl:valuation.value-netDeposits});
+    rows.push({at:valuation.at,pnl:valuation.value-netDeposits,...(valuation.estimated?{estimated:true}:{})});
   }
   let performance=sampledPerformance(rows,range,now);
   // When the period boundary predates our usable history, report only the
@@ -54,7 +54,8 @@ export function accountPerformance(valuations,transactions,currency,range,now=Da
   const startValue=range==='MAX'?0:valuations.find(v=>v.at===startAt)?.value;
   const flows=funding.filter(t=>range==='MAX'||t.at>startAt).map(t=>({at:t.at,amount:t.type==='DEPOSIT'?t.amount:-Math.abs(t.amount)}));
   const ratePercent=Number.isFinite(performance.amount)?moneyWeightedReturn({startAt,endAt:latest.at,startValue,endValue:latest.value,flows}):null;
-  return {...performance,netDeposits,totalReturn:latest.value-netDeposits,accountValue:latest.value,ratePercent,rateMethod:ratePercent===null?null:'calculated-mwrr',reason:null};
+  const estimated=!!valuations.find(v=>v.at===performance.baselineAt)?.estimated||!!latest.estimated;
+  return {...performance,estimated,netDeposits,totalReturn:latest.value-netDeposits,accountValue:latest.value,ratePercent,rateMethod:ratePercent===null?null:'calculated-mwrr',reason:null};
 }
 // The graph holds realized P/L constant between executions, including the
 // period boundary and the current observation time. These are calculated

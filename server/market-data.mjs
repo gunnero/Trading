@@ -161,6 +161,18 @@ export function parsePriceHistory(payload,asset,range,now=Date.now()){
   const change=baseline>0?quote.price-baseline:null;
   return {quote,points,change,changePercent:change===null?null:change/baseline*100,from:points[0].at,to:cutoff,basis:range==='1D'?'Previous regular-session close':'First available price in this range',range,interval:PRICE_RANGES[range][0]};
 }
+export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
+  const result=resultOf(payload,asset);
+  if(asset.kind!=='equity'||result.meta.dataGranularity!=='1d'||!result.meta.currency)throw Error('Daily listing prices could not be verified.');
+  const splits=Object.values(result.events?.splits||{}).map(s=>{
+    if(!validNumber(s.date)||!validNumber(s.numerator)||!validNumber(s.denominator)||s.numerator<=0||s.denominator<=0)throw Error('Invalid split adjustment.');
+    return {at:s.date*1000,ratio:s.numerator/s.denominator};
+  });
+  // Yahoo closes are split-adjusted. Reconstruct prices in the share units
+  // held at each date; dividend-adjusted closes are intentionally not used.
+  const points=parseCandles(payload,asset,'D',cutoff,{full:true}).map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
+  return {currency:result.meta.currency,points,provider:'Yahoo Finance',basis:'Daily close; split adjustments reversed to historical share units'};
+}
 export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=null}={}){
   const cache=new Map(),failures=new Map(),pending=new Map();let blockedUntil=0,active=0,saveTimer;const queue=[];
   if(cachePath)try{const data=JSON.parse(readFileSync(cachePath,'utf8'));if(data.version===1){for(const [k,v] of data.entries.slice(-192))if(now()-v.fetchedAt<86400000)cache.set(k,v);for(const [k,v] of (data.failures||[]).slice(-192))if(v>now())failures.set(k,v);blockedUntil=Math.min(now()+86400000,Number(data.blockedUntil)||0);}}catch{}
@@ -213,6 +225,17 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
     if(!raw.payload)return {...raw,symbol,range,points:[]};
     try{return markAge({...parsePriceHistory(raw.payload,asset,range,Math.min(now(),Date.parse(raw.fetchedAt))),status:raw.status,message:raw.message,fetchedAt:raw.fetchedAt,symbol});}
     catch{return {...unavailable('Stock price history is unavailable for this period.'),symbol,range,points:[]};}
+  }
+  async function portfolioPrices(symbol,from,to){
+    const asset=resolveSymbol(symbol);
+    if(!asset||asset.kind!=='equity'||!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error('Historical listing is unsupported.');
+    const first=Math.floor((from-7*86400000)/86400000),last=Math.floor(to/86400000);
+    const raw=await get(`portfolio-prices:${asset.symbol}:${first}:${last}`,3600000,async()=>{
+      const payload=JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=1d&period1=${first*86400}&period2=${Math.floor(to/1000)}&events=splits&includePrePost=false`));
+      parsePortfolioPrices(payload,asset,to);return {payload};
+    });
+    if(!raw.payload||raw.status!=='ok')throw Error('Verified daily history is unavailable for '+symbol+'.');
+    return parsePortfolioPrices(raw.payload,asset,Math.min(to,Date.parse(raw.fetchedAt)));
   }
   async function chart(symbol,frame){
     if(!supportsChart(symbol,frame))return unavailable('Unsupported chart.');
@@ -307,9 +330,11 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
       return {status:raw.status,message:raw.message,provider:'Yahoo Finance',symbol,timeframe:frame,from,to,currency:'USD',fetchedAt:raw.fetchedAt,observedThrough:cutoff/1000,candles,indicators};
     }catch{return {...unavailable('No valid historical candles cover these trade dates.'),symbol,timeframe:frame,from,to};}
   }
-  return {quote,chart,priceHistory,levelHistory,setupHistory,tradeHistory};
+  return {quote,chart,priceHistory,portfolioPrices,levelHistory,setupHistory,tradeHistory};
 }
-export function marketDataMiddleware(service=createMarketService({cachePath:new URL('../.cache/market-data.json',import.meta.url).pathname})){
+let sharedMarket;
+export const defaultMarketService=()=>sharedMarket??=createMarketService({cachePath:new URL('../.cache/market-data.json',import.meta.url).pathname});
+export function marketDataMiddleware(service=defaultMarketService()){
   return async(req,res,next)=>{
     const url=new URL(req.url,'http://localhost');if(!url.pathname.startsWith('/api/market/'))return next();
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');

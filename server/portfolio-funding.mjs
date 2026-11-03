@@ -21,7 +21,7 @@ export function normalizeFundingHistory(body,now=Date.now()){
     return {id,type,currency,amount,at:Date.parse(item.dateTime)};
   });return {rows,next};
 }
-export function createPortfolioFunding(db,{now,request,credential,decode,account,isClosed}){
+export function createPortfolioFunding(db,{now,request,credential,decode,account,isClosed,historicalValues=()=>[]}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_valuations(account_id TEXT NOT NULL,slot INTEGER NOT NULL,at INTEGER NOT NULL,currency TEXT NOT NULL,value REAL NOT NULL,PRIMARY KEY(account_id,slot));
     CREATE TABLE IF NOT EXISTS portfolio_funding_state(account_id TEXT PRIMARY KEY,state TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_cashflows(account_id TEXT NOT NULL,scan TEXT NOT NULL,reference TEXT NOT NULL,at INTEGER NOT NULL,currency TEXT NOT NULL,amount REAL NOT NULL,type TEXT NOT NULL,PRIMARY KEY(account_id,scan,reference));`);
@@ -43,13 +43,16 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     const valuations=broker?db.prepare('SELECT at,value FROM portfolio_valuations WHERE account_id=? AND currency=? ORDER BY at').all(id,currency):[];
     const at=Date.parse(snap?.fetchedAt);if(broker&&Number.isFinite(snap.accountValue)&&Number.isFinite(at)&&at>(valuations.at(-1)?.at||0))valuations.push({at,value:snap.accountValue});
     if(broker&&s.completedValuation?.currency===currency&&!valuations.some(v=>v.at===s.completedValuation.at))valuations.push(s.completedValuation);
+    const recordedFrom=valuations.length?Math.min(...valuations.map(v=>v.at)):null;
+    const reconstructed=broker?historicalValues(id).filter(v=>recordedFrom!==null&&v.at<recordedFrom):[];
+    valuations.push(...reconstructed);
     // Pagination is a snapshot of history starting at the first request. Do not
     // pair newer balances with older funding: an unseen deposit is not profit.
     const covered=valuations.filter(v=>v.at<=s.coveredThrough).sort((a,b)=>a.at-b.at);
     const rows=broker&&s.completedScan?db.prepare('SELECT at,amount,currency,type FROM portfolio_cashflows WHERE account_id=? AND scan=? ORDER BY at').all(id,s.completedScan):[];
     const performance=broker&&s.completedScan?accountPerformance(covered,rows,currency,range,now()):{amount:null,points:[],coverage:'unavailable',netDeposits:null,totalReturn:null,ratePercent:null,accountValue:snap?.accountValue??null,reason:broker?'Complete deposit and withdrawal history is required.':'Connect an account to calculate return from its funding history.'};
-    const chartFrom=portfolioRangeStart(range,now()),valuePoints=valuations.filter(v=>v.at<=now()&&v.at>=chartFrom).sort((a,b)=>a.at-b.at).map(v=>({at:v.at,value:v.value}));
-    return {...performance,valuePoints,valuationTrackingFrom:valuations.length?Math.min(...valuations.map(v=>v.at)):null,trackingFrom:covered[0]?.at||null,fetchedAt:s.completedAt||null,status:s.completedScan&&broker?'ready':'unavailable',updating:connected&&!!s.scan&&!s.error,pages:s.pages||0,error:broker?s.error||null:null,connected};
+    const chartFrom=portfolioRangeStart(range,now()),valuePoints=valuations.filter(v=>v.at<=now()&&v.at>=chartFrom).sort((a,b)=>a.at-b.at).map(v=>({at:v.at,value:v.value,...(v.estimated?{estimated:true}:{})}));
+    return {...performance,valuePoints,recordedFrom,reconstructedFrom:reconstructed[0]?.at||null,reconstructedTo:reconstructed.at(-1)?.at||null,valuationTrackingFrom:valuations.length?Math.min(...valuations.map(v=>v.at)):null,trackingFrom:covered[0]?.at||null,fetchedAt:s.completedAt||null,status:s.completedScan&&broker?'ready':'unavailable',updating:connected&&!!s.scan&&!s.error,pages:s.pages||0,error:broker?s.error||null:null,connected};
   }
   async function sync(id){
     account(id);const record=credential(id);if(!record||pending.has(id))return;

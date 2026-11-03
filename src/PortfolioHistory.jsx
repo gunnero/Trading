@@ -7,12 +7,12 @@ import {PortfolioValueChart} from './PortfolioValueChart';
 
 const money=(v,c)=>Number.isFinite(v)&&c?new Intl.NumberFormat('en-US',{style:'currency',currency:c,maximumFractionDigits:2}).format(v):'—';
 const percent=v=>Number.isFinite(v)?`${v>0?'+':''}${v.toFixed(2)}%`:'—';
-async function request(accountId,range,signal,sync=false){
-  const path=`/api/portfolio/accounts/${accountId}/history${sync?'/sync':'?'+new URLSearchParams({range})}`;
-  const res=await apiFetch(path,{signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),...(sync?{method:'POST',headers:{'content-type':'application/json','x-opening-bell-client':'web'},body:JSON.stringify({range})}:{})});
+async function request(accountId,range,signal,action='',body={}){
+  const path=`/api/portfolio/accounts/${accountId}/history${action?'/'+action:'?'+new URLSearchParams({range})}`;
+  const res=await apiFetch(path,{signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),...(action?{method:'POST',headers:{'content-type':'application/json','x-opening-bell-client':'web'},body:JSON.stringify({...body,range})}:{})});
   const result=await res.json();if(!res.ok)throw Error(result.message||'Account history is unavailable.');return result;
 }
-export function PortfolioHistory({account}){
+export function PortfolioHistory({account,watchlist=[]}){
   const [range,setRange]=useState('MAX'),[state,setState]=useState(null),[error,setError]=useState(''),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false);
   const {clockStamp,displayDay,zoneLabel}=useDisplayTime(),key=account.id+'|'+range,snap=account.snapshot;
   useEffect(()=>{
@@ -21,8 +21,8 @@ export function PortfolioHistory({account}){
       if(pending||document.hidden)return;pending=true;setBusy(true);setError('');
       try{
         const accept=result=>{if(!controller.signal.aborted)setState({...result,key});};
-        accept(await request(account.id,range,controller.signal));
-        if(account.connected)accept(await request(account.id,range,controller.signal,true));
+        const saved=await request(account.id,range,controller.signal);accept(saved);
+        if(account.connected)accept(await request(account.id,range,controller.signal,saved.rebuild?.status==='loading'?'rebuild/sync':'sync'));
       }catch(e){if(!controller.signal.aborted)setError(e.message||'Account history is unavailable.');}
       finally{pending=false;if(!controller.signal.aborted)setBusy(false);}
     }
@@ -30,6 +30,7 @@ export function PortfolioHistory({account}){
     return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',load);};
   },[key,account.connected,refresh]);
   const data=state?.key===key?state:null,r=data?.accountReturn,reported=snap?.source!=='api'&&range==='MAX';
+  async function rebuild(){setBusy(true);setError('');try{const result=await request(account.id,range,new AbortController().signal,'rebuild',{listings:watchlist});setState({...result,key});setRefresh(n=>n+1);}catch(e){setError(e.message);}finally{setBusy(false);}}
   const amount=reported?snap.totalReturn:r?.amount,rate=reported?snap.returnPercent:r?.ratePercent,net=reported?snap.netDeposits:r?.netDeposits;
   const points=r?.valuePoints||[],partial=['partial','insufficient'].includes(r?.coverage),tone=amount>0?'green':amount<0?'red':'';
   const partialReturn=partial&&Number.isFinite(amount)&&Number.isFinite(r?.baselineAt);
@@ -41,15 +42,23 @@ export function PortfolioHistory({account}){
     <div className="pm-net-deposits"><span>Net deposits</span><strong>{money(net,snap?.currency)}</strong></div>
     {status&&<p className="pm-history-state" role="status">{status}</p>}
     {partial&&<p className="pm-history-state pm-period-coverage" role="status">{partialReturn?`Partial ${range} · Return and rate cover ${clockStamp(r.baselineAt)} to ${clockStamp(r.to)} ${zoneLabel}. Full ${range} history is not available yet.`:'Waiting for two recorded balances in this period and complete funding history to calculate return.'}</p>}
+    {r?.estimated&&<p className="pm-history-state" role="status">Estimated return · Uses a reconstructed daily balance at {clockStamp(r.baselineAt)} {zoneLabel}. Daily closing prices can differ from Trading 212’s prices and period boundaries.</p>}
     {points.length?<PortfolioValueChart key={key} points={points} currency={snap?.currency}/>:<div className="pm-chart-empty" role="status">{data?'Your account chart builds as balances are recorded.':'Loading account chart…'}</div>}
     <div className="pm-periods" aria-label="Account chart period">{PORTFOLIO_RANGES.map(p=><button key={p} className={range===p?'selected':''} aria-pressed={range===p} onClick={()=>setRange(p)}>{p}</button>)}</div>
-    {r?.valuationTrackingFrom&&<p className="pm-history-state">Recorded chart from {displayDay(r.valuationTrackingFrom)} · {snap?.fetchedAt?`updated ${clockStamp(snap.fetchedAt)} ${zoneLabel}`:'saved observations'}</p>}
+    {r?.valuationTrackingFrom&&<p className="pm-history-state">{r.reconstructedFrom?`Estimated daily history from ${displayDay(r.reconstructedFrom)} through ${displayDay(r.reconstructedTo)}; recorded balances from ${displayDay(r.recordedFrom)}`:`Recorded chart from ${displayDay(r.valuationTrackingFrom)}`} · {snap?.fetchedAt?`updated ${clockStamp(snap.fetchedAt)} ${zoneLabel}`:'saved observations'}</p>}
     <div className="pm-cash-row"><span>CASH</span><strong>{money(snap?.cash,snap?.currency)}</strong></div>
+    {account.connected&&<details className="pm-history-explainer" open={data?.rebuild?.status==='loading'||data?.rebuild?.status==='unavailable'}><summary>Older account history</summary>
+      <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
+      <p>Uses historical daily stock prices from Yahoo Finance. Currently supports matching account and stock currencies, verified listings and ordinary trades. Transfers, corporate actions or missing prices may prevent a reliable rebuild.</p>
+      {data?.rebuild?.status==='loading'?<p role="status">Rebuilding older history · {data.rebuild.pages} pages read · {data.rebuild.priced} instruments priced. Keep this page open; it continues each minute.</p>:<button className="button outline" disabled={busy} onClick={rebuild}>{data?.rebuild?.status==='ready'?'Rebuild history again':'Rebuild older history'}</button>}
+      {data?.rebuild?.message&&<p role="status">{data.rebuild.message}</p>}
+      {data?.rebuild?.status==='ready'&&<p>Reconstructed history is available. Estimated points are identified on the chart.</p>}
+    </details>}
     <details className="pm-history-explainer"><summary>Return details</summary>
       <dl className="pm-return-breakdown"><div><dt>Open holdings return</dt><dd>{money(snap?.unrealized,snap?.currency)}{snap?.cost>0&&Number.isFinite(snap?.unrealized)?` (${percent(snap.unrealized/snap.cost*100)})`:''}</dd></div><div><dt>Realized trading return</dt><dd>{money(snap?.realized,snap?.currency)}</dd></div><div><dt>Investments / cost of open holdings</dt><dd>{money(snap?.investmentsValue,snap?.currency)} / {money(snap?.cost,snap?.currency)}</dd></div></dl>
       <p>Total return is account value minus net deposits, including cash, dividends, interest and charges reflected in the balance. It is available after funding history finishes loading with History: Transactions permission. Foreign-currency funding or ambiguous transfers can prevent a reliable calculation. {r?.pages?`${r.pages} funding pages checked.`:''} {r?.to?`Return valuation: ${clockStamp(r.to)} ${zoneLabel}.`:''}</p>
       <p>Calculated return rate uses dated deposits and withdrawals to calculate a money-weighted return over the displayed return dates. It is calculated here, not supplied by Trading 212, and may differ from their timing or rounding. Partial-period percentages cover only the recorded part, without projecting or annualizing it. Ambiguous cash-flow patterns or missing data leave the percentage unavailable. Imported snapshot percentages retain their reported basis.</p>
-      <p>The chart shows account value, so deposits and withdrawals move the line. Returns exclude those cash movements. 1D is the last 24 hours; 1W is 7 days; 1M, 3M and 1Y are calendar lookbacks; YTD begins January 1 UTC. Earlier account valuations are not supplied by the API. Until a starting balance is available for the full period, return uses the first recorded balance inside that period and is marked partial. Longer ranges can show the same partial return while they share the same recorded history. Full-period returns appear automatically as history builds; MAX uses the available all-time total. {r?.baselineAt?`The starting balance used is from ${clockStamp(r.baselineAt)} ${zoneLabel}${partial?'':'; the nearest recorded observation approximates the period boundary'}.`:''} Net deposits always shows the all-time amount. Snapshots are recorded every 15 minutes, with minute updates while this page is visible.</p>
+      <p>The chart shows account value, so deposits and withdrawals move the line. Returns exclude those cash movements. 1D is the last 24 hours; 1W is 7 days; 1M, 3M and 1Y are calendar lookbacks; YTD begins January 1 UTC. Earlier account valuations are not supplied directly by the API. Older account history can reconstruct estimated daily balances where complete transactions and verified prices are available. Until a starting balance is available for the full period, return uses the first recorded balance inside that period and is marked partial. Longer ranges can show the same partial return while they share the same recorded history. Full-period returns appear automatically as history builds; MAX uses the available all-time total. {r?.baselineAt?`The starting balance used is from ${clockStamp(r.baselineAt)} ${zoneLabel}${partial?'':'; the nearest recorded observation approximates the period boundary'}.`:''} Net deposits always shows the all-time amount. Snapshots are recorded every 15 minutes, with minute updates while this page is visible.</p>
       <p><a href="https://helpcentre.trading212.com/hc/en-us/articles/22435640547613-Portfolio-Charts" target="_blank" rel="noopener noreferrer">Trading 212’s return definitions ↗</a></p>
     </details>
   </section>;
