@@ -1,17 +1,21 @@
 import {chartableEntry} from './instruments.mjs';
 
 // Primary USD listings, kept distinct from broker IDs and share classes.
-// FB -> META is the issuer's documented ticker rename, not a generic alias rule.
+// FB -> META and IPOE -> SOFI are documented issuer renames, not generic aliases.
 const listings=[
   ['AMD','US0079031078'],['AAPL','US0378331005'],['TSLA','US88160R1014'],
   ['GOOG','US02079K1079'],['GOOGL','US02079K3059'],['META','US30303M1027'],
+  ['SOFI','US83406F1021'],
 ];
 export function portfolioListing(holding) {
   if(!holding||holding.instrumentCurrency!=='USD')return null;
-  const ticker=holding.ticker.replace(/_US_EQ$/,''),symbol=ticker==='FB'?'META':ticker;
+  const ticker=holding.ticker.replace(/_US_EQ$/,''),symbol=ticker==='FB'?'META':ticker==='IPOE'?'SOFI':ticker;
   const known=listings.find(([id,isin])=>id===symbol&&(!holding.isin||holding.isin===isin));
   if(!known)return null;
   return {id:`NASDAQ:${symbol}`,symbol,ticker:symbol,exchange:'NASDAQ',group:'STOCKS'};
+}
+export function portfolioHoldingLabel(holding){
+  return {name:holding.name,symbol:portfolioListing(holding)?.symbol||null,brokerId:holding.ticker};
 }
 export function portfolioListingChoices(watchlist) {
   return [...new Map(watchlist.filter(chartableEntry).map(entry=>[entry.id,entry])).values()];

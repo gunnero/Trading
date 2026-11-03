@@ -24,7 +24,7 @@ export function marketFeeds() {
     server.middlewares.use(workspaceMiddleware(store));
     const nlb=globalThis[Symbol.for('opening-bell.nlb-connection')] ||= createNlbConnection(dirname(store.filename));
     server.middlewares.use(nlb.middleware);
-    const portfolios=globalThis[Symbol.for('opening-bell.portfolios')] ||= createPortfolioService(account,dirname(store.filename));
+    const portfolios=globalThis[Symbol.for('opening-bell.portfolios')] ||= createPortfolioService(account,dirname(store.filename),{background:process.env.NODE_ENV!=='test'});
     server.middlewares.use(portfolios.middleware);
     server.middlewares.use(journalDraftsMiddleware(dirname(store.filename)));
     const marketKey=Symbol.for('opening-bell.market-service');

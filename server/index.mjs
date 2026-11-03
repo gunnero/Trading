@@ -24,7 +24,7 @@ const auth=authMiddleware(account,{config});
 const sentimentConnection=createSentimentConnection(account);
 const store=openWorkspaceStore(),workspace=workspaceMiddleware(store),feeds=feedMiddleware(cachedFeedService({sentimentApi:sentimentConnection.get})),markets=marketDataMiddleware(),companies=companyMiddleware(),earnings=earningsMiddleware();
 const nlb=createNlbConnection(dirname(store.filename));
-const portfolios=createPortfolioService(account,dirname(store.filename));
+const portfolios=createPortfolioService(account,dirname(store.filename),{background:process.env.NODE_ENV!=='test'});
 const journalDrafts=journalDraftsMiddleware(dirname(store.filename));
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.woff':'font/woff','.woff2':'font/woff2','.png':'image/png'};
 async function assets(req,res){
