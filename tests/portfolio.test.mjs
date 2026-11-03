@@ -5,13 +5,47 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {openAuthStore} from '../server/auth.mjs';
 import {createPortfolioService,normalizeTrading212} from '../server/portfolio.mjs';
-import {normalizePortfolioSnapshot,portfolioStatus,portfolioTotals} from '../src/data/portfolio.mjs';
+import {normalizePortfolioSnapshot,portfolioStatus,portfolioTotals,portfolioPerformance,portfolioReturnTotals} from '../src/data/portfolio.mjs';
+import {portfolioListing,portfolioAverageLine} from '../src/data/portfolio-listings.mjs';
 
 const summary={id:12345,currency:'EUR',totalValue:340,cash:{availableToTrade:10,reservedForOrders:20,inPies:10},investments:{currentValue:300,totalCost:320,unrealizedProfitLoss:-20,realizedProfitLoss:45}};
 const positions=[{instrument:{ticker:'TEST_US_EQ',name:'Fixture company',currency:'USD',isin:'US1234567890'},quantity:2.12345678,averagePricePaid:180,currentPrice:170,walletImpact:{currency:'EUR',currentValue:300,totalCost:320,unrealizedProfitLoss:-20,fxImpact:3}}];
 const snapshot={version:1,currency:'USD',accountValue:1100,cash:100,holdings:[{ticker:'TEST',name:'Fixture',quantity:2.5,value:1000,unrealized:100,cost:900}],sourceLabel:'Isolated screenshot fixture'};
 const credentials={apiKey:'fixture-key-12345',apiSecret:'fixture-secret-67890',environment:'live',authorized:true};
 const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
+test('returns separate open percentage, combined trading amount and a supplied total percentage',()=>{
+ assert.deepEqual(portfolioPerformance({unrealized:100,cost:1000,realized:200,totalReturn:350,returnPercent:42}),{open:100,openPercent:10,trading:300,reported:350,reportedPercent:42});
+ assert.deepEqual(portfolioPerformance({unrealized:-20,cost:320,realized:45}),{open:-20,openPercent:-6.25,trading:25,reported:null,reportedPercent:null});
+ assert.equal(portfolioPerformance({unrealized:0,cost:100,realized:0}).openPercent,0);
+ for(const cost of [0,null,undefined,-1,'100'])assert.equal(portfolioPerformance({unrealized:20,cost,realized:2}).openPercent,null);
+ assert.equal(portfolioPerformance({unrealized:20,cost:100}).trading,null);
+ assert.equal(portfolioPerformance(null).open,null);
+});
+test('aggregate open returns weight actual costs, preserve currency and disclose incomplete coverage',()=>{
+ const a=(currency,unrealized,cost,environment='live')=>({environment,snapshot:{currency,unrealized,cost}});
+ const totals=portfolioReturnTotals([a('USD',10,100),a('USD',20,400),a('EUR',-5,50),a('USD',999,1,'demo'),{snapshot:null}]);
+ assert.equal(totals[0].percent,6);assert.equal(totals[0].open,30);assert.equal(totals[1].percent,-10);
+ const incomplete=portfolioReturnTotals([a('USD',10,100),a('USD',20,null),a('USD',null,0)])[0];
+ assert.equal(incomplete.percent,null);assert.equal(incomplete.open,30);assert.equal(incomplete.known,2);assert.equal(incomplete.accounts,3);
+});
+test('holding chart matches reject other currencies and conflicting identifiers, retain share classes and support the FB rename',()=>{
+ const h={ticker:'FB_US_EQ',instrumentCurrency:'USD',isin:'US30303M1027'};
+ assert.equal(portfolioListing(h).id,'NASDAQ:META');
+ assert.equal(portfolioListing({...h,ticker:'AMD_US_EQ'}),null);
+ assert.equal(portfolioListing({...h,instrumentCurrency:'EUR'}),null);
+ assert.equal(portfolioListing({ticker:'SPCX_US_EQ',instrumentCurrency:'USD'}),null);
+ assert.equal(portfolioListing({ticker:'GOOG_US_EQ',instrumentCurrency:'USD'}).symbol,'GOOG');
+ assert.equal(portfolioListing({ticker:'GOOGL_US_EQ',instrumentCurrency:'USD',isin:'US02079K1079'}),null);
+ assert.equal(portfolioListing({ticker:'AMD_DE_EQ',instrumentCurrency:'USD'}),null);
+});
+test('average overlays need the instrument currency and exact chart symbol, independent of account currency',()=>{
+ const h={ticker:'AMD_US_EQ',instrumentCurrency:'USD',averagePrice:90},entry=portfolioListing(h),q={providerSymbol:'AMD',currency:'USD'};
+ assert.equal(portfolioAverageLine(h,q,entry).value,90);
+ assert.equal(portfolioAverageLine({...h,averagePrice:null},q,entry),null);
+ assert.equal(portfolioAverageLine(h,{...q,currency:'EUR'},entry),null);
+ assert.equal(portfolioAverageLine(h,{...q,providerSymbol:'AAPL'},entry),null);
+ assert.equal(portfolioAverageLine(h,{},entry),null);
+});
 function fixture(t,fetcher=async url=>json(url.endsWith('/summary')?summary:positions)){
   const directory=mkdtempSync(join(tmpdir(),'opening-bell-portfolio-')),auth=openAuthStore({directory});let time=Date.parse('2026-11-03T15:00:00Z');
   let service=createPortfolioService(auth,directory,{fetcher,now:()=>time});

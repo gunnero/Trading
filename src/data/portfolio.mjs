@@ -56,3 +56,26 @@ export function portfolioTotals(accounts) {
   }
   return [...currencies.values()];
 }
+
+// The API's open-position cost is not the capital invested across closed trades.
+// Never divide lifetime realized + unrealized P/L by that cost to invent a rate.
+export function portfolioPerformance(snapshot) {
+  const open=Number.isFinite(snapshot?.unrealized)?snapshot.unrealized:null;
+  return {open,openPercent:open!==null&&Number.isFinite(snapshot.cost)&&snapshot.cost>0?open/snapshot.cost*100:null,
+    trading:open!==null&&Number.isFinite(snapshot?.realized)?open+snapshot.realized:null,
+    reported:Number.isFinite(snapshot?.totalReturn)?snapshot.totalReturn:null,
+    reportedPercent:Number.isFinite(snapshot?.returnPercent)?snapshot.returnPercent:null};
+}
+export function portfolioReturnTotals(accounts) {
+  const currencies=new Map();
+  for(const account of accounts){
+    const s=account.snapshot;if(account.environment==='demo'||!s)continue;
+    let total=currencies.get(s.currency);
+    if(!total){total={currency:s.currency,open:0,cost:0,known:0,accounts:0,costKnown:0};currencies.set(s.currency,total);}
+    total.accounts++;
+    if(!Number.isFinite(s.unrealized))continue;
+    total.open+=s.unrealized;total.known++;
+    if(Number.isFinite(s.cost)&&s.cost>=0){total.cost+=s.cost;total.costKnown++;}
+  }
+  return [...currencies.values()].map(t=>({...t,percent:t.known===t.costKnown&&t.cost>0?t.open/t.cost*100:null}));
+}
