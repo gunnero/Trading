@@ -1,6 +1,6 @@
 import {useDisplayTime} from './DisplayTime';
 import {useEffect,useMemo,useState} from 'react';
-import {Bell,ArrowUpRight} from '@phosphor-icons/react';
+import {Bell,ArrowUpRight,Circle} from '@phosphor-icons/react';
 import {marketSession,until,MARKET_CALENDAR} from './data/market-session.mjs';
 
 function useMarketClock() {
@@ -19,8 +19,8 @@ export function MarketClock({onOpen,compact=false}) {
   const {zoneLabel,clockDate,clockTime,formatLabel,clockStamp}=useDisplayTime();
   const clock=useMarketClock();
   return <button className={`market-clock ${compact?'market-clock-compact':'market-clock-sidebar'} session-${clock.state}`} onClick={onOpen} aria-label="Market status and session hours" aria-haspopup="dialog" title={`${clock.label} · ${clock.detail}. View session hours in ${zoneLabel}.`}>
-    <span className="market-clock-heading"><Bell size={29} weight="light"/><span><small>U.S. STOCK MARKET</small><strong className="market-clock-state">{clock.label}</strong><span className="market-clock-detail">{clock.detail}</span></span></span>
-    <span className="market-clock-local"><span className="market-clock-date">{clockDate(clock.now)}</span><span><time dateTime={new Date(clock.now).toISOString()} className="market-clock-time">{clockTime(clock.now,!compact)}</time><small>{zoneLabel} · {formatLabel}</small></span></span>
+    <span className="market-clock-heading"><Bell size={29} weight="light"/><span><small>U.S. STOCK MARKET</small><strong className="market-clock-state">{!compact&&<Circle className="market-status-dot" size={8} weight="fill" aria-hidden="true"/>}{clock.label}</strong><span className="market-clock-detail">{clock.detail}</span></span></span>
+    <span className="market-clock-local"><span className="market-clock-date">{clockDate(clock.now)}</span><span><time dateTime={new Date(clock.now).toISOString()} className="market-clock-time">{clockTime(clock.now)}</time><small>{zoneLabel}{compact?` · ${formatLabel}`:''}</small></span></span>
   </button>;
 }
 export function MarketHours() {

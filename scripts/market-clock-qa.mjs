@@ -27,11 +27,11 @@ try{
  await page.clock.install({time:new Date('2026-10-24T21:30:00Z')});await page.clock.pauseAt(new Date('2026-10-24T21:31:00Z'));
  await expect(sidebar.locator('.market-clock-state')).toHaveText('Weekend');
  await expect(sidebar.locator('.market-clock-date')).toHaveText('Sat, 24 Oct 2026');
- await expect(sidebar.locator('.market-clock-time')).toHaveText('23:31:00');
+ await expect(sidebar.locator('.market-clock-time')).toHaveText('23:31');
  await expect(sidebar.locator('.market-clock-opening')).toHaveCount(0);
  await expect(sidebar.locator('.market-clock-next')).toHaveCount(0);
  await snap('market-clock-weekend-fixture');await noOverflow();
- await page.clock.runFor(1000);await expect(sidebar.locator('.market-clock-time')).toHaveText('23:31:01');
+ await page.clock.runFor(60000);await expect(sidebar.locator('.market-clock-time')).toHaveText('23:32');
  mark('Sidebar shows the current date, clock and status with the lower details block hidden');
  await sidebar.focus();await page.keyboard.press('Space');
  const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
@@ -45,7 +45,7 @@ try{
  mark('Keyboard-accessible session details show local extended hours, next-day rollover and separate options hours');
  await time('2026-10-26T13:29:59Z');await expect(sidebar.locator('.market-clock-state')).toHaveText('Pre-market');await expect(sidebar.locator('.market-clock-next')).toHaveCount(0);
  await page.clock.runFor(1000);await expect(sidebar.locator('.market-clock-state')).toHaveText('Market open');await expect(sidebar.locator('.market-clock-next')).toHaveCount(0);
- await expect(sidebar.locator('.market-clock-time')).toHaveText('14:30:00');
+ await expect(sidebar.locator('.market-clock-time')).toHaveText('14:30');
  await time('2026-10-26T19:59:59Z');await page.clock.runFor(1000);await expect(sidebar.locator('.market-clock-state')).toHaveText('After-hours');
  await time('2026-10-27T00:00:00Z');await expect(sidebar.locator('.market-clock-state')).toHaveText('Market closed');
  mark('Clock ticks automatically through opening, closing and the end of after-hours');

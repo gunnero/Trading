@@ -25,7 +25,7 @@ try{
  mark('Older workspace defaults to Skopje/24h without a save; U.S. markets is fixed');
  const setZone=async zone=>{await page.getByLabel('Time zone',{exact:true}).selectOption(zone);await expect.poll(async()=>(await read()).data.displayTime?.timeZone).toBe(zone);};
  await setZone('America/New_York');await page.getByLabel('Time format',{exact:true}).selectOption('h12');await expect.poll(async()=>(await read()).data.displayTime?.hourCycle).toBe('h12');
- await expect(page.locator('.session-display-preview strong')).toHaveText('04:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-time')).toHaveText('04:00:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-state')).toHaveText(status);
+ await expect(page.locator('.session-display-preview strong')).toHaveText('04:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-time')).toHaveText('04:00 PM');await expect(page.locator('.market-clock-sidebar .market-clock-state')).toHaveText(status);
  await page.locator('.market-clock-sidebar').click();await expect(page.locator('.market-hours')).toContainText('New York');await expect(page.locator('.market-hours')).toContainText('AM');await expect(page.locator('.market-hours')).toContainText('PM');await page.getByRole('dialog').getByRole('button',{name:'Close'}).click();
  await page.reload();await expect(page.getByLabel('Time zone',{exact:true})).toHaveValue('America/New_York');await expect(page.getByLabel('Time format',{exact:true})).toHaveValue('h12');
  const saved=await read(),{displayTime,...rest}=saved.data;expect(rest).toEqual(baseline.data);

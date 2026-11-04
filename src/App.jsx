@@ -175,7 +175,8 @@ function SessionDesk({workspace}) {
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">
-          <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span className="account-nav-copy"><span>Settings</span><small className="account-nav-profile">{user.username}</small></span></button>
+          <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>
+          <button className="nav-item sidebar-account" aria-label="Account & security" title="Account & security" onClick={()=>navigate('settings/account')}><UserCircle size={20}/><span>{user.username}</span></button>
           <button className="sidebar-logout" aria-label="Log out" title="Log out" disabled={logoutBusy} onClick={logout}><SignOut size={19}/><span>{logoutBusy?'Logging out…':'Log out'}</span></button>
           {logoutError&&<p className="sidebar-logout-error" role="alert">{logoutError}</p>}
         </div>
