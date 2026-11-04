@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,MARKET_BUY_BUFFER_PERCENT} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,MARKET_BUY_BUFFER_PERCENT,sellRemainder} from '../src/data/portfolio-order-size.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {createOrderTracker} from './portfolio-order-tracker.mjs';
 
@@ -205,7 +205,9 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(!rounded)throw fail(400,`Use the ${10**-quantityPrecision} share sizing step, with a maximum of 1,000,000 shares. Adjust the quantity or cash amount.`);
     const qty=Number(rounded);
     if(!normalize&&qty!==input.quantity)throw fail(409,'The share precision changed. Review the adjusted quantity before confirming again.');
-    if(input.side==='SELL'&&(!numeric(available)||qty>available+1e-9))throw fail(400,'The quantity exceeds shares available to trade. Shares reserved for orders or pies may be unavailable.');
+    if(input.side==='SELL'&&(!numeric(available)||qty>available))throw fail(400,'The quantity exceeds shares available to trade. Shares reserved for orders or pies may be unavailable.');
+    const remainder=input.side==='SELL'?sellRemainder(available,qty,quantityPrecision):null;
+    if(remainder?.belowStep)throw fail(400,`This sale would leave ${remainder.shares} available shares, below the ${10**-quantityPrecision} share sizing step. Use Trading 212 to sell all available shares, or enter a smaller partial sale. No order was sent.`);
     if(input.side==='BUY'&&instrument.maxOpenQuantity!==null&&qty+(position?.quantity||0)>instrument.maxOpenQuantity)throw fail(400,'This exceeds the broker’s maximum position size.');
     const estimate=reference===null?null:qty*reference;
     const maxOrderValue=orderLimit(id,estimate,summary.currency);

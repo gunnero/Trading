@@ -23,12 +23,26 @@ export function marketBuyCashLimit(availableCash){
 export function orderPercentage({side,type='LIMIT',percent,availableShares,availableCash,price,precision=DEFAULT_ORDER_PRECISION}){
   if(![25,50,75,100].includes(percent)||!['BUY','SELL'].includes(side))return '';
   const quantity=sizedQuantity(side==='SELL'?availableShares:availableCash,side==='SELL'?1:price,percent,precision);
+  // A 100% sale must mean all available shares, never an almost-full sale.
+  if(side==='SELL'&&percent===100&&Number(quantity)!==availableShares)return '';
   if(side!=='BUY'||type!=='MARKET')return quantity;
   const maximum=cashOrderQuantity(marketBuyCashLimit(availableCash),price,precision);
   return quantity&&maximum?(Number(quantity)>Number(maximum)?maximum:quantity):'';
 }
 export function cashOrderQuantity(amount,price,precision=DEFAULT_ORDER_PRECISION){return sizedQuantity(amount,price,100,precision);}
 export function roundedOrderQuantity(value,precision=DEFAULT_ORDER_PRECISION){return sizedQuantity(value,1,100,precision);}
+export function sellRemainder(availableShares,quantity,precision=DEFAULT_ORDER_PRECISION){
+  const available=decimal(availableShares),sale=decimal(quantity);
+  if(!available||!sale||!Number.isInteger(precision)||precision<0||precision>8)return null;
+  // Decimal subtraction avoids displaying a binary tail or treating an exact
+  // sizing-step remainder as too small. Holdings themselves are never rounded.
+  const denominator=available.d>sale.d?available.d:sale.d;
+  const remaining=available.n*(denominator/available.d)-sale.n*(denominator/sale.d);
+  if(remaining<0n)return null;
+  const digits=String(denominator).length-1;
+  const fraction=String(remaining%denominator).padStart(digits,'0').replace(/0+$/,'');
+  return {shares:String(remaining/denominator)+(fraction?'.'+fraction:''),belowStep:remaining>0n&&remaining*10n**BigInt(precision)<denominator};
+}
 function sizedQuantity(value,price,percent,precision){
   const amount=decimal(value),cost=decimal(price);
   if(!amount||!cost||cost.n===0n||!Number.isInteger(precision)||precision<0||precision>8)return '';
