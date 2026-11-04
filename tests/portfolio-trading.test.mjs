@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
+import {createTradePrice} from '../server/portfolio-trade-price.mjs';
 import {createPortfolioTrading} from '../server/portfolio-trading.mjs';
 import {cashOrderQuantity,orderPercentage} from '../src/data/portfolio-order-size.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
@@ -19,7 +20,7 @@ function fixture(t){
   const order={id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,status:'NEW'};
   if(path==='/equity/orders')return json([order]);if(path==='/equity/orders/75')return json(order);throw Error('Unexpected endpoint '+path);
  };
- const options={now:()=>at,credential:()=>({generation}),decode:()=>({environment:a.environment,apiKey:'fake-key',apiSecret:'fake-secret'}),account:id=>{if(id!=='a'&&id!=='b')throw Error('unknown account');return a;},isClosed:()=>closed,fetcher};
+ const options={marketPrice:createTradePrice({now:()=>at,workspace:()=>({watchText:source.watchText||''}),quote:async key=>source.quote?.(key,at)}),now:()=>at,credential:()=>({generation}),decode:()=>({environment:a.environment,apiKey:'fake-key',apiSecret:'fake-secret'}),account:id=>{if(id!=='a'&&id!=='b')throw Error('unknown account');return a;},isClosed:()=>closed,fetcher};
  let service=createPortfolioTrading(db,options);
  return {get service(){return service;},source,calls,db,a,advance:(ms=61000)=>at+=ms,connect:()=>generation='second',enable:()=>service.configure('a',{enabled:true,authorized:true}),writes:()=>calls.filter(c=>c.method!=='GET'),restart:()=>service=createPortfolioTrading(db,options),close:()=>closed=true};
 }
@@ -90,14 +91,14 @@ test('live environment requires its own explicit enablement and routes only to t
 
 test('current holding distinguishes owned shares/value from available shares and reuses a fresh read for review',async t=>{
  const f=fixture(t);await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),/Enable/);assert.equal(f.calls.length,0);f.enable();
- const position=await f.service.position('a','AMD_US_EQ');assert.deepEqual(position,{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:5,availableShares:3,value:500,price:100,averagePrice:95,cost:475,unrealized:25,unrealizedPercent:25/475*100,availableCash:1000,checkedAt:1000000});
+ const position=await f.service.position('a','AMD_US_EQ');assert.deepEqual(position,{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:5,availableShares:3,value:500,price:100,priceQuote:{source:'Trading 212',observedAt:null,checkedAt:1000000,validUntil:1065000,session:null,delayMinutes:null},averagePrice:95,cost:475,unrealized:25,unrealizedPercent:25/475*100,availableCash:1000,checkedAt:1000000});
  await f.service.preview('a',{...input,side:'SELL',quantity:3});assert.equal(f.calls.filter(c=>c.path==='/equity/positions').length,1);assert.equal(f.writes().length,0);
  f.advance(6000);f.source.available=1.12345678;assert.equal((await f.service.position('a','AMD_US_EQ')).availableShares,1.12345678);
  await assert.rejects(()=>f.service.preview('a',{...input,side:'SELL',quantity:3}),/available/);assert.equal(f.writes().length,0);
 });
 test('unheld instruments have zero positions while missing existing fields stay unknown',async t=>{
  const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;
- assert.deepEqual(await f.service.position('a','AMD_US_EQ'),{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:0,availableShares:0,value:0,price:null,averagePrice:null,cost:0,unrealized:null,unrealizedPercent:null,availableCash:1000,checkedAt:1000000});
+ assert.deepEqual(await f.service.position('a','AMD_US_EQ'),{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:0,availableShares:0,value:0,price:null,priceQuote:null,averagePrice:null,cost:0,unrealized:null,unrealizedPercent:null,availableCash:1000,checkedAt:1000000});
  f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'EUR'},quantity:5,quantityAvailableForTrading:6,currentPrice:100,averagePricePaid:95,walletImpact:{totalCost:475,unrealizedProfitLoss:25,currency:'EUR',currentValue:500}}]):null;
  const missing=await f.service.position('a','AMD_US_EQ');assert.equal(missing.shares,5);for(const key of ['availableShares','value','price'])assert.equal(missing[key],null);
  f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ'}}]):null;
@@ -138,7 +139,7 @@ test('cash amount sizes down to eight decimals and a reviewed quantity never res
  f.advance(6000);f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:3,currentPrice:120}]):null;
  await f.service.submit('a',{token:review.token,confirmed:true,cashAmount:999});assert.equal(JSON.parse(f.writes()[0].body).quantity,1.25);
  f.advance();f.source.read=path=>path.endsWith('/positions')?json([]):null;
- await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/current broker price/);
+ await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/current market reference price/);
  review=await f.service.preview('a',{...input,cashAmount:100,limitPrice:300});assert.equal(review.quantity,0.33333333);assert.ok(review.estimate<=100);
  await assert.rejects(()=>f.service.preview('a',{...input,cashAmount:1001}),/cash/);
 });
@@ -247,4 +248,46 @@ test('submit refuses a reviewed extended order if refreshed broker eligibility i
  const f=fixture(t);f.enable();await f.service.search('a','AMD');f.advance(590000);
  const review=await f.service.preview('a',{...input,type:'MARKET',extendedHours:true});f.source.extendedHours=false;f.advance(11000);
  await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/eligible/);assert.equal(f.writes().length,0);
+});
+
+const marketResult=(symbol,at,price=200)=>({status:'ok',fetchedAt:new Date(at).toISOString(),quote:{provider:'Yahoo Finance',providerSymbol:symbol,kind:'equity',currency:'USD',exchangeName:'NMS',instrumentType:'EQUITY',price,observedAt:new Date(at-60000).toISOString(),sessionType:'post',delayMinutes:null}});
+test('unheld stock market quotes size cash and percentages without chart prices; confirmed shares never resize',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;let price=200;const keys=[];
+ f.source.quote=(key,at)=>{keys.push(key);return marketResult('AMD',at,price);};
+ const position=await f.service.position('a','AMD_US_EQ');assert.equal(position.price,200);assert.equal(position.shares,0);assert.equal(position.value,0);assert.equal(position.priceQuote.source,'Yahoo Finance');assert.equal(position.priceQuote.observedAt,940000);assert.equal(position.priceQuote.session,'After-hours');assert.equal(position.averagePrice,null);
+ assert.equal(orderPercentage({side:'BUY',percent:50,availableCash:position.availableCash,price:position.price}),'2.5');
+ const review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:125,limitPrice:1,price:1,referencePrice:1});assert.equal(review.quantity,0.625);assert.equal(review.referencePrice,200);assert.equal(review.limitPrice,null);assert.equal(review.priceQuote.source,'Yahoo Finance');
+ price=210;f.advance(6000);await f.service.submit('a',{token:review.token,confirmed:true});assert.deepEqual(JSON.parse(f.writes()[0].body),{ticker:'AMD_US_EQ',quantity:0.625,extendedHours:false});assert.deepEqual(keys,['NASDAQ:AMD','NASDAQ:AMD','NASDAQ:AMD']);
+});
+test('market quote loss or a higher estimate blocks submission of a priced review before writing',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;f.source.quote=(key,at)=>marketResult('AMD',at);
+ const review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:1000});
+ f.source.quote=()=>({status:'unavailable'});await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/reference price is unavailable/);assert.equal(f.writes().length,0);
+ f.source.quote=(key,at)=>marketResult('AMD',at,201);await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/Not enough available cash/);assert.equal(f.writes().length,0);
+ f.source.quote=()=>{throw Error('provider outage');};assert.equal((await f.service.position('a','AMD_US_EQ')).price,null);
+ await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100,limitPrice:1}),/reference price is unavailable/);
+ assert.equal((await f.service.preview('a',{...input,limitPrice:50})).referencePrice,50);
+});
+test('broker-held prices take priority and missing quote observation time remains explicit',async t=>{
+ const f=fixture(t);f.enable();f.source.quote=()=>{assert.fail('Held stock should use broker price');};
+ const position=await f.service.position('a','AMD_US_EQ');assert.equal(position.price,100);assert.equal(position.priceQuote.source,'Trading 212');assert.equal(position.priceQuote.observedAt,null);
+});
+test('trade quote lookup verifies exact listing, class, currency, freshness and source metadata',async()=>{
+ const at=Date.parse('2026-11-04T05:00:00Z'),instrument={ticker:'MSFT_US_EQ',currency:'USD',type:'STOCK',isin:'US5949181045'};
+ let watchText='###STOCKS,NASDAQ:MSFT',response=marketResult('MSFT',at),calls=0;
+ const read=createTradePrice({now:()=>at,workspace:()=>({watchText}),quote:async key=>{calls++;assert.equal(key,'NASDAQ:MSFT');return response;}});
+ assert.equal((await read(instrument)).price,200);
+ watchText='###ETF,NASDAQ:QQQ';assert.equal(await read(instrument),null);assert.equal(calls,1);
+ watchText='###STOCKS,NASDAQ:MSFT,NYSE:MSFT';assert.equal(await read(instrument),null);assert.equal(calls,1);
+ watchText='###STOCKS,NASDAQ:MSFT';
+ for(const patch of [{currency:'EUR'},{providerSymbol:'QQQ'},{providerSymbol:'MSFT.L'},{exchangeName:'LSE'},{instrumentType:'ETF'},{kind:'future'},{provider:'Other'},{price:0},{price:NaN},{observedAt:null},{observedAt:new Date(at+60000).toISOString()},{observedAt:new Date(at-4*86400000).toISOString()},{sessionType:'unknown'}]){response={...marketResult('MSFT',at),quote:{...marketResult('MSFT',at).quote,...patch}};assert.equal(await read(instrument),null,JSON.stringify(patch));}
+ for(const patch of [{status:'stale'},{status:'unavailable'},{fetchedAt:null},{fetchedAt:new Date(at-65000).toISOString()},{fetchedAt:new Date(at+60000).toISOString()}]){response={...marketResult('MSFT',at),...patch};assert.equal(await read(instrument),null);}
+ response=marketResult('MSFT',at);response.quote.sessionType='regular';response.quote.observedAt=new Date(at-9*3600000).toISOString();const close=await read(instrument);assert.equal(close.priceQuote.session,'Regular session');assert.equal(close.priceQuote.observedAt,at-9*3600000);
+ assert.equal(await read({...instrument,ticker:'MSFT_GB_EQ'}),null);assert.equal(await read({...instrument,currency:'EUR'}),null);
+});
+test('account reconnection during a market quote lookup invalidates position and review',async t=>{
+ for(const action of ['position','preview']){
+  const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;
+  f.source.quote=(key,at)=>{f.connect();return marketResult('AMD',at);};await assert.rejects(()=>action==='position'?f.service.position('a','AMD_US_EQ'):f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/connection/);assert.equal(f.writes().length,0);
+ }
 });

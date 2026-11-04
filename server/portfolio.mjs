@@ -6,6 +6,7 @@ import {PORTFOLIO_LIMITS,portfolioText,portfolioNumber,portfolioCurrency,normali
 import {createPortfolioHistory,orderHistoryPath} from './portfolio-history.mjs';
 import {createPortfolioFunding,fundingHistoryPath} from './portfolio-funding.mjs';
 import {createPortfolioActivity} from './portfolio-activity.mjs';
+import {createTradePrice} from './portfolio-trade-price.mjs';
 import {createPortfolioTrading,orderView} from './portfolio-trading.mjs';
 import {createPortfolioRebuild,dividendHistoryPath} from './portfolio-rebuild.mjs';
 import {createPortfolioMetadata} from './portfolio-metadata.mjs';
@@ -228,7 +229,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
   const metadata=createPortfolioMetadata(db,historyOptions);
   const activity=createPortfolioActivity(db,{...historyOptions,orderView,accounts:()=>read().data,tracking:id=>trading.tracking(id)});
-  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,readCatalog:metadata.instruments,orderLimit:(...args)=>planning.orderLimit(...args),getOrderLimit:id=>planning.settings(id).maxOrderValue,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
+  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,marketPrice:createTradePrice({now,quote,workspace}),readCatalog:metadata.instruments,orderLimit:(...args)=>planning.orderLimit(...args),getOrderLimit:id=>planning.settings(id).maxOrderValue,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
     if(closed||credential(id)?.generation!==generation)throw fail(409,'The account connection changed.');
     if(pending.has(id))throw fail(409,'An account refresh is already running.');
     const snapshot=normalizeTrading212(fresh.summary,fresh.positions,new Date(fresh.at).toISOString());
