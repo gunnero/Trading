@@ -1,3 +1,4 @@
+import {quotePrice,quoteChange,quoteTone} from './data/quotes.mjs';
 import {createContext,useContext,useEffect,useId,useRef,useState} from 'react';
 import {ChartLine,Stack,PencilSimple,ArrowsOutCardinal,ArrowCounterClockwise,Gear,X,ArrowUpRight} from '@phosphor-icons/react';
 import {CHART_DEFAULTS,readChartSettings,chartConfig} from './data/chart-settings.mjs';
@@ -39,11 +40,11 @@ export function useSavedTimeframe(symbol,{primary=false}={}){
   }));}
   return [frame,change];
 }
-export function ChartHeader({symbol,marketKey=symbol,timeframe,onTimeframe,source='Yahoo Finance',daily=false,roles}){
+export function ChartHeader({symbol,quote,marketKey=symbol,timeframe,onTimeframe,source='Yahoo Finance',daily=false,roles}){
   const {config,set,reset,openGlobal,status}=useSavedChart(`${marketKey}|${timeframe}`);
   const icons=[['indicators',daily?'Readings':'Indicators',ChartLine],['levels','Levels',Stack],['drawings','Drawing tools',PencilSimple],['navigation','Chart navigation',ArrowsOutCardinal]];
   return <div className="chart-toolbar compact-chart-header">
-    <div className="chart-header-left"><span className="chart-identity"><strong>{symbol||'Select a stock'}</strong> · {timeframe} · {source}</span>
+    <div className="chart-header-left"><span className="chart-identity"><strong>{symbol||'Select a stock'}</strong>{quote&&<><b className="chart-quote">{quotePrice(quote)}</b><span className={quoteTone(quote)}>{quoteChange(quote)}</span></>}<small className="chart-source">{timeframe} · {source}</small></span>
       <div className="chart-header-icons" role="group" aria-label="Chart controls">{icons.filter(([id])=>!daily||id!=='levels').map(([id,label,Icon])=><button key={id} type="button" title={id==='levels'&&roles?.status?`${label} · ${roles.status==='ok'?'confirmed roles':roles.status==='stale'?'cached confirmation':roles.status}`:label} aria-label={label} disabled={!marketKey} aria-expanded={config.panel===id} aria-pressed={config.panel===id} onClick={()=>set({panel:config.panel===id?null:id})}><Icon size={17}/>{id==='levels'&&roles?.status==='stale'&&<i className="chart-control-dot"/>}</button>)}
         <button type="button" title="Reset view and indicators to global defaults · keep drawings" aria-label="Reset view" disabled={!marketKey} onClick={reset}><ArrowCounterClockwise size={17}/></button>
         <button type="button" title="Global chart settings" aria-label="Global chart settings" onClick={openGlobal}><Gear size={17}/></button>

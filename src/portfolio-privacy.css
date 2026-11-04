@@ -1,8 +1,11 @@
+@layer base {
 .portfolio-privacy{margin:0 0 20px;padding:14px 18px;border:1px solid var(--border);border-radius:6px;background:var(--panel)}
 .portfolio-privacy>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .portfolio-privacy strong{font-size:13px;margin-right:6px}
 .portfolio-privacy .button{min-height:34px;padding:7px 12px}
-.portfolio-privacy button[aria-pressed=true]{background:rgba(42,201,173,.15);border-color:var(--green);color:var(--green)}
+.portfolio-privacy button[aria-pressed=true]{background:var(--selection);border-color:var(--primary);color:var(--primary)}
 .portfolio-privacy p{font-size:12px;color:var(--muted);margin:9px 0 0;line-height:1.6}
 .portfolio-privacy-note{padding:24px;color:var(--muted);text-align:center;border:1px dashed var(--border);border-radius:5px}
 @media print{.portfolio-privacy{display:none}}
+
+}

@@ -10,7 +10,7 @@ export function useWorkspace() {
     setStatus('loading');setError('');
     try {
       const response=await apiFetch('/api/workspace',{signal});
-      if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw new Error('Cannot load your saved workspace. Start the Opening Bell server and retry.');
+      if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw new Error('Cannot load your saved workspace. Start the Trading Desk server and retry.');
       const result=await response.json();
       if(result.data?.schemaVersion!==1||!Number.isSafeInteger(result.revision))throw new Error('Unrecognized saved workspace.');
       levelSnapshots(result.data);parseWatchlist(result.data.watchText,{allowEmpty:true});

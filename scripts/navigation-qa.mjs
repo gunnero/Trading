@@ -16,7 +16,7 @@ try{
  const before=await read();await page.goto(runtime.url+'/#overview');
  const main=page.getByRole('navigation',{name:'Main navigation'});
  await expect(main.getByRole('button')).toHaveText(['Overview','Markets','Portfolio Manager16','Journal']);
- await expect(page.getByRole('button',{name:'Account and security',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Account and security',exact:true})).toBeHidden();
  await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();await expect(page).toHaveURL(/#levels$/);await expect(main.getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');
  await page.getByRole('button',{name:'Back to Overview',exact:true}).click();await expect(page).toHaveURL(/#overview$/);
  await main.getByRole('button',{name:'Markets',exact:true}).click();const markets=page.getByRole('navigation',{name:'Markets sections'});
@@ -43,8 +43,11 @@ try{
    if([320,1488].includes(width)&&['overview','markets/news','portfolio','journal/review/2026-11-03','settings/account'].includes(route))await page.screenshot({path:`${dir}/${route.replaceAll('/','-')}-${width}.png`});
   }
  }
- await page.setViewportSize({width:390,height:844});const quick=page.getByRole('navigation',{name:'Quick navigation'});await quick.getByRole('button',{name:'Markets',exact:true}).click();await expect(page).toHaveURL(/#markets\/calendar$/);await quick.getByRole('button',{name:'Portfolio Manager',exact:true}).click();await expect(page).toHaveURL(/#portfolio$/);
- await quick.getByRole('button',{name:'More navigation'}).click();await expect(page.getByRole('dialog',{name:'Navigation'})).toBeVisible();await main.getByRole('button',{name:'Journal',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await expect(page.getByRole('heading',{name:'Trade journal',exact:true})).toBeVisible();
+ await page.setViewportSize({width:390,height:844});
+ for(const [label,route] of [['Markets','markets/calendar'],['Portfolio Manager','portfolio'],['Journal','journal']]){
+  await page.getByRole('button',{name:'Open navigation',exact:true}).click();await expect(page.getByRole('dialog',{name:'Navigation'})).toBeVisible();await main.getByRole('button',{name:label,exact:true}).click();await expect(page).toHaveURL(runtime.url+'/#'+route);await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
+ }
+ await expect(page.getByRole('heading',{name:'Trade journal',exact:true})).toBeVisible();
  expect((await read()).revision).toBe(before.revision);expect(tradeWrites).toBe(0);expect(errors).toEqual([]);mark('Legacy links, four responsive widths and mobile navigation pass with no workspace or trading writes');
  writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors,tradeWrites},null,2)+'\n');
 }catch(e){await page.screenshot({path:dir+'/failure.png',fullPage:true});writeFileSync(dir+'/checks.json',JSON.stringify({result:'failed',checks,errors,error:e.message},null,2)+'\n');throw e;}finally{await browser.close();await runtime.close();}

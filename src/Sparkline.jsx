@@ -1,6 +1,6 @@
 import {memo, useEffect, useRef} from 'react';
 
-const colors={green:'#27cbb0',red:'#f46f73',amber:'#efbd4e',muted:'#7d929b'};
+const colors={green:'#087a4b',red:'#bb304a',amber:'#8f5900',muted:'#6f6483'};
 // A preview needs only a stroke, not an independent interactive chart engine.
 export const Sparkline=memo(function Sparkline({tone='green',data=[]}){
   const ref=useRef(null);

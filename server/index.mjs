@@ -47,6 +47,6 @@ const server=createServer(async(req,res)=>{
   }catch{if(!res.headersSent)res.writeHead(500);res.end('Request failed.');}
 });
 server.requestTimeout=15000;server.headersTimeout=10000;
-server.listen(port,'127.0.0.1',()=>console.log(`Opening Bell: http://127.0.0.1:${port} (saved workspace enabled)`));
+server.listen(port,'127.0.0.1',()=>console.log(`Trading Desk: http://127.0.0.1:${port} (saved workspace enabled)`));
 function close(){server.close(async()=>{await nlb.close();portfolios.close();store.close();account.close();process.exit(0);});setTimeout(()=>process.exit(1),5000).unref();}
 process.on('SIGINT',close);process.on('SIGTERM',close);

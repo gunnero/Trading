@@ -7,7 +7,7 @@ import {canonicalRoute,routeView,routeGroup,marketTabs,portfolioTabs} from './da
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, Bell, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
+import { Briefcase, ChartBar, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, Trash, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, FunnelSimple, Notebook, ArrowCounterClockwise, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
 import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';
 const SentimentPage=React.lazy(()=>import('./SentimentPage'));
@@ -58,7 +58,7 @@ function Modal({ title, subtitle, children, onClose, wide = false, className = '
 
 export function App() {
   const workspace=useWorkspace();
-  if(!workspace.data) return <div className="workspace-loading"><Bell size={36} className="amber"/><h1>Opening Bell</h1><p>{workspace.status==='loading'?'Loading your saved workspace…':workspace.error}</p>{workspace.status!=='loading'&&<button className="button primary" onClick={workspace.retry}>Retry connection</button>}</div>;
+  if(!workspace.data) return <div className="workspace-loading"><ChartBar size={36} weight="fill"/><h1>Trading Desk</h1><p>{workspace.status==='loading'?'Loading your saved workspace…':workspace.error}</p>{workspace.status!=='loading'&&<button className="button primary" onClick={workspace.retry}>Retry connection</button>}</div>;
   return <DisplayTimeProvider workspace={workspace}><ChartSettingsProvider workspace={workspace}><DrawingProvider workspace={workspace}><SessionDesk workspace={workspace}/></DrawingProvider></ChartSettingsProvider></DisplayTimeProvider>;
 }
 function SessionDesk({workspace}) {
@@ -107,7 +107,7 @@ function SessionDesk({workspace}) {
         else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
       }
     };
-    const onResize=()=>{if(window.innerWidth>760)setMenuOpen(false);};
+    const onResize=()=>{if(window.innerWidth>950)setMenuOpen(false);};
     document.addEventListener('keydown',onKey);window.addEventListener('resize',onResize);
     return()=>{document.body.style.overflow=previous;document.removeEventListener('keydown',onKey);window.removeEventListener('resize',onResize);if(trigger?.isConnected)trigger.focus({preventScroll:true});};
   },[menuOpen]);
@@ -170,7 +170,7 @@ function SessionDesk({workspace}) {
   }}/>;
   return <div className="app-shell" data-section={section}>
     <aside ref={sidebarRef} id="desk-navigation" role={menuOpen?'dialog':undefined} aria-modal={menuOpen||undefined} aria-label="Navigation" className={`sidebar ${menuOpen ? 'is-open' : ''}`}>
-      <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
+      <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><div className="desk-brand"><ChartBar size={30} weight="fill"/><span>Trading Desk</span></div><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
       <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${group === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={group === id ? 'page' : undefined}><Icon size={22} weight={group === id ? 'regular' : 'light'}/><span>{title}</span>{id==='portfolio'&&notifications.feed?.unread>0&&<span className="pa-badge" aria-label={`${notifications.feed.unread} unread alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</span>}</button>)}</nav>
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
@@ -182,33 +182,32 @@ function SessionDesk({workspace}) {
       </div>
     </aside>
     {menuOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
-    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','markets','portfolio'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={group===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='portfolio'?'Portfolio':title}{id==='portfolio'&&notifications.feed?.unread>0&&<b className="pa-badge" aria-label={`${notifications.feed.unread} unread alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</b>}</span></button>)}<button aria-label="More navigation" aria-current={['settings','journal','sentiment'].includes(group)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
     <div className="main-shell" inert={menuOpen||undefined}>
+      <header className="desk-mobile-header"><button className="icon-button" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={24}/></button><span className="desk-brand"><ChartBar size={28} weight="fill"/><span>Trading Desk</span></span><button className="icon-button mobile-account" aria-label="Account settings" onClick={()=>navigate('settings/account')}><UserCircle size={25}/></button></header>
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
       <PageNavigation.Provider value={{expanded:menuOpen,open:()=>setMenuOpen(true),sections:group==='markets'?marketTabs:group==='portfolio'?portfolioTabs:null,sectionsLabel:group==='markets'?'Markets sections':'Portfolio sections',selected:section,unread:notifications.feed?.unread||0,navigate}}><main>
         <PortfolioNotice event={notifications.notice} onOpen={()=>{navigate('activity');notifications.dismiss();}} onDismiss={notifications.dismiss}/>
         {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>navigate('settings/account')}>Set up security <CaretRight size={15}/></button></div>}
 
         {section === 'overview' && <>
-          <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session." actions={<button className="button outline" onClick={()=>navigate('levels')}><SlidersHorizontal size={18}/>Key levels</button>}/>
+          <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session." actions={<button className="button primary" onClick={()=>navigate('levels')}><SlidersHorizontal size={18}/>Key levels</button>}/>
           <div className="page-market-context">{marketContext}</div>
           {quote && instrument && !matchedDate && <div className="notice"><WarningCircle size={20}/><span>{awaitingSessionQuote(sourceDate,quote)?`Today's levels are ready. Waiting for today's ${symbol} price; Yahoo's last regular-session quote is from ${formatDate(quote.sessionDate)}. No new level import is needed.`:<>{instrument.carriedForward?'Carried-forward levels':'Levels'} dated {formatDate(sourceDate)}; {symbol} quote session {formatDate(quote.sessionDate)}. The chart remains available; zone comparisons are paused until dates match.</>}</span></div>}
-          <BriefingStrip briefing={briefing} watchlist={watchlist} onOpen={() => navigate('briefing')} onNews={() => navigate('news')} onEarnings={()=>navigate('earnings')} onSentiment={()=>navigate('sentiment')}/>
           <FocusTabs focus={focus} onFocus={setFocus} quotes={quotes} qqqRoles={qqqRoles} spyRoles={spyRoles} sheet={sheet} scan={scan} customEntry={customEntry}/>
-          <SetupControls focus={focus} watchlist={watchlist} customKey={customKey} onCustom={setCustom} interval={setupInterval} onInterval={setSetupInterval} scan={scan} sheetDate={sheet.date}/>
+          {['custom','hot'].includes(focus)&&<SetupControls focus={focus} watchlist={watchlist} customKey={customKey} onCustom={setCustom} interval={setupInterval} onInterval={setSetupInterval} scan={scan} sheetDate={sheet.date}/>}
           {focus==='hot'&&<div className="desk-view-controls"><div className="segmented" aria-label="Top / Hot view">{[['single','Single chart'],['grid','Grid']].map(([view,label])=><button key={view} aria-pressed={gridConfig.view===view} className={gridConfig.view===view?'selected':''} onClick={()=>setGridConfig({view})}>{label}</button>)}</div></div>}
           {gridActive?<ChartGrid watchlist={watchlist} sheet={sheet} scan={scan} config={gridConfig} onChange={setGridConfig} onOpen={entry=>{setSelectedEntry(entry);setDialog('grid-chart');}}/>:<>
           <div className="market-data-caption" role="status"><span>{quote?`${symbol} · ${quoteStamp(quote)} · ${quote.session||'Regular session'} ${isExtendedQuote(quote)?'chart price · level context only':'quote'}`:!symbol?(focus==='hot'?'No qualifying Top/Hot setup in your watchlist.':'Choose your custom stock from the watchlist.'):quoteResult?.status==='loading'?'Loading Yahoo prices…':'Yahoo prices unavailable · retrying automatically'}{quoteResult?.status==='stale'&&' · Cached / old reading'}</span><button onClick={()=>setDialog('market-data')}>Source & delays <Info size={13}/></button></div>
           <div className="workspace-grid">
-            <section className="chart-panel" aria-label={`${symbol||'Stock'} chart`}><ChartHeader symbol={symbol} marketKey={marketKey} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles}/>
+            <section className="chart-panel" aria-label={`${symbol||'Stock'} chart`}><ChartHeader symbol={symbol} quote={quote} marketKey={marketKey} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles}/>
               <ChartLevels scope={`${marketKey}|${timeframe}`} instrument={instrument} date={sheet.date} roles={roles} quoteDate={quote?.sessionDate} onTradingView={()=>setDialog('tradingview')}/>
               {chart.candles?.length ? <PriceChart symbol={symbol} drawingKey={marketKey} instrument={validInstrument?instrument:null} timeframe={timeframe} candles={chart.candles} price={chart.quote.price} indicators={chart.indicators}/> : <Empty icon={Clock} title={!symbol?(focus==='hot'?'No qualifying setup':'Choose a watchlist stock'):chart.status==='loading'?'Loading Yahoo chart…':'Chart unavailable'}>{!symbol?(focus==='hot'?'The automatic scan waits for your break-and-retest rules and indicator alignment. Open Scan details to see each stock’s status.':'Use the Watchlist stock selector above.'):chart.status==='loading'?'Fetching actual regular-session candles.':chart.message}</Empty>}
               <div className="chart-footnote"><span>{chart.status==='stale'?'Cached / old history · ':''}{chart.quote?`Quote ${quoteStamp(chart.quote)} · `:''}{timeframe==='4h'?'4h from hourly bars':'Yahoo history'}</span><span>Regular session · partial bars marked</span></div>
             </section>
-            <RetestPanel symbol={symbol} result={setup} canPlan={!!context&&!!(context.supply||context.demand||setup.zone)} onPlan={startPlan}/>
 
           </div>
           </>}
+          <div className="overview-support"><div className="overview-setup">{!['custom','hot'].includes(focus)&&<SetupControls focus={focus} watchlist={watchlist} customKey={customKey} onCustom={setCustom} interval={setupInterval} onInterval={setSetupInterval} scan={scan} sheetDate={sheet.date}/>}<RetestPanel symbol={symbol} result={setup} canPlan={!!context&&!!(context.supply||context.demand||setup.zone)} onPlan={startPlan}/></div><section className="overview-briefing" aria-label="Session briefing"><h2>Session briefing</h2><BriefingStrip briefing={briefing} watchlist={watchlist} onOpen={() => navigate('briefing')} onNews={() => navigate('news')} onEarnings={()=>navigate('earnings')} onSentiment={()=>navigate('sentiment')}/></section></div>
           <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
@@ -223,7 +222,7 @@ function SessionDesk({workspace}) {
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel} onBack={()=>navigate('overview')}/ >}
 
         <div className={`workspace-save-status ${workspace.status==='error'||workspace.status==='conflict'?'needs-attention':''}`} role="status" aria-live="polite"><span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span><div>{['error','conflict'].includes(workspace.status)&&<>{workspace.status==='error'&&<button onClick={workspace.retry}>Retry save</button>}<button onClick={workspace.reload}>Load saved version</button></>}<button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button></div></div>
-        <footer className="app-footer"><span>OPENING BELL <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
+        <footer className="app-footer"><span>TRADING DESK <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
       </main></PageNavigation.Provider>
     </div>
       {dialog === 'grid-chart' && selectedEntry && <Modal title={`${selectedEntry.symbol} chart`} subtitle={`${selectedEntry.exchange} · full chart and saved drawing tools`} onClose={()=>setDialog(null)} wide className="market-chart-modal"><GridDetail entry={selectedEntry} sheet={sheet} interval={gridConfig.interval} setup={scan.byKey[quoteKey(selectedEntry)]}/></Modal>}

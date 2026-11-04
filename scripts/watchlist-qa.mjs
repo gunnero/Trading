@@ -49,7 +49,7 @@ try{
     await page.setViewportSize({width,height:980});await expect(settingsNav.getByRole('link',{name:'Watchlist',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({path:`docs/qa/watchlist-settings-${width}.png`,fullPage:true});
   }
-  await page.setViewportSize({width:390,height:844});await page.getByRole('navigation',{name:'Quick navigation'}).getByRole('button',{name:'Overview',exact:true}).click();await navigate();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await expect(page.getByRole('button',{name:'More navigation'})).toHaveAttribute('aria-current','page');
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Overview',exact:true}).click();await navigate();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await expect(page.getByRole('button',{name:'Open navigation'})).toHaveAttribute('aria-expanded','false');
   mark('Watchlist settings and menu navigation fit phone, tablet and desktop');
   expect(errors).toEqual([]);writeFileSync('docs/qa/watchlist-management-checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
 }catch(e){await page.screenshot({path:'docs/qa/watchlist-management-failure.png',fullPage:true});throw e;}finally{await browser.close();}

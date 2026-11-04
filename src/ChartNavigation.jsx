@@ -25,7 +25,7 @@ export function useChartNavigation(key,count,axes=[0,1],endOfData=100,persist){
   const common={xAxisIndex:axes,filterMode:'none',start:view.start,end:view.end,minSpan};
   return {view,setView,zoom,pan,reset,onKeyDown,dataZoom:[
     {...common,id:'inside-zoom',type:'inside',zoomOnMouseWheel:true,moveOnMouseMove:true,moveOnMouseWheel:false,preventDefaultMouseMove:true},
-    {...common,id:'range-zoom',type:'slider',height:18,bottom:7,left:12,right:68,showDetail:false,borderColor:'#30464e',backgroundColor:'#101c22',fillerColor:'#2ac9ad24',handleStyle:{color:'#89aaa9',borderColor:'#27cbb0'},dataBackground:{lineStyle:{color:'#607d84'},areaStyle:{color:'#263c43'}},selectedDataBackground:{lineStyle:{color:'#48ad9f'},areaStyle:{color:'#204b44'}},brushSelect:false},
+    {...common,id:'range-zoom',type:'slider',height:18,bottom:7,left:12,right:68,showDetail:false,borderColor:'#d1c4e7',backgroundColor:'#f4f2fa',fillerColor:'#713bdd24',handleStyle:{color:'#b9a1dd',borderColor:'#713bdd'},dataBackground:{lineStyle:{color:'#a894c7'},areaStyle:{color:'#e6ddf9'}},selectedDataBackground:{lineStyle:{color:'#713bdd'},areaStyle:{color:'#e6ddf9'}},brushSelect:false},
   ]};
 }
 export function ChartNavigation({navigation,count,label='candles',priceScale,onReset,compact=false}){

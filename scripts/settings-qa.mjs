@@ -47,7 +47,7 @@ try{
    expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
    if(['Charts','Connections'].includes(category)&&[390,820].includes(width))await page.screenshot({path:`${dir}/${category.toLowerCase()}-${width}.png`,fullPage:true});
   }
-  if(width===390){await page.getByRole('button',{name:'More navigation'}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await footer.getByRole('button',{name:'Log out',exact:true}).scrollIntoViewIfNeeded();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
+  if(width===390){await page.getByRole('button',{name:'Open navigation',exact:true}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await footer.getByRole('button',{name:'Log out',exact:true}).scrollIntoViewIfNeeded();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
  }
  mark('All five settings sections and bottom account controls fit phone, tablet and desktop; the mobile drawer closes after navigation');
  await settingsNav.getByRole('link',{name:'Charts',exact:true}).click();

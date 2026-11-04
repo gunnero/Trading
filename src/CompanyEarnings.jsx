@@ -15,8 +15,8 @@ function EarningsChart({rows}){
  const low=Math.min(0,...values),high=Math.max(0,...values),span=high-low||1;
  const y=v=>bottom-(v-low)/span*(bottom-top),slot=(width-left-right)/rows.length,bar=Math.min(34,slot*.24);
  return <div ref={container} className="company-eps-scroll" tabIndex={0} role="region" aria-label="EPS comparison chart, scroll horizontally for older quarters"><svg width={width} height={height} role="img" aria-label="Actual versus estimated EPS by fiscal quarter. Exact values follow in the table.">
-  {[low,(low+high)/2,high].filter((v,i,a)=>a.indexOf(v)===i).map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} stroke="#2a414a" strokeDasharray={v===0?undefined:'3 4'}/><text x={left-7} y={y(v)+4} textAnchor="end">{number(v)}</text></g>)}
-  {rows.map((r,i)=>{const x=left+slot*(i+.5);return <g key={r.end||r.period}><title>{r.period}: actual {number(r.actual)}, estimate {number(r.estimate)}</title>{[[r.actual,-bar-3,'#24c4b0'],[r.estimate,3,'#9bafb9']].map(([v,dx,color],j)=>Number.isFinite(v)&&<rect key={j} x={x+dx} y={Math.min(y(v),y(0))} width={bar} height={Math.max(1,Math.abs(y(v)-y(0)))} rx="2" fill={color} opacity={j?.55:1}/>)}<text x={x} y={bottom+24} textAnchor="middle">{r.period}</text></g>;})}
+  {[low,(low+high)/2,high].filter((v,i,a)=>a.indexOf(v)===i).map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} stroke="#ddd8ea" strokeDasharray={v===0?undefined:'3 4'}/><text x={left-7} y={y(v)+4} textAnchor="end">{number(v)}</text></g>)}
+  {rows.map((r,i)=>{const x=left+slot*(i+.5);return <g key={r.end||r.period}><title>{r.period}: actual {number(r.actual)}, estimate {number(r.estimate)}</title>{[[r.actual,-bar-3,'#713bdd'],[r.estimate,3,'#b9a1dd']].map(([v,dx,color],j)=>Number.isFinite(v)&&<rect key={j} x={x+dx} y={Math.min(y(v),y(0))} width={bar} height={Math.max(1,Math.abs(y(v)-y(0)))} rx="2" fill={color} opacity={j?.55:1}/>)}<text x={x} y={bottom+24} textAnchor="middle">{r.period}</text></g>;})}
  </svg></div>;
 }
 export function CompanyEarnings({data,status,message,financialHistory}){

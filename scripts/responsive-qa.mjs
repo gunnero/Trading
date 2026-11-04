@@ -58,13 +58,13 @@ try{
   mark('Ten viewport sizes from 320 to 1488px fit without page overflow; chart controls do not overlap, tablet charts are full width, and phone watchlists retain essential details');
 
   const mobile=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});await setup(mobile);await mobile.goto(runtime.url+'/#overview');
-  const quick=mobile.getByRole('navigation',{name:'Quick navigation'});
-  await quick.getByRole('button',{name:'More navigation',exact:true}).tap();await expect(mobile.locator('.sidebar')).toHaveAttribute('aria-modal','true');
+  const quick=mobile;
+  await quick.getByRole('button',{name:'Open navigation',exact:true}).tap();await expect(mobile.locator('.sidebar')).toHaveAttribute('aria-modal','true');
   expect(await mobile.evaluate(()=>document.body.style.overflow)).toBe('hidden');
   await mobile.keyboard.press('Shift+Tab');expect(await mobile.evaluate(()=>document.activeElement.closest('.sidebar')!==null)).toBe(true);
-  await mobile.keyboard.press('Escape');await expect(quick.getByRole('button',{name:'More navigation'})).toBeFocused();
-  await quick.getByRole('button',{name:'More navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Overview',exact:true}).tap();await mobile.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
-  await quick.getByRole('button',{name:'Overview',exact:true}).tap();const panel=mobile.locator('.chart-panel'),chart=panel.locator('.price-chart');await expect(chart).toBeVisible();
+  await mobile.keyboard.press('Escape');await expect(quick.getByRole('button',{name:'Open navigation'})).toBeFocused();
+  await quick.getByRole('button',{name:'Open navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Overview',exact:true}).tap();await mobile.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
+  await mobile.getByRole('button',{name:'Open navigation',exact:true}).tap();await mobile.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Overview',exact:true}).tap();const panel=mobile.locator('.chart-panel'),chart=panel.locator('.price-chart');await expect(chart).toBeVisible();
   await chart.scrollIntoViewIfNeeded();await expect(panel.locator('.touch-chart-shell')).toHaveAttribute('data-touch-active','false');
   const cdp=await mobile.context().newCDPSession(mobile),box=await chart.boundingBox(),start=await mobile.evaluate(()=>scrollY);
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+100,y:box.y+210,id:1}]});

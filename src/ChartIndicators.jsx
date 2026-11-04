@@ -1,13 +1,13 @@
 import {useDisplayTime} from './DisplayTime';
 export const INDICATORS=[
-  {key:'ema',label:'9 / 21 EMA ribbon',color:'#b2b5be',series:['ema9','ema21']},
-  {key:'vwap',label:'Session VWAP',color:'#ffffff',series:['vwap']},
+  {key:'ema',label:'9 / 21 EMA ribbon',color:'#81808c',series:['ema9','ema21']},
+  {key:'vwap',label:'Session VWAP',color:'#3b2954',series:['vwap']},
   {key:'pdh',label:'Previous day high',color:'#4caf50',series:['pdh'],cross:true},
   {key:'pdl',label:'Previous day low',color:'#f23645',series:['pdl'],cross:true},
-  {key:'pdc',label:'Previous day close',color:'#ffeb3b',series:['pdc'],cross:true},
-  {key:'sma20',label:'20 SMA · 1D',color:'#00bcd4',series:['sma20']},
-  {key:'sma50',label:'50 SMA · 1D',color:'#ffeb3b',series:['sma50']},
-  {key:'sma100',label:'100 SMA · 1D',color:'#00e676',series:['sma100']},
+  {key:'pdc',label:'Previous day close',color:'#9e7c08',series:['pdc'],cross:true},
+  {key:'sma20',label:'20 SMA · 1D',color:'#0b829d',series:['sma20']},
+  {key:'sma50',label:'50 SMA · 1D',color:'#9e7c08',series:['sma50']},
+  {key:'sma100',label:'100 SMA · 1D',color:'#16834d',series:['sma100']},
   {key:'sma200',label:'200 SMA · 1D',color:'#f23645',series:['sma200']},
 ];
 export const validIndicator=value=>typeof value==='number'&&Number.isFinite(value);

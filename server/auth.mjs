@@ -215,7 +215,7 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
         if(path==='/api/auth/totp/start'){
           const user=await reauthenticate(row,data,ip),secret=new Secret({size:20});
           store.db.prepare('UPDATE owner SET pending_totp=?,pending_until=?,pending_session=? WHERE id=1').run(store.encrypt(secret.base32),store.now()+10*60_000,row.id);
-          const totp=new TOTP({issuer:'Opening Bell',label:user.email,secret});
+          const totp=new TOTP({issuer:'Trading Desk',label:user.email,secret});
           return json(res,200,{secret:secret.base32,qr:await QRCode.toDataURL(totp.toString(),{errorCorrectionLevel:'M',width:240,margin:2})});
         }
         if(path==='/api/auth/totp/confirm'){

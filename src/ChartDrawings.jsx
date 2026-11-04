@@ -173,7 +173,7 @@ function DrawingOverlay({instance,times,items,tool,color,selected,hidden,draft,s
        item.type==='trend'?<><line x1={x} y1={y} x2={x2} y2={y2} {...style}/><line x1={x} y1={y} x2={x2} y2={y2} {...hit}/></>:
        item.type==='rectangle'?<rect x={Math.min(x,x2)} y={Math.min(y,y2)} width={Math.max(1,Math.abs(x2-x))} height={Math.max(1,Math.abs(y2-y))} {...style} fill={`${item.color}20`} pointerEvents={tool==='select'?'all':'none'}/>:
        <text x={x} y={y} fill={item.color} className="drawing-note" style={{pointerEvents:tool==='select'?'all':'none'}}>{item.text}</text>}
-      {active&&tool==='select'&&pts.map(([px,py],i)=><g key={i}><circle cx={item.type==='horizontal'?(left+right)/2:px} cy={py} r={5} fill="#101a1f" stroke={item.color} strokeWidth={2} pointerEvents="none"/><circle data-handle={i} cx={item.type==='horizontal'?(left+right)/2:px} cy={py} r={12} fill="transparent" pointerEvents="all" style={{cursor:'crosshair'}}/></g>)}
+      {active&&tool==='select'&&pts.map(([px,py],i)=><g key={i}><circle cx={item.type==='horizontal'?(left+right)/2:px} cy={py} r={5} fill="#faf8ff" stroke={item.color} strokeWidth={2} pointerEvents="none"/><circle data-handle={i} cx={item.type==='horizontal'?(left+right)/2:px} cy={py} r={12} fill="transparent" pointerEvents="all" style={{cursor:'crosshair'}}/></g>)}
     </g>;
   }
   return <svg ref={svg} className="drawing-overlay" width={width} height={height} aria-hidden="true" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={cancel}>

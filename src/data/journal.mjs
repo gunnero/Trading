@@ -52,7 +52,7 @@ export function validateJournal(value){
 export function parseJournalImport(raw){
   if(typeof raw!=='string'||raw.length>2000000)fail('Choose a journal JSON file under 2 MB.');
   let value;try{value=JSON.parse(raw);}catch{fail('This is not a valid journal JSON file. Use the reviewed file prepared from your screenshot.');}
-  if(value.format!=='opening-bell-journal-v1'||!Array.isArray(value.trades)||!value.trades.length||value.trades.length>2000)fail('Use an Opening Bell journal file with 1–2,000 trade records.');
+  if(value.format!=='opening-bell-journal-v1'||!Array.isArray(value.trades)||!value.trades.length||value.trades.length>2000)fail('Use a Trading Desk journal file with 1–2,000 trade records.');
   if(value.currency!=='USD')fail('This journal currently supports USD accounts only.');
   return {label:text(value.label||'Reviewed trade import','import label',160),trades:value.trades.map(row=>validateTrade({...row,id:row.id||crypto.randomUUID(),tags:row.tags||[],source:row.source||'import'}))};
 }

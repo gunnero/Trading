@@ -110,9 +110,9 @@ try {
   await expect(page.getByRole('heading',{name:'News',exact:true,level:1})).toBeVisible();
   await expect(page.locator('.news-article').first()).toBeVisible();
   if(width===390){
-   await page.getByRole('button',{name:'More navigation',exact:true}).click();await nav().click();await page.getByLabel('Event impact').selectOption('all');
+   await page.getByRole('button',{name:'Open navigation',exact:true}).click();await nav().click();await page.getByLabel('Event impact').selectOption('all');
    await expect(page.locator('.news-panel')).toHaveCount(0);
-   await page.getByRole('button',{name:'More navigation',exact:true}).click();await nav('News').click();
+   await page.getByRole('button',{name:'Open navigation',exact:true}).click();await nav('News').click();
    await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
    await expect(page.locator('.news-article').first()).toBeVisible({timeout:20000});
    await page.screenshot({path:'docs/qa/news-page-mobile.png',fullPage:false});
