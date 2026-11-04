@@ -9,13 +9,13 @@ const input={side:'BUY',type:'LIMIT',ticker:'AMD_US_EQ',quantity:2.5,limitPrice:
 function fixture(t){
  const db=new DatabaseSync(':memory:');t.after(()=>db.close());let at=1000000,generation='first',closed=false;
  const a={platform:'Trading 212',environment:'demo',snapshot:{source:'api',brokerId:'123',currency:'USD'}},calls=[];
- const source={cash:1000,available:3,currency:'USD',max:50,write:null,read:null,delay:null};
+ const source={cash:1000,available:3,currency:'USD',max:50,extendedHours:true,write:null,read:null,delay:null};
  const fetcher=async(url,options)=>{const path=new URL(url).pathname.replace('/api/v0','');calls.push({url,path,...options});assert.equal(new URL(url).origin,'https://'+a.environment+'.trading212.com');assert.equal(options.redirect,'error');
-  if(options.method!=='GET'){if(source.delay)await source.delay;if(source.write)return source.write(path,options);if(options.method==='DELETE')return new Response(null,{status:200});const d=JSON.parse(options.body);return json({id:75,ticker:d.ticker,side:d.quantity<0?'SELL':'BUY',type:path.endsWith('/limit')?'LIMIT':'MARKET',quantity:d.quantity,status:'NEW',filledQuantity:0});}
+  if(options.method!=='GET'){if(source.delay)await source.delay;if(source.write)return source.write(path,options);if(options.method==='DELETE')return new Response(null,{status:200});const d=JSON.parse(options.body);return json({id:75,ticker:d.ticker,side:d.quantity<0?'SELL':'BUY',type:path.endsWith('/limit')?'LIMIT':'MARKET',quantity:d.quantity,extendedHours:d.extendedHours,status:'NEW',filledQuantity:0});}
   if(source.read){const result=source.read(path);if(result)return result;}
   if(path==='/equity/account/summary')return json({id:123,currency:'USD',cash:{availableToTrade:source.cash}});
   if(path==='/equity/positions')return json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:source.available,currentPrice:100,averagePricePaid:95,walletImpact:{totalCost:475,unrealizedProfitLoss:25,currency:'USD',currentValue:500}}]);
-  if(path==='/equity/metadata/instruments')return json([{ticker:'AMD_US_EQ',name:'Advanced Micro Devices',type:'STOCK',currencyCode:source.currency,maxOpenQuantity:source.max}]);
+  if(path==='/equity/metadata/instruments')return json([{ticker:'AMD_US_EQ',name:'Advanced Micro Devices',type:'STOCK',currencyCode:source.currency,maxOpenQuantity:source.max,extendedHours:source.extendedHours}]);
   const order={id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,status:'NEW'};
   if(path==='/equity/orders')return json([order]);if(path==='/equity/orders/75')return json(order);throw Error('Unexpected endpoint '+path);
  };
@@ -209,4 +209,42 @@ test('untrusted history cursors never leave the broker allowlist and repeated pa
   const f=fixture(t);f.enable();await f.service.pending('a');f.advance();f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[],nextPagePath}):null;
   const data=await f.service.pending('a');assert.ok(data.historyError);assert.equal(data.orders[0].status,'NEW');assert.equal(data.orders[0].awaitingHistory,true);assert.equal(f.calls.filter(c=>c.path==='/equity/history/orders').length,1);assert.equal(f.writes().length,0);
  }
+});
+
+
+test('extended market sessions are immutable per reviewed buy and sell, survive restart and are not changed by submit fields',async t=>{
+ for(const side of ['BUY','SELL']){
+  const f=fixture(t);f.enable();assert.equal((await f.service.search('a','AMD')).items[0].extendedHours,true);
+  const review=await f.service.preview('a',{...input,type:'MARKET',side,quantity:1,extendedHours:true});assert.equal(review.extendedHours,true);assert.equal(f.writes().length,0);
+  f.restart();const result=await f.service.submit('a',{token:review.token,confirmed:true,extendedHours:false});assert.equal(result.state,'ACCEPTED');assert.equal(result.order.extendedHours,true);
+  assert.deepEqual(JSON.parse(f.writes()[0].body),{ticker:'AMD_US_EQ',quantity:side==='SELL'?-1:1,extendedHours:true});
+  await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
+ }
+});
+test('regular-session reviews and legacy prepared orders never silently opt into extended sessions',async t=>{
+ const f=fixture(t);f.enable();
+ for(const legacy of [false,true]){
+  const review=await f.service.preview('a',{...input,type:'MARKET',extendedHours:false});assert.equal(review.extendedHours,false);
+  if(legacy){const row=f.db.prepare('SELECT detail FROM portfolio_order_attempts WHERE token=?').get(review.token),detail=JSON.parse(row.detail);delete detail.extendedHours;f.db.prepare('UPDATE portfolio_order_attempts SET detail=? WHERE token=?').run(JSON.stringify(detail),review.token);f.restart();}
+  assert.equal((await f.service.submit('a',{token:review.token,confirmed:true,extendedHours:true})).state,'ACCEPTED');assert.equal(JSON.parse(f.writes().at(-1).body).extendedHours,false);
+ }
+});
+test('ineligible stocks, unknown eligibility, limit sessions and malformed flags cannot request extended execution',async t=>{
+ const f=fixture(t);f.enable();
+ for(const extendedHours of ['true',1,null,{}])await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',extendedHours}),/valid trading session/);
+ await assert.rejects(()=>f.service.preview('a',{...input,extendedHours:true}),/market orders only/);
+ for(const eligible of [false,undefined]){f.source.extendedHours=eligible;f.restart();await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',extendedHours:true}),/eligible/);assert.equal((await f.service.preview('a',{...input,type:'MARKET',extendedHours:false})).extendedHours,false);}
+ assert.equal(f.writes().length,0);
+});
+test('broker session mismatch is uncertain and cannot be retried automatically',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',{...input,type:'MARKET',extendedHours:true});
+ f.source.write=()=>json({id:75,ticker:'AMD_US_EQ',side:'BUY',type:'MARKET',quantity:2.5,status:'NEW',extendedHours:false});
+ const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,'UNKNOWN');assert.equal(f.service.read('a').blocked,true);
+ await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
+});
+
+test('submit refuses a reviewed extended order if refreshed broker eligibility is withdrawn',async t=>{
+ const f=fixture(t);f.enable();await f.service.search('a','AMD');f.advance(590000);
+ const review=await f.service.preview('a',{...input,type:'MARKET',extendedHours:true});f.source.extendedHours=false;f.advance(11000);
+ await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/eligible/);assert.equal(f.writes().length,0);
 });

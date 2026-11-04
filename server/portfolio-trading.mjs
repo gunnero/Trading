@@ -13,7 +13,7 @@ export function orderView(order){
   const ticker=order?.instrument?.ticker||order?.ticker;
   if(!Number.isSafeInteger(order?.id)||order.id<0||typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker)||!['BUY','SELL'].includes(order.side)||!['MARKET','LIMIT','STOP','STOP_LIMIT'].includes(order.type)||![...activeStatuses,...terminalStatuses,'CANCELLING'].includes(order.status)||(!numeric(order.quantity)&&!(order.strategy==='VALUE'&&numeric(order.value))))throw fail(502,'The broker returned an incomplete order. Check Trading 212.');
   const label=order.instrument?.name||order.name,code=value=>typeof value==='string'&&/^[A-Z]{3}$/.test(value)?value:null;
-  return {id:order.id,ticker,name:typeof label==='string'?label.slice(0,160):ticker,strategy:order.strategy||'QUANTITY',side:order.side,type:order.type,status:order.status,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:numeric(order.limitPrice)?order.limitPrice:null,currency:code(order.currency)||code(order.instrument?.currency),priceCurrency:code(order.instrument?.currency)||code(order.priceCurrency)||code(order.currency),createdAt:typeof order.createdAt==='string'&&Number.isFinite(Date.parse(order.createdAt))?order.createdAt:null};
+  return {id:order.id,ticker,name:typeof label==='string'?label.slice(0,160):ticker,strategy:order.strategy||'QUANTITY',side:order.side,type:order.type,status:order.status,extendedHours:typeof order.extendedHours==='boolean'?order.extendedHours:null,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:numeric(order.limitPrice)?order.limitPrice:null,currency:code(order.currency)||code(order.instrument?.currency),priceCurrency:code(order.instrument?.currency)||code(order.priceCurrency)||code(order.currency),createdAt:typeof order.createdAt==='string'&&Number.isFinite(Date.parse(order.createdAt))?order.createdAt:null};
 }
 
 export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected,readCatalog}){
@@ -66,8 +66,8 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const key=id+':catalog';if((readBackoff.get(key)||0)>now())throw fail(429,'Wait a minute before refreshing the instrument list.');readBackoff.set(key,now()+60000);
     const raw=readCatalog?await readCatalog(id):await broker('/equity/metadata/instruments',ctx.secret);current(id,ctx);
     if(!Array.isArray(raw)||raw.length>40000)throw fail(502,'The broker instrument list is unavailable.');
-    const items=raw.filter(r=>['STOCK','ETF'].includes(r.type)&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),currency:r.currencyCode,type:r.type,isin:r.isin||'',maxOpenQuantity:numeric(r.maxOpenQuantity)?r.maxOpenQuantity:null}));
-    catalogs.delete(id);catalogs.set(id,{generation:ctx.record.generation,until:now()+3600000,items});
+    const items=raw.filter(r=>['STOCK','ETF'].includes(r.type)&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),currency:r.currencyCode,type:r.type,isin:r.isin||'',maxOpenQuantity:numeric(r.maxOpenQuantity)?r.maxOpenQuantity:null,extendedHours:r.extendedHours===true}));
+    catalogs.delete(id);catalogs.set(id,{generation:ctx.record.generation,until:now()+600000,items});
     while(catalogs.size>4)catalogs.delete(catalogs.keys().next().value);
     return items;
   }
@@ -132,6 +132,9 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const instrument=(await catalog(id,ctx)).find(r=>r.ticker===input.ticker);
     if(!instrument)throw fail(400,'Choose an exact stock or ETF from the broker instrument list.');
     if(instrument.currency!==summary.currency)throw fail(400,'Trading here currently requires the instrument and primary account currency to match. Use Trading 212 for currency conversion orders.');
+    if(input.extendedHours!==undefined&&typeof input.extendedHours!=='boolean')throw fail(400,'Choose a valid trading session.');
+    if(input.extendedHours===true&&input.type!=='MARKET')throw fail(400,'The API supports selecting extended sessions for market orders only. Use Trading 212 for an overnight limit order.');
+    if(input.extendedHours===true&&!instrument.extendedHours)throw fail(400,'The broker has not marked this instrument as eligible for extended sessions.');
     if(input.type==='LIMIT'&&(!numeric(input.limitPrice)||input.limitPrice<=0||input.limitPrice>10000000))throw fail(400,'Enter a positive limit price in the account currency.');
     if(input.type==='LIMIT'&&input.timeValidity!==undefined&&!['DAY','GOOD_TILL_CANCEL'].includes(input.timeValidity))throw fail(400,'Choose a valid order duration.');
     if(!Array.isArray(positions))throw fail(502,'Available shares could not be checked.');
@@ -149,7 +152,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(input.side==='BUY'&&(summary.cash.availableToTrade<=0||estimate!==null&&estimate>summary.cash.availableToTrade+1e-8))throw fail(400,'Not enough available cash for this order estimate.');
     const saleCost=input.side==='SELL'&&holding.cost!==null&&holding.shares>0?holding.cost*qty/holding.shares:null;
     const estimatedProfit=estimate!==null&&saleCost!==null?estimate-saleCost:null;
-    return {action:'ORDER',side:input.side,type:input.type,ticker:instrument.ticker,name:instrument.name,quantity:qty,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,estimate,
+    return {action:'ORDER',side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,estimate,
       currentShares:holding.shares,remainingShares:holding.shares===null?null:holding.shares+(input.side==='BUY'?qty:-qty),remainingCash:estimate===null?null:summary.cash.availableToTrade+(input.side==='SELL'?estimate:-estimate),estimatedProfit,estimatedProfitPercent:saleCost>0&&estimatedProfit!==null?estimatedProfit/saleCost*100:null,
       environment:ctx.a.environment,brokerId:ctx.a.snapshot.brokerId};
   }
@@ -175,9 +178,10 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     try{
       let result;
       if(d.action==='CANCEL'){await broker('/equity/orders/'+d.orderId,ctx.secret,{method:'DELETE'});tracker.record(id,ctx,d.order);result={...d,message:'Cancellation requested. Orders will refresh automatically to check the final result; a fill may have happened first.'};}
-      else{const body={ticker:d.ticker,quantity:d.quantity*(d.side==='SELL'?-1:1),...(d.type==='LIMIT'?{limitPrice:d.limitPrice,timeValidity:d.timeValidity}:{extendedHours:false})};
+      else{const body={ticker:d.ticker,quantity:d.quantity*(d.side==='SELL'?-1:1),...(d.type==='LIMIT'?{limitPrice:d.limitPrice,timeValidity:d.timeValidity}:{extendedHours:d.extendedHours===true})};
         const order=orderView(await broker('/equity/orders/'+d.type.toLowerCase(),ctx.secret,{method:'POST',body}));
         if(order.ticker!==d.ticker||order.side!==d.side||order.type!==d.type||!numeric(order.quantity)||Math.abs(order.quantity-d.quantity)>1e-8)throw fail(502,'The broker reply does not match the submitted order. Check Trading 212.');
+        if(d.type==='MARKET'&&order.extendedHours!==null&&order.extendedHours!==(d.extendedHours===true))throw fail(502,'The broker reply has a different trading session. Check Trading 212.');
         tracker.record(id,ctx,order);
         result={...d,order,message:order.status==='FILLED'?'Order filled.':order.status==='REJECTED'?'Order rejected by Trading 212.':'Order received by Trading 212. Its status will update automatically.'};}
       const state=result.order?.status==='REJECTED'?'REJECTED':'ACCEPTED';if(!isClosed())update(row.token,state,result);return {token:row.token,state,...result};

@@ -22,3 +22,5 @@
 .pm-size-mode{display:flex;gap:4px;padding:3px;border:1px solid var(--border);border-radius:5px;width:fit-content}.pm-size-mode button{background:transparent;border:0;border-radius:3px;padding:10px 16px;color:var(--muted);font:inherit;font-size:12px}.pm-size-mode button[aria-pressed=true]{color:var(--text);background:var(--panel-hover)}.pm-order-levels{display:grid;gap:8px}.pm-order-levels select{width:100%;min-width:0}.pm-holding-profit{grid-column:1/-1}.pm-order-holding .pm-holding-profit small{font-size:14px}.pm-order-status{font-size:12px;font-weight:600}.pm-cash-conversion{padding:10px 12px;background:var(--panel-hover);border-radius:4px}
 
 .pm-order-holding .green,.pm-order-review .green{color:var(--green)}.pm-order-holding .red,.pm-order-review .red{color:var(--red)}
+
+.pm-order-session{min-width:0}.pm-order-session select{min-width:0;width:100%}

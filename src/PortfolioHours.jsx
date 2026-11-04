@@ -31,7 +31,7 @@ function HoursDialog({item,hours,session,name,onClose}){
     {hours.data?.error&&<p role="status" className="amber">{hours.data.error}</p>}
     {session.phase==='unknown'&&<p>{!hours.connected?'Connect this account to read its instrument schedule.':'A current schedule covering this time is not available. Check Metadata read permission on the Trading 212 key.'}</p>}
     {item&&<><p>{item.exchange||'Exchange not supplied'} · {item.extendedHours?'Extended-hours eligible':'Regular session only'}</p><h3>Broker schedule</h3><ul className="pi-hours-events">{[previous,...upcoming].filter(Boolean).map((e,i)=><li key={e.at+e.type}><span>{SESSION_EVENTS[e.type]}{i===0&&previous?' · latest event':''}</span><time>{journalStamp(e.at)}</time></li>)}</ul></>}
-    <p className="pi-help">Scheduled hours from Trading 212. Halts and individual order acceptance are not monitored. Market orders in this desk use the regular session.</p>
+    <p className="pi-help">Scheduled hours from Trading 212. Halts and individual order acceptance are not monitored. Choose the trading session in the order ticket. Eligible market orders can include extended sessions; hours alone do not confirm that an order will fill.</p>
     <p className="pi-help">{hours.data?.fetchedAt?`Checked ${journalStamp(hours.data.fetchedAt)}. `:''}<a href="https://docs.trading212.com/api/instruments" target="_blank" rel="noreferrer">Trading 212 metadata ↗</a></p>
   </div></dialog>;
 }
