@@ -161,6 +161,29 @@ export function parsePriceHistory(payload,asset,range,now=Date.now()){
   const change=baseline>0?quote.price-baseline:null;
   return {quote,points,change,changePercent:change===null?null:change/baseline*100,from:points[0].at,to:cutoff,basis:range==='1D'?'Previous regular-session close':'First available price in this range',range,interval:PRICE_RANGES[range][0]};
 }
+export function resolvePortfolioPriceSymbol(key){
+  if(key==='LSE:VUAA')return {key,symbol:'VUAA.L',kind:'equity',portfolioDailyZone:'Europe/London'};
+  return resolveSymbol(key);
+}
+const londonDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'});
+function londonPortfolioCandles(result,asset,cutoff){
+  const m=result.meta,q=result.indicators?.quote?.[0],seen=new Set();
+  if(asset.key!=='LSE:VUAA'||asset.symbol!=='VUAA.L'||m.currency!=='USD'||m.exchangeName!=='LSE'||m.instrumentType!=='ETF'||m.exchangeTimezoneName!=='Europe/London')
+    throw Error('The USD London fund listing could not be verified.');
+  return (result.timestamp||[]).flatMap((t,i)=>{
+    const o=q?.open?.[i],c=q?.close?.[i],l=q?.low?.[i],h=q?.high?.[i];
+    if(!validNumber(t)||![o,c,l,h].every(n=>validNumber(n)&&n>0)||l>Math.min(o,c)||h<Math.max(o,c)||h<l)return [];
+    const sessionDate=londonDay.format(t*1000),at=Date.parse(exchangeInstant(sessionDate,16));
+    // Account valuations are sampled at 16:00 New York, after London's close.
+    // Use London's bar date, not the US holiday calendar. Never synthesize a
+    // missing session or expose a developing London bar at its opening time.
+    const end=m.currentTradingPeriod?.regular?.end;
+    const suppliedEnd=validNumber(end)&&londonDay.format((end-1)*1000)===sessionDate?end*1000:0;
+    if(t*1000>at||suppliedEnd>at||at>cutoff)return [];
+    if(seen.has(sessionDate))throw Error('Duplicate London daily price.');seen.add(sessionDate);
+    return [{timestamp:t,sessionDate,ohlc:[o,c,l,h]}];
+  }).sort((a,b)=>a.timestamp-b.timestamp);
+}
 export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
   const result=resultOf(payload,asset);
   if(asset.kind!=='equity'||result.meta.dataGranularity!=='1d'||!result.meta.currency)throw Error('Daily listing prices could not be verified.');
@@ -170,8 +193,10 @@ export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
   });
   // Yahoo closes are split-adjusted. Reconstruct prices in the share units
   // held at each date; dividend-adjusted closes are intentionally not used.
-  const points=parseCandles(payload,asset,'D',cutoff,{full:true}).map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
-  return {currency:result.meta.currency,points,provider:'Yahoo Finance',shareBasis:'historical',splitAdjustments:splits,basis:'Daily close; split adjustments reversed to historical share units'};
+  const rows=asset.portfolioDailyZone?londonPortfolioCandles(result,asset,cutoff):parseCandles(payload,asset,'D',cutoff,{full:true});
+  const points=rows.map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
+  if(!points.length)throw Error('No completed daily listing prices.');
+  return {currency:result.meta.currency,points,provider:'Yahoo Finance',shareBasis:'historical',splitAdjustments:splits,basis:asset.portfolioDailyZone?'London daily close sampled at 16:00 New York; split adjustments reversed to historical share units':'Daily close; split adjustments reversed to historical share units'};
 }
 export function parseBenchmarkPrices(payload,asset,cutoff=Date.now()){
   const r=resultOf(payload,asset),adjusted=r.indicators?.adjclose?.[0]?.adjclose;
@@ -237,7 +262,7 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
     catch{return {...unavailable('Stock price history is unavailable for this period.'),symbol,range,points:[]};}
   }
   async function portfolioPrices(symbol,from,to){
-    const asset=resolveSymbol(symbol);
+    const asset=resolvePortfolioPriceSymbol(symbol);
     if(!asset||asset.kind!=='equity'||!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error('Historical listing is unsupported.');
     const first=Math.floor((from-7*86400000)/86400000),last=Math.floor(to/86400000);
     const raw=await get(`portfolio-prices:${asset.symbol}:${first}:${last}`,3600000,async()=>{

@@ -7,6 +7,7 @@ const listings=[
   ['GOOG','US02079K1079'],['GOOGL','US02079K3059'],['META','US30303M1027'],
   ['SOFI','US83406F1021'],
   ['NFLX','US64110L1061'],
+  ['V','US92826C8394','NYSE'],
   ['QQQ','US46090E1038','NASDAQ','FUND'],
   ['SPY','US78462F1030','NYSEARCA','FUND'],
 ];
@@ -32,6 +33,15 @@ export function portfolioListing(holding,watchlist=[]) {
 }
 export function portfolioHoldingLabel(holding,watchlist=[]){
   return {name:holding.name,symbol:portfolioListing(holding,watchlist)?.symbol||null,brokerId:holding.ticker};
+}
+// Historical valuation also supports this exact USD London fund listing.
+// Vanguard identifies IE00BFMXXD54 / VUAA / VUAA.L under USD–London:
+// https://www.vanguard.co.uk/professional/product/etf/equity/9694/sp-500-ucits-etf-usd-accumulating
+// Keep it separate from the US-only interactive chart and order-quote resolver.
+export function portfolioHistoryListing(holding,watchlist=[]) {
+  if(holding?.ticker==='VUAAl_EQ'&&holding.isin==='IE00BFMXXD54'&&holding.instrumentCurrency==='USD')
+    return {id:'LSE:VUAA',symbol:'VUAA',ticker:'VUAA',exchange:'LSE',group:'FUND'};
+  return portfolioListing(holding,watchlist);
 }
 export function portfolioListingChoices(watchlist) {
   return [...new Map(watchlist.filter(chartableEntry).map(entry=>[entry.id,entry])).values()];

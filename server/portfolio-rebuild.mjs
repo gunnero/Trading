@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {portfolioListing} from '../src/data/portfolio-listings.mjs';
+import {portfolioHistoryListing} from '../src/data/portfolio-listings.mjs';
 import {portfolioLedger,rebuildPortfolioValues,verifyPortfolioSplits} from '../src/data/portfolio-rebuild.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {fundingHistoryPath} from './portfolio-funding.mjs';
@@ -71,7 +71,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
         if(ledger.instruments.length>100)throw Error('Automatic reconstruction currently supports up to 100 historical instruments.');
         s.instruments=ledger.instruments;s.stage='prices';
         for(let count=0;count<2&&s.priced<ledger.instruments.length;count++){
-          const instrument=ledger.instruments[s.priced],listing=portfolioListing(instrument,s.listings);
+          const instrument=ledger.instruments[s.priced],listing=portfolioHistoryListing(instrument,s.listings);
           if(!listing)throw Error('No verified historical price listing for '+instrument.name+' ('+instrument.ticker+'). Add its exact listing to the watchlist, then retry using saved history.');
           retryable=true;const history=await prices(listing.id,ledger.from,ledger.to);retryable=false;if(!current())return safeRead();
           verifyPortfolioSplits(ledger.splits.filter(split=>split.ticker===instrument.ticker),history);

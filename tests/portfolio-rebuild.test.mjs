@@ -8,7 +8,8 @@ import {portfolioLedger,rebuildPortfolioValues} from '../src/data/portfolio-rebu
 import {createPortfolioRebuild,dividendHistoryPath} from '../server/portfolio-rebuild.mjs';
 import {accountPerformance} from '../src/data/portfolio-history.mjs';
 import {createPortfolioFunding} from '../server/portfolio-funding.mjs';
-import {parsePortfolioPrices,resolveSymbol,createMarketService} from '../server/market-data.mjs';
+import {parsePortfolioPrices,resolveSymbol,resolvePortfolioPriceSymbol,supportsChart,createMarketService} from '../server/market-data.mjs';
+import {portfolioHistoryListing,portfolioListing} from '../src/data/portfolio-listings.mjs';
 import {yahooPayload} from './fixtures/market.mjs';
 const time=s=>Date.parse(s),day=86400000,NOW=time('2026-10-23T22:00Z');
 const instrument={ticker:'AMD_US_EQ',name:'Advanced Micro Devices',currency:'USD',isin:'US0079031078'};
@@ -66,6 +67,71 @@ test('daily price service uses fixed Yahoo daily history, a bounded shared cache
  const calls=[],service=createMarketService({now:()=>NOW,fetcher:async url=>{calls.push(url);return new Response(JSON.stringify(pricesPayload()),{headers:{'content-type':'application/json'}});}});
  assert.equal((await service.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW)).points.length,2);await service.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW);assert.equal(calls.length,1);const url=new URL(calls[0]);assert.equal(url.host,'query1.finance.yahoo.com');assert.equal(url.searchParams.get('interval'),'1d');assert.equal(url.searchParams.get('events'),'splits');
  const failed=createMarketService({now:()=>NOW,fetcher:async()=>new Response('',{status:429})});await assert.rejects(()=>failed.portfolioPrices('NASDAQ:AMD',NOW-10*day,NOW),/unavailable/);
+});
+
+const vuaa={ticker:'VUAAl_EQ',isin:'IE00BFMXXD54',instrumentCurrency:'USD'};
+test('historical listings identify USD London VUAA and NYSE Visa without borrowing another share class',()=>{
+ assert.equal(portfolioHistoryListing(vuaa).id,'LSE:VUAA');
+ assert.equal(portfolioHistoryListing({ticker:'V_US_EQ',isin:'US92826C8394',instrumentCurrency:'USD'}).id,'NYSE:V');
+ assert.equal(portfolioHistoryListing({ticker:'V_US_EQ',isin:'WRONG',instrumentCurrency:'USD'}),null);
+ for(const change of [{isin:''},{isin:'WRONG'},{instrumentCurrency:'GBP'},{instrumentCurrency:'GBp'},{instrumentCurrency:'EUR'},{ticker:'VUAGl_EQ'},{ticker:'VUAAd_EQ'},{ticker:'VUAA'},{ticker:'VUAAL_EQ'}])
+  assert.equal(portfolioHistoryListing({...vuaa,...change}),null);
+ assert.equal(portfolioListing(vuaa),null);assert.equal(resolveSymbol('LSE:VUAA'),null);assert.equal(supportsChart('LSE:VUAA','D'),false);
+ assert.equal(resolvePortfolioPriceSymbol('LSE:VUAG'),null);assert.equal(resolvePortfolioPriceSymbol('XETR:VUAA'),null);
+});
+function londonPayload(dates=['2026-10-20T07:00Z','2026-10-21T07:00Z']){
+ const payload=pricesPayload(),r=payload.chart.result[0];
+ Object.assign(r.meta,{symbol:'VUAA.L',currency:'USD',exchangeName:'LSE',instrumentType:'ETF',exchangeTimezoneName:'Europe/London'});
+ delete r.meta.currentTradingPeriod;delete r.events;
+ r.timestamp=dates.map(d=>time(d)/1000);const closes=dates.map((_,i)=>100+i);
+ r.indicators.quote[0]={open:closes,close:closes,low:closes,high:closes};return payload;
+}
+test('London daily history uses the account valuation time across DST without US holiday filtering or future values',()=>{
+ const asset=resolvePortfolioPriceSymbol('LSE:VUAA');
+ const dates=['2026-07-03T07:00Z','2026-10-23T07:00Z','2026-10-26T08:00Z','2026-11-02T08:00Z']; // July 3 is a US holiday, not a London holiday.
+ const payload=londonPayload(dates),cutoff=time('2026-11-02T21:00Z');
+ const history=parsePortfolioPrices(payload,asset,cutoff);
+ assert.deepEqual(history.points.map(p=>new Date(p.at).toISOString()),['2026-07-03T20:00:00.000Z','2026-10-23T20:00:00.000Z','2026-10-26T20:00:00.000Z','2026-11-02T21:00:00.000Z']);
+ assert.deepEqual(history.points.map(p=>p.value),[100,101,102,103]); // Never the dividend-adjusted series.
+ assert.equal(parsePortfolioPrices(payload,asset,cutoff-1).points.length,3);
+ assert.equal(parsePortfolioPrices(payload,asset,time('2026-11-02T10:00Z')).points.length,3);
+ payload.chart.result[0].meta.currentTradingPeriod={regular:{end:time('2026-11-02T22:00Z')/1000}};
+ assert.equal(parsePortfolioPrices(payload,asset,cutoff).points.length,3); // A supplied later session end is respected.
+ assert.equal(parsePortfolioPrices(payload,asset,cutoff+2*3600000).points.length,3); // Never backdate a later close into an earlier account value.
+});
+test('London daily history rejects a different symbol, currency, exchange, instrument or ambiguous daily bar',()=>{
+ const asset=resolvePortfolioPriceSymbol('LSE:VUAA');
+ for(const meta of [{symbol:'VUAG.L'},{currency:'GBp'},{currency:'EUR'},{exchangeName:'GER'},{instrumentType:'EQUITY'},{exchangeTimezoneName:'America/New_York'},{dataGranularity:'1h'}]){
+  const payload=londonPayload();Object.assign(payload.chart.result[0].meta,meta);assert.throws(()=>parsePortfolioPrices(payload,asset,NOW));
+ }
+ assert.throws(()=>parsePortfolioPrices(londonPayload(['2026-10-20T07:00Z','2026-10-20T07:00Z']),asset,NOW),/Duplicate/);
+ const missing=londonPayload();missing.chart.result[0].indicators.quote[0].close=[null,null];assert.throws(()=>parsePortfolioPrices(missing,asset,NOW),/No completed/);
+});
+test('London USD history uses the fixed provider and shared cache without enabling arbitrary overseas listings',async()=>{
+ const calls=[],service=createMarketService({now:()=>NOW,fetcher:async url=>{calls.push(url);return new Response(JSON.stringify(londonPayload()),{headers:{'content-type':'application/json'}});}});
+ const history=await service.portfolioPrices('LSE:VUAA',NOW-10*day,NOW);assert.equal(history.currency,'USD');assert.equal(history.points.length,2);
+ await service.portfolioPrices('LSE:VUAA',NOW-10*day,NOW);assert.equal(calls.length,1);
+ const url=new URL(calls[0]);assert.equal(url.host,'query1.finance.yahoo.com');assert.equal(url.pathname,'/v8/finance/chart/VUAA.L');assert.equal(url.searchParams.get('interval'),'1d');assert.equal(url.searchParams.get('events'),'splits');
+ await assert.rejects(()=>service.portfolioPrices('LSE:VUAG',NOW-10*day,NOW),/unsupported/);assert.equal(calls.length,1);
+});
+test('a saved price-listing blocker resumes with retained imports, anchor and earlier prices after restart',async t=>{
+ const f=fixture(t,{disk:true}),visa={ticker:'V_US_EQ',name:'Visa',currency:'USD',isin:'US92826C8394'};
+ // Retain the original AMD position and add two independent USD listings.
+ f.input.orders.push({...trade(3,'BUY',1,100,'2026-10-20T14:00Z'),order:{id:3,side:'BUY',status:'FILLED',instrument:{...vuaa,currency:'USD',name:'USD fund'}}},
+  {...trade(4,'BUY',1,100,'2026-10-20T14:00Z'),order:{id:4,side:'BUY',status:'FILLED',instrument:visa}});
+ f.input.snapshot.cash-=200;f.input.snapshot.holdings.push({ticker:vuaa.ticker,quantity:1},{ticker:visa.ticker,quantity:1});
+ f.service.start('a',{});await f.service.sync('a');
+ const saved=JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state);
+ saved.status='blocked';saved.stage='prices';saved.retryAt=null;saved.priced=1;saved.message='No verified historical price listing';
+ f.db.prepare('UPDATE portfolio_rebuild_state SET state=?').run(JSON.stringify(saved));
+ f.db.prepare('INSERT INTO portfolio_rebuild_items VALUES(?,?,?,?,?)').run('a',saved.scan,'prices','AMD_US_EQ',JSON.stringify(priceHistory()));
+ const oldRows=f.db.prepare('SELECT * FROM portfolio_rebuild_items ORDER BY kind,item_id').all(),priceCalls=[];
+ f.options.prices=async key=>{priceCalls.push(key);assert.ok(['LSE:VUAA','NYSE:V'].includes(key));return priceHistory();};
+ f.restart(true);f.service.start('a',{});await f.service.sync('a');
+ assert.deepEqual(priceCalls,['LSE:VUAA','NYSE:V']);assert.equal(f.calls.length,3);assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').pages,3);assert.equal(f.service.read('a').anchorAt,saved.anchor.fetchedAt);
+ const rows=f.db.prepare('SELECT * FROM portfolio_rebuild_items ORDER BY kind,item_id').all();for(const row of oldRows)assert.deepEqual(rows.find(r=>r.kind===row.kind&&r.item_id===row.item_id),row);
+ assert.deepEqual(f.service.values('a').map(p=>p.value),[1000,1070,1142,1123]);
+ f.restart(true);assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').at(-1).value,1123);
 });
 
 test('unfilled order identifiers cannot overwrite an execution with the same numeric identifier',async t=>{
