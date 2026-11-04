@@ -38,7 +38,21 @@ export function portfolioHoldingLabel(holding,watchlist=[]){
 // Vanguard identifies IE00BFMXXD54 / VUAA / VUAA.L under USD–London:
 // https://www.vanguard.co.uk/professional/product/etf/equity/9694/sp-500-ucits-etf-usd-accumulating
 // Keep it separate from the US-only interactive chart and order-quote resolver.
+// Historical broker IDs retained after completed business combinations. Require
+// the resulting common-share ISIN, never the old SPAC units or warrants.
+// https://ir.bigbear.ai/news-events/press-releases/detail/26/bigbear-ai-announces-completion-of-business-combination
+// https://s27.q4cdn.com/787306631/files/doc_news/Hims-Hers-Press-Release-Deal-Close-FINAL.pdf
+// Trading 212 verifies current NYSE listings and ISINs at /invest/BBAI.US and /invest/HIMS.US.
+const historyAliases={
+  GIG_US_EQ:{symbol:'BBAI',isin:'US08975B1098'},
+  OAC_US_EQ:{symbol:'HIMS',isin:'US4330001060'},
+};
 export function portfolioHistoryListing(holding,watchlist=[]) {
+  if(holding&&Object.hasOwn(historyAliases,holding.ticker)){
+    const {symbol,isin}=historyAliases[holding.ticker];
+    if(holding.isin!==isin||holding.instrumentCurrency!=='USD')return null;
+    return {id:`NYSE:${symbol}`,symbol,ticker:symbol,exchange:'NYSE',group:'STOCKS',providerCheck:{exchange:'NYSE',currency:'USD',type:'EQUITY'}};
+  }
   if(holding?.ticker==='VUAAl_EQ'&&holding.isin==='IE00BFMXXD54'&&holding.instrumentCurrency==='USD')
     return {id:'LSE:VUAA',symbol:'VUAA',ticker:'VUAA',exchange:'LSE',group:'FUND'};
   // Trading 212 and Invesco identify this accumulating USD share class on SIX:

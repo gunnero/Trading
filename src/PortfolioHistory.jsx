@@ -7,6 +7,7 @@ import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {PortfolioValueChart} from './PortfolioValueChart';
 
 const percent=v=>Number.isFinite(v)?`${v>0?'+':''}${v.toFixed(2)}%`:'—';
+const listingPriority=status=>['unmatched','unavailable'].includes(status)?0:status==='saved'?2:1;
 async function request(accountId,range,signal,action='',body={}){
   const path=`/api/portfolio/accounts/${accountId}/history${action?'/'+action:'?'+new URLSearchParams({range})}`;
   const res=await apiFetch(path,{signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),...(action?{method:'POST',headers:{'content-type':'application/json','x-opening-bell-client':'web'},body:JSON.stringify({...body,range})}:{})});
@@ -70,7 +71,7 @@ export function PortfolioHistory({account,watchlist=[]}){
       {data?.rebuild?.message&&<p role="status">{data.rebuild.message}</p>}
       {rebuildState?.listingMessage&&<p role="status">{rebuildState.listingMessage}</p>}
       {rebuildState?.listingChecks?.length>0&&<details open={rebuildState.listingChecks.some(i=>['unmatched','unavailable'].includes(i.status))} className="pm-listing-checks"><summary>Historical instruments · {rebuildState.priced} / {rebuildState.instruments} ready</summary>
-        <ul>{rebuildState.listingChecks.map(i=><li key={i.ticker}><strong>{i.name}</strong> · {i.ticker} · {i.currency}<br/>{i.status==='saved'?`Prices saved · ${i.listing||'verified listing'}`:i.status==='pending'?`Waiting for prices · ${i.listing}`:i.status==='unavailable'?`${i.listing} · ${i.message}`:'No exact listing verified. Automatic matching needs the same instrument, currency and exchange; a similar fund is not substituted.'}</li>)}</ul>
+        <ul>{[...rebuildState.listingChecks].sort((a,b)=>listingPriority(a.status)-listingPriority(b.status)).map(i=><li key={i.ticker}><strong>{i.name}</strong> · {i.ticker} · {i.currency}<br/>{i.status==='saved'?`Prices saved · ${i.listing||'verified listing'}`:i.status==='pending'?`Waiting for prices · ${i.listing}`:i.status==='unavailable'?`${i.listing} · ${i.message}`:'No exact listing verified. Automatic matching needs the same instrument, currency and exchange; a similar fund is not substituted.'}</li>)}</ul>
       </details>}
       {data?.rebuild?.status==='ready'&&<p>Reconstructed history is available. Estimated points are identified on the chart.</p>}
     </details>}

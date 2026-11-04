@@ -71,6 +71,25 @@ test('daily price service uses fixed Yahoo daily history, a bounded shared cache
 
 const vuaa={ticker:'VUAAl_EQ',isin:'IE00BFMXXD54',instrumentCurrency:'USD'};
 const eqac={ticker:'EQACs_EQ',isin:'IE00BFZXGZ54',instrumentCurrency:'USD'};
+test('verified BigBear and Hims historical broker IDs require the resulting common-share ISIN and USD',()=>{
+ for(const [ticker,isin,symbol] of [['GIG_US_EQ','US08975B1098','BBAI'],['OAC_US_EQ','US4330001060','HIMS']]){
+  const h={ticker,isin,instrumentCurrency:'USD'},listing=portfolioHistoryListing(h);
+  assert.equal(listing.id,'NYSE:'+symbol);assert.deepEqual(listing.providerCheck,{exchange:'NYSE',currency:'USD',type:'EQUITY'});
+  assert.equal(portfolioListing(h),null,'historical aliases do not change trading or interactive chart resolution');
+  for(const change of [{isin:''},{isin:'WRONG'},{instrumentCurrency:'EUR'},{instrumentCurrency:'GBp'},{ticker:ticker.replace('_US_EQ','W_US_EQ')}])assert.equal(portfolioHistoryListing({...h,...change}),null);
+  assert.equal(portfolioHistoryListing({...h,isin:'WRONG'},[{id:'NASDAQ:'+ticker.split('_')[0],symbol:ticker.split('_')[0],ticker:ticker.split('_')[0],exchange:'NASDAQ',group:'STOCKS'}]),null,'an old-symbol watchlist row cannot override an alias identity mismatch');
+ }
+});
+test('historical alias prices verify the current symbol, NYSE venue, common equity type and currency',()=>{
+ for(const [ticker,isin,symbol] of [['GIG_US_EQ','US08975B1098','BBAI'],['OAC_US_EQ','US4330001060','HIMS']]){
+  const listing=portfolioHistoryListing({ticker,isin,instrumentCurrency:'USD'}),asset=resolvePortfolioPriceSymbol(listing.id,listing.providerCheck),payload=pricesPayload();
+  Object.assign(payload.chart.result[0].meta,{symbol,currency:'USD',instrumentType:'EQUITY',exchangeName:'NYQ',exchangeTimezoneName:'America/New_York'});
+  assert.equal(parsePortfolioPrices(payload,asset,NOW).points.length,2);
+  for(const change of [{symbol:ticker.split('_')[0]},{exchangeName:'NMS'},{currency:'EUR'},{instrumentType:'ETF'},{exchangeTimezoneName:'Europe/London'}]){
+   const wrong=structuredClone(payload);Object.assign(wrong.chart.result[0].meta,change);assert.throws(()=>parsePortfolioPrices(wrong,asset,NOW));
+  }
+ }
+});
 test('Swiss accumulating EQAC is identified by broker ID, ISIN and USD without changing chart or trade mappings',()=>{
  assert.equal(portfolioHistoryListing(eqac).id,'SIX:EQAC');
  for(const change of [{isin:''},{isin:'IE0032077012'},{instrumentCurrency:'CHF'},{instrumentCurrency:'EUR'},{ticker:'EQACl_EQ'},{ticker:'EQAC_US_EQ'},{ticker:'EQACS_EQ'}])assert.equal(portfolioHistoryListing({...eqac,...change}),null);
