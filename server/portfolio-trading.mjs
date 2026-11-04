@@ -9,19 +9,20 @@ const activeStatuses=['LOCAL','UNCONFIRMED','CONFIRMED','NEW','PARTIALLY_FILLED'
 const terminalStatuses=['CANCELLED','FILLED','REJECTED','REPLACED'];
 const numeric=value=>typeof value==='number'&&Number.isFinite(value);
 function quantity(value){if(!numeric(value)||value<=0||value>1000000||Number(value.toFixed(8))!==value)throw fail(400,'Enter a positive share quantity with up to 8 decimal places.');return value;}
-function orderView(order){
+export function orderView(order){
   const ticker=order?.instrument?.ticker||order?.ticker;
-  if(!Number.isSafeInteger(order?.id)||order.id<0||typeof ticker!=='string'||!['BUY','SELL'].includes(order.side)||!['MARKET','LIMIT','STOP','STOP_LIMIT'].includes(order.type)||![...activeStatuses,...terminalStatuses,'CANCELLING'].includes(order.status)||(!numeric(order.quantity)&&!(order.strategy==='VALUE'&&numeric(order.value))))throw fail(502,'The broker returned an incomplete order. Check Trading 212.');
-  return {id:order.id,ticker,name:order.instrument?.name||ticker,side:order.side,type:order.type,status:order.status,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:order.limitPrice??null,currency:order.currency||order.instrument?.currency,createdAt:order.createdAt||null};
+  if(!Number.isSafeInteger(order?.id)||order.id<0||typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker)||!['BUY','SELL'].includes(order.side)||!['MARKET','LIMIT','STOP','STOP_LIMIT'].includes(order.type)||![...activeStatuses,...terminalStatuses,'CANCELLING'].includes(order.status)||(!numeric(order.quantity)&&!(order.strategy==='VALUE'&&numeric(order.value))))throw fail(502,'The broker returned an incomplete order. Check Trading 212.');
+  const label=order.instrument?.name||order.name,code=value=>typeof value==='string'&&/^[A-Z]{3}$/.test(value)?value:null;
+  return {id:order.id,ticker,name:typeof label==='string'?label.slice(0,160):ticker,strategy:order.strategy||'QUANTITY',side:order.side,type:order.type,status:order.status,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:numeric(order.limitPrice)?order.limitPrice:null,currency:code(order.currency)||code(order.instrument?.currency),priceCurrency:code(order.instrument?.currency)||code(order.priceCurrency)||code(order.currency),createdAt:typeof order.createdAt==='string'&&Number.isFinite(Date.parse(order.createdAt))?order.createdAt:null};
 }
 
-export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances}){
+export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_trading_settings(account_id TEXT PRIMARY KEY,generation TEXT NOT NULL,enabled INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_order_attempts(token TEXT PRIMARY KEY,account_id TEXT NOT NULL,generation TEXT NOT NULL,created_at INTEGER NOT NULL,state TEXT NOT NULL,detail TEXT NOT NULL);`);
   // A process may have died after sending an order and before saving its reply.
   db.prepare("UPDATE portfolio_order_attempts SET state='UNKNOWN' WHERE state='SENDING'").run();
   const catalogs=new Map(),balances=new Map(),locks=new Set(),readBackoff=new Map();
-  const tracker=createOrderTracker(db,{now,broker,current,orderView,refreshBalances:async(id,ctx)=>{
+  const tracker=createOrderTracker(db,{now,broker,current,orderView,onObserve,refreshBalances:async(id,ctx)=>{
     balances.delete(id);const fresh=await freshBalances(id,ctx);current(id,ctx);
     if(onBalances)await onBalances(id,fresh,ctx.record.generation);
   }});
@@ -36,15 +37,15 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const a=account(id),record=credential(id);
     if(!record||a.platform!=='Trading 212'||a.snapshot?.source!=='api')throw fail(400,'Connect this Trading 212 account first.');
     if(requireEnabled&&!enabled(id))throw fail(403,'Enable trading for this account first.');
-    return {a,record,secret:decode(record,id)};
+    return {a,record,requireEnabled,secret:decode(record,id)};
   }
-  function current(id,ctx){if(isClosed()||credential(id)?.generation!==ctx.record.generation||!enabled(id))throw fail(409,'The account connection or trading permission changed. Review a new order.');}
+  function current(id,ctx){if(isClosed()||credential(id)?.generation!==ctx.record.generation||ctx.requireEnabled&&!enabled(id))throw fail(409,'The account connection or trading permission changed. Review a new order.');}
   async function broker(path,secret,{method='GET',body}={}){
     const allowed=method==='GET'&&(path==='/equity/account/summary'||path==='/equity/positions'||path==='/equity/metadata/instruments'||path==='/equity/orders'||/^\/equity\/orders\/\d+$/.test(path)||path.startsWith('/equity/history/orders?')&&orderHistoryPath(path)===path)||method==='POST'&&['/equity/orders/market','/equity/orders/limit'].includes(path)||method==='DELETE'&&/^\/equity\/orders\/\d+$/.test(path);
     if(!allowed||!bases[secret.environment])throw fail(400,'Unsupported trading request.');
     try{
       const res=await fetcher(bases[secret.environment]+path,{method,redirect:'error',signal:AbortSignal.timeout(timeoutMs),headers:{Accept:'application/json',Authorization:'Basic '+Buffer.from(secret.apiKey+':'+secret.apiSecret).toString('base64'),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-      if(!res.ok){const error=fail(502,res.status===403?'Trading 212 denied access. Enable Metadata, Orders: Read and Orders: Execute permissions for this account.':res.status===400?'Trading 212 rejected the order parameters. Check quantity, cash, price and instrument restrictions.':res.status===429?'Trading 212 is rate limiting requests. Wait before trying again.':res.status===401?'Trading 212 rejected the API credentials. Reconnect this account.':'Trading 212 could not confirm this request.');error.definite=[400,401,403,404,429].includes(res.status);error.upstreamStatus=res.status;throw error;}
+      if(!res.ok){const error=fail(502,res.status===403?'Trading 212 denied access. Enable Metadata, Orders: Read and Orders: Execute permissions for this account.':res.status===400?'Trading 212 rejected the order parameters. Check quantity, cash, price and instrument restrictions.':res.status===429?'Trading 212 is rate limiting requests. Wait before trying again.':res.status===401?'Trading 212 rejected the API credentials. Reconnect this account.':'Trading 212 could not confirm this request.');error.definite=[400,401,403,404,429].includes(res.status);error.upstreamStatus=res.status;const seconds=Number(res.headers.get('retry-after')),reset=Number(res.headers.get('x-ratelimit-reset'));error.retryMs=Math.min(86400000,Math.max(60000,Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(res.headers.get('retry-after'))-now())||0,Number.isFinite(reset)?reset*1000-now():0));if(method==='GET'&&res.status===403)error.message=path.includes('/history/')?'Final status needs History: Orders permission on the API key.':'Trading 212 denied read access. Check this account’s API read permissions.';throw error;}
       if(method==='DELETE')return null;
       if(!res.headers.get('content-type')?.includes('application/json'))throw Error('Invalid response');
       const reader=res.body.getReader(),chunks=[];let size=0;
@@ -71,13 +72,24 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     return items;
   }
   async function search(id,q){const ctx=context(id);if(typeof q!=='string'||q.length<2||q.length>80)return {items:[]};const query=q.toLowerCase();return {items:(await catalog(id,ctx)).filter(r=>(r.name+' '+r.ticker+' '+r.isin).toLowerCase().includes(query)).slice(0,40)};}
-  async function pending(id){return exclusive(id,()=>{
-    const ctx=context(id);
-    // Continue accepted attempts made before order tracking was introduced.
+  async function track(id,requireEnabled){
+    const ctx=context(id,requireEnabled);
+    // Continue accepted attempts after a restart without replaying old alerts.
     const attempts=db.prepare("SELECT detail FROM portfolio_order_attempts WHERE account_id=? AND generation=? AND state IN ('ACCEPTED','REJECTED') ORDER BY created_at DESC LIMIT 100").all(id,ctx.record.generation).map(row=>JSON.parse(row.detail)).filter(detail=>detail.order).map(detail=>orderView(detail.order));
     tracker.restore(id,ctx,attempts);
-    return tracker.poll(id,ctx);
-  });}
+    const result=await tracker.poll(id,ctx);
+    if(onObserve)for(const order of result.orders)onObserve(id,ctx.record.generation,order,null,false);
+    return result;
+  }
+  async function pending(id){return exclusive(id,()=>track(id,true));}
+  async function monitor(id){
+    if(isClosed()||locks.has(id))return;
+    const record=credential(id);if(!record)return;
+    const restore=db.prepare("SELECT 1 FROM portfolio_order_attempts WHERE account_id=? AND generation=? AND state IN ('ACCEPTED','REJECTED') LIMIT 1").get(id,record.generation);
+    if(!enabled(id)&&!tracker.needsMonitoring(id,record.generation,!!restore))return;
+    return exclusive(id,()=>track(id,false));
+  }
+  function tracking(id){const record=credential(id);return record?tracker.read(id,record.generation):null;}
   async function freshBalances(id,ctx){
     let fresh=balances.get(id);
     if(!fresh||fresh.generation!==ctx.record.generation||now()-fresh.at>5000){
@@ -169,10 +181,10 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
         tracker.record(id,ctx,order);
         result={...d,order,message:order.status==='FILLED'?'Order filled.':order.status==='REJECTED'?'Order rejected by Trading 212.':'Order received by Trading 212. Its status will update automatically.'};}
       const state=result.order?.status==='REJECTED'?'REJECTED':'ACCEPTED';if(!isClosed())update(row.token,state,result);return {token:row.token,state,...result};
-    }catch(error){const state=error.definite?'REJECTED':'UNKNOWN',detail={...d,message:error.definite?error.message:'The result is uncertain. Do not repeat this order. Check orders and trade history in Trading 212, then mark this attempt reviewed.'};if(!isClosed())update(row.token,state,detail);return {token:row.token,state,...detail};}
+    }catch(error){const state=error.definite?'REJECTED':'UNKNOWN',detail={...d,message:error.definite?error.message:'The result is uncertain. Do not repeat this order. Check orders and trade history in Trading 212, then mark this attempt reviewed.'};if(!isClosed()){update(row.token,state,detail);if(state==='REJECTED')onRejected?.(id,ctx.record.generation,{...detail,token:row.token});}return {token:row.token,state,...detail};}
   });}
   function acknowledge(id,input){context(id,false);const row=saved(input.token);if(!row||row.account_id!==id||row.state!=='UNKNOWN'||input.checkedBroker!==true)throw fail(400,'Confirm you checked this attempt in Trading 212.');update(row.token,'REVIEWED',{...row.detail,message:'Marked reviewed after checking Trading 212. This does not assert an execution outcome.'});return read(id);}
   function assertIdle(id){if(locks.has(id))throw fail(409,'Wait for the current order operation before changing this account.');}
   function remove(id){assertIdle(id);catalogs.delete(id);balances.delete(id);tracker.remove(id);db.prepare('DELETE FROM portfolio_trading_settings WHERE account_id=?').run(id);db.prepare('DELETE FROM portfolio_order_attempts WHERE account_id=?').run(id);}
-  return {read,configure,search,pending,position,preview,submit,acknowledge,assertIdle,remove};
+  return {read,configure,search,pending,monitor,tracking,position,preview,submit,acknowledge,assertIdle,remove};
 }

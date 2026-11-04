@@ -1,3 +1,5 @@
+import {usePortfolioNotifications,PortfolioNotice} from './PortfolioNotifications';
+const PortfolioActivity=React.lazy(()=>import('./PortfolioActivity'));
 import TransfersNet from './TransfersNet';
 import {PageHeader,PageNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
@@ -40,7 +42,7 @@ import {WATCH_GROUPS, WATCH_EXCHANGES, overviewWatchlist, readWatchlist, newWatc
 import {DrawingProvider} from './ChartDrawings';
 import {ChartSettingsProvider,ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 
-const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'portfolio', title: 'Portfolio Manager', icon: Briefcase }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
+const sections = [{ id: 'overview', title: 'Overview', icon: SquaresFour }, { id: 'levels', title: 'Key levels', icon: SlidersHorizontal }, { id: 'briefing', title: 'Economic Calendar', icon: CalendarBlank }, { id: 'earnings', title: 'Earnings', icon: CalendarBlank }, { id: 'news', title: 'News', icon: Newspaper }, { id: 'portfolio', title: 'Portfolio Manager', icon: Briefcase }, { id: 'activity', title: 'Activity & alerts', icon: Bell }, { id: 'journal', title: 'Trade journal', icon: Notebook }, { id: 'review', title: 'Session review', icon: CalendarBlank }, { id: 'sentiment', title: 'Fear & Greed', icon: Gauge }, { id: 'settings', title: 'Settings', icon: Gear }];
 function currentRoute() {
   const route = window.location.hash.slice(1);
   if (route.split('/')[0] === 'transfers') return 'settings/transfers';
@@ -91,6 +93,7 @@ function SessionDesk({workspace}) {
   const setManual=manualSentiment=>workspace.update({manualSentiment});
   const [dialog, setDialog] = useState(null);
   useEffect(()=>{if(!user.mfaEnabled)navigate('settings/account');},[]);
+  const notifications=usePortfolioNotifications();
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const sidebarRef=useRef(null);
@@ -128,7 +131,7 @@ function SessionDesk({workspace}) {
   const symbol=['QQQ','SPY'].includes(focus)?focus:selectedStock?.symbol;
   const marketKey=['QQQ','SPY'].includes(focus)?focus:selectedStock?quoteKey(selectedStock):null;
   const [timeframe,setTimeframe]=useSavedTimeframe(marketKey,{primary:true});
-  const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['portfolio','transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
+  const quotes=useMarketQuotes(watchlist,watchlistOpen,[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['activity','portfolio','transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
   const chart=useMarketChart(marketKey,timeframe,section==='overview'&&!gridActive);
   const quoteResult=quotes[marketKey],quote=quoteResult?.quote;
   const setup=scan.byKey[marketKey]||{stage:scan.status==='loading'?'loading':symbol?'no-levels':'waiting-break',timeframe:setupInterval};
@@ -172,7 +175,7 @@ function SessionDesk({workspace}) {
   return <div className="app-shell" data-section={section}>
     <aside ref={sidebarRef} id="desk-navigation" role={menuOpen?'dialog':undefined} aria-modal={menuOpen||undefined} aria-label="Navigation" className={`sidebar ${menuOpen ? 'is-open' : ''}`}>
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
-      <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${section === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={section === id ? 'page' : undefined}><Icon size={22} weight={section === id ? 'regular' : 'light'}/><span>{title}</span></button>)}</nav>
+      <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${section === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={section === id ? 'page' : undefined}><Icon size={22} weight={section === id ? 'regular' : 'light'}/><span>{title}</span>{id==='activity'&&notifications.feed?.unread>0&&<span className="pa-badge" aria-label={`${notifications.feed.unread} unread order alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</span>}</button>)}</nav>
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">
@@ -184,10 +187,11 @@ function SessionDesk({workspace}) {
       </div>
     </aside>
     {menuOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)}/>}
-    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['portfolio','transfers','levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More</span></button></nav>
+    <nav className="mobile-bottom-nav" aria-label="Quick navigation" inert={menuOpen||undefined}>{sections.filter(item=>['overview','briefing','news'].includes(item.id)).map(({id,title,icon:Icon})=><button key={id} aria-label={title} aria-current={section===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={21}/><span>{id==='briefing'?'Calendar':title}</span></button>)}<button aria-label="More navigation" aria-current={['activity','portfolio','transfers','levels','review','settings','journal','earnings','sentiment'].includes(section)?'page':undefined} aria-expanded={menuOpen} aria-controls="desk-navigation" onClick={()=>setMenuOpen(true)}><List size={21}/><span>More{notifications.feed?.unread>0&&<b className="pa-badge" aria-label={`${notifications.feed.unread} unread order alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</b>}</span></button></nav>
     <div className="main-shell" inert={menuOpen||undefined}>
       <MarketClock compact onOpen={()=>setDialog('market-hours')}/>
       <PageNavigation.Provider value={{expanded:menuOpen,open:()=>setMenuOpen(true)}}><main>
+        <PortfolioNotice event={notifications.notice} onOpen={()=>{navigate('activity');notifications.dismiss();}} onDismiss={notifications.dismiss}/>
         {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>navigate('settings/account')}>Set up security <CaretRight size={15}/></button></div>}
 
         {section === 'overview' && <>
@@ -213,7 +217,8 @@ function SessionDesk({workspace}) {
           <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
-        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager sheet={sheet} watchlist={watchlist} setupInterval={setupInterval}/></React.Suspense>}
+        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onActivity={()=>navigate('activity')}/></React.Suspense>}
+        {section === 'activity' && <React.Suspense fallback={<p role="status">Loading activity…</p>}><PortfolioActivity notifications={notifications} onPortfolios={()=>navigate('portfolio')}/></React.Suspense>}
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={route.split('/')[1]==='plans'?'plans':'trades'} tradeId={route.split('/')[2]} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}

@@ -1,0 +1,52 @@
+import {chromium,expect} from '@playwright/test';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {testRuntime} from './qa-runtime.mjs';
+import {testFetch} from '../tests/fixtures/auth.mjs';
+import {mockMarket} from '../tests/fixtures/market.mjs';
+import {mockBriefing} from '../tests/fixtures/briefing.mjs';
+import {activityDateBounds} from '../src/data/portfolio-activity.mjs';
+
+const runtime=await testRuntime(),dir='docs/qa/portfolio-activity';mkdirSync(dir,{recursive:true});
+const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',env:{...process.env,LD_LIBRARY_PATH:'/home/gunner/.cache/mediahub/browser-libs/root/usr/lib/x86_64-linux-gnu'}});
+const checks=[],errors=[],mark=s=>{checks.push(s);console.log('PASS '+s);},read=async path=>(await testFetch(runtime.url+path)).json();
+try{
+ for(const path of ['/api/portfolio/activity','/api/portfolio/notifications'])expect((await fetch(runtime.url+path)).status).toBe(401);
+ expect((await testFetch(runtime.url+'/api/portfolio/notifications/read',{method:'POST',headers:{'content-type':'application/json','x-opening-bell-client':'web','X-CSRF-Token':'invalid'},body:'{"through":0}'})).status).toBe(403);
+ expect((await testFetch(runtime.url+'/api/portfolio/activity?kind=bad')).status).toBe(400);
+ expect((await read('/api/portfolio/notifications')).unread).toBe(0);
+ mark('Activity and notifications enforce authentication, CSRF and filter validation');
+ const before=await read('/api/workspace'),page=await browser.newPage({viewport:{width:1488,height:1200},reducedMotion:'reduce'});
+ page.on('pageerror',e=>errors.push(e.message));await mockMarket(page);await mockBriefing(page);
+ const at=Date.parse('2026-11-03T23:30:00Z'),people=[{id:'p1',name:'Hristijan Fixture'},{id:'p2',name:'Martin Fixture'}],accounts=[{id:'a1',personId:'p1',label:'Invest',environment:'live'},{id:'a2',personId:'p2',label:'Invest',environment:'demo'}];
+ const trades=Array.from({length:51},(_,i)=>({id:i+1,orderId:123,ticker:'AMD_US_EQ',name:'Advanced Micro Devices',side:'SELL',at,quantity:1.25,price:105,priceCurrency:'USD',currency:'EUR',realized:i===50?null:0,charges:i===50?null:[{name:'CURRENCY_CONVERSION_FEE',amount:.15,currency:'EUR'},{name:'FINRA_FEE',amount:.01,currency:'USD'}],accountId:'a1',personId:'p1',person:people[0].name,accountLabel:'Invest',environment:'live'}));
+ trades.push({...trades[0],id:52,ticker:'MSFT_US_EQ',name:'Microsoft',accountId:'a2',personId:'p2',person:people[1].name,environment:'demo'});
+ const orders=[{...trades[0],id:123,createdAt:new Date(at).toISOString(),status:'PARTIALLY_FILLED',quantity:2,filledQuantity:1,limitPrice:100,type:'LIMIT',awaitingHistory:true}];
+ let events=[{...trades[0],eventId:1,status:'PARTIALLY_FILLED',filledQuantity:1,quantity:2,read:false}],fail=false,lag=0,writes=0;
+ const feed=()=>({latestId:events.at(-1)?.eventId||0,unread:events.filter(e=>!e.read).length,items:[...events].reverse()});
+ await page.route('**/api/portfolio/notifications',route=>route.fulfill({json:feed()}));
+ await page.route('**/api/portfolio/notifications/read',route=>{expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBeTruthy();const {through}=route.request().postDataJSON();events=events.map(e=>({...e,read:e.eventId<=through||e.read}));writes++;return route.fulfill({json:feed()});});
+ await page.route('**/api/portfolio/activity?*',async route=>{
+   const q=new URL(route.request().url()).searchParams,kind=q.get('kind'),bounds=activityDateBounds(q.get('from'),q.get('to'),q.get('timeZone'));
+   if(lag)await new Promise(r=>setTimeout(r,lag));if(fail)return route.fulfill({status:503,json:{message:'Fixture activity unavailable.'}}).catch(()=>{});
+   const all=kind==='trades'?trades:kind==='orders'?orders:events,items=all.filter(x=>(!q.get('person')||x.personId===q.get('person'))&&(!q.get('account')||x.accountId===q.get('account'))&&(!q.get('stock')||(x.ticker+' '+x.name).toLowerCase().includes(q.get('stock').toLowerCase()))&&(bounds.from===null||x.at>=bounds.from)&&(bounds.to===null||x.at<bounds.to));
+   const offset=Number(q.get('offset'));await route.fulfill({json:{kind,total:items.length,items:items.slice(offset,offset+50),offset,more:offset+50<items.length,people,accounts,statuses:accounts.map(a=>({accountId:a.id,accountLabel:a.label,person:people.find(p=>p.id===a.personId).name,environment:a.environment,connected:true,checkedAt:at,complete:a.id==='a1',pages:2,error:a.id==='a2'?'Enable History: Orders on this account’s Trading 212 API key.':null,tracking:{checkedAt:at,error:null,historyError:null,balanceError:null}}))}}).catch(()=>{});
+ });
+ await page.goto(runtime.url+'/#activity');await expect(page.getByRole('heading',{name:'Activity & alerts',exact:true})).toBeVisible();const panel=page.getByRole('region',{name:'Portfolio activity'}),table=panel.locator('tbody');
+ await expect(table.locator('tr')).toHaveCount(50);await expect(page.locator('.pa-unread')).toHaveText('1 unread');await expect(page.locator('.pa-notice')).toHaveCount(0);await expect(table.locator('tr').first()).toContainText('$105.00 USD / share');await expect(table.locator('tr').first()).toContainText('€0.15 EUR');await expect(table.locator('tr').first()).toContainText('$0.01 USD');await expect(table.locator('tr').first()).toContainText('€0.00');
+ await panel.getByRole('button',{name:'Next',exact:true}).click();await expect(table.locator('tr')).toHaveCount(2);await expect(table.locator('tr').first().locator('td').last()).toHaveText('—');await expect(table).toContainText('DEMO');await expect(panel.getByRole('button',{name:'Next',exact:true})).toBeDisabled();
+ mark('Individual executions, separate fee/price/P&L currencies, zero/missing values, demo labels and pagination render correctly');
+ await panel.getByLabel('Person',{exact:true}).selectOption('p2');await expect(table.locator('tr')).toHaveCount(1);await expect(table).toContainText('Microsoft');await expect(panel.getByLabel('Account',{exact:true}).locator('option')).toHaveCount(2);await panel.getByLabel('Account',{exact:true}).selectOption('a2');await panel.getByLabel('Stock',{exact:true}).fill('AMD');await expect(panel.getByRole('heading',{name:'No trades in this view'})).toBeVisible();
+ await panel.getByRole('button',{name:'Clear filters'}).click();await panel.getByLabel('From',{exact:true}).fill('2026-11-04');await panel.getByLabel('To',{exact:true}).fill('2026-11-04');await expect(table.locator('tr')).toHaveCount(50);await panel.getByLabel('From',{exact:true}).fill('2026-11-03');await panel.getByLabel('To',{exact:true}).fill('2026-11-03');await expect(panel.getByRole('heading',{name:'No trades in this view'})).toBeVisible();
+ await panel.getByRole('button',{name:'Clear filters'}).click();await expect(table.locator('tr')).toHaveCount(50);lag=400;await panel.getByLabel('Person',{exact:true}).selectOption('p2');await expect(panel.locator('tbody')).toHaveCount(0);await expect(table).toContainText('Microsoft');lag=0;await panel.getByRole('button',{name:'Clear filters'}).click();await expect(table.locator('tr')).toHaveCount(50);
+ mark('Person/account/stock/date filters combine, reset pagination and never show a previous account during loading; dates use Skopje midnight');
+ await panel.getByRole('button',{name:'Orders',exact:true}).click();await expect(table).toContainText('Partially filled');await expect(table).toContainText('Awaiting broker confirmation');await expect(table).toContainText('1 / 2');
+ events.push({...events[0],eventId:2,status:'FILLED',filledQuantity:2});await page.getByRole('button',{name:'Refresh view',exact:true}).click();await expect(page.locator('.pa-notice')).toContainText('Filled');await page.getByRole('button',{name:'Dismiss order notification'}).click();await expect(page.locator('.pa-unread')).toHaveText('2 unread');
+ await panel.getByRole('button',{name:/^Alerts/}).click();await expect(panel.locator('.pa-alert-list li')).toHaveCount(2);await panel.getByRole('button',{name:'Mark all read'}).click();await expect(page.locator('.pa-unread')).toHaveText('0 unread');await expect(panel.locator('.pa-alert-list li.unread')).toHaveCount(0);expect(writes).toBe(1);await page.reload();await expect(page.locator('.pa-unread')).toHaveText('0 unread');await expect(page.locator('.pa-notice')).toHaveCount(0);
+ mark('New order changes produce an in-app notice; dismissing keeps unread status; marking read persists through reload without old-alert popups');
+ await page.getByText('Connections & history coverage · attention needed',{exact:true}).click();await expect(page.locator('.pa-coverage')).toContainText('History imported');await expect(page.locator('.pa-coverage')).toContainText('History: Orders');
+ for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:1200});await page.getByRole('heading',{name:'Activity & alerts',exact:true}).scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/activity-${width}.png`,fullPage:false});}
+ await panel.getByLabel('Stock',{exact:true}).focus();await page.keyboard.type('NoSuchStock');await expect(panel.getByRole('heading',{name:'No trades in this view'})).toBeVisible();await panel.getByRole('button',{name:'Clear filters'}).click();await expect(table.locator('tr')).toHaveCount(50);
+ fail=true;await page.getByRole('button',{name:'Refresh view',exact:true}).click();await expect(panel.getByRole('alert')).toContainText('Showing the last saved view');await expect(table.locator('tr')).toHaveCount(50);fail=false;await page.getByRole('button',{name:'Refresh view',exact:true}).click();await expect(panel.getByRole('alert')).toHaveCount(0);
+ mark('Desktop/tablet/mobile layouts stay within the viewport; keyboard filters, coverage warnings and refresh failure recovery work');
+ expect(errors).toEqual([]);expect(await read('/api/workspace')).toEqual(before);writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors,brokerRequests:'Mocked only; no broker credentials or real orders'},null,2)+'\n');
+}finally{await browser.close();await runtime.close();}

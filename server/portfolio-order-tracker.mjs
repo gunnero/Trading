@@ -6,34 +6,35 @@ const initial=()=>({revision:0,syncedRevision:0,nextCheckAt:0,historyNextAt:0,ch
 
 // Private, generation-scoped observations. A missing pending order is unresolved
 // until the broker's order history supplies a terminal status for that exact ID.
-export function createOrderTracker(db,{now,broker,current,orderView,refreshBalances}){
+export function createOrderTracker(db,{now,broker,current,orderView,refreshBalances,onObserve}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_tracked_orders(account_id TEXT NOT NULL,generation TEXT NOT NULL,order_id INTEGER NOT NULL,detail TEXT NOT NULL,PRIMARY KEY(account_id,generation,order_id));
     CREATE TABLE IF NOT EXISTS portfolio_order_tracking(account_id TEXT NOT NULL,generation TEXT NOT NULL,detail TEXT NOT NULL,PRIMARY KEY(account_id,generation));`);
   const state=(id,g)=>{const row=db.prepare('SELECT detail FROM portfolio_order_tracking WHERE account_id=? AND generation=?').get(id,g);return row?JSON.parse(row.detail):initial();};
   const save=(id,g,s)=>db.prepare('INSERT INTO portfolio_order_tracking VALUES(?,?,?) ON CONFLICT(account_id,generation) DO UPDATE SET detail=excluded.detail').run(id,g,JSON.stringify(s));
   const orders=(id,g)=>db.prepare('SELECT detail FROM portfolio_tracked_orders WHERE account_id=? AND generation=?').all(id,g).map(row=>JSON.parse(row.detail));
-  function observe(id,g,order,s){
+  function observe(id,g,order,s,alert=true){
     const row=db.prepare('SELECT detail FROM portfolio_tracked_orders WHERE account_id=? AND generation=? AND order_id=?').get(id,g,order.id),old=row?JSON.parse(row.detail):null;
     if(old&&(old.ticker!==order.ticker||old.side!==order.side||old.type!==order.type||old.quantity!==order.quantity))throw Error('Order identity changed. Check Trading 212.');
     if(old&&terminal.has(old.status))return;
     if(old&&finite(old.filledQuantity)&&finite(order.filledQuantity)&&order.filledQuantity<old.filledQuantity)return;
     const filled=finite(order.filledQuantity)&&order.filledQuantity>(old?.filledQuantity??0);
-    if(filled||terminal.has(order.status)&&old?.status!==order.status)s.revision++;
+    if(filled||order.status==='PARTIALLY_FILLED'&&old?.status!==order.status||terminal.has(order.status)&&old?.status!==order.status)s.revision++;
     // Persist the refresh obligation before the observation, so a crash between
     // recording a fill and refreshing balances cannot lose that work.
     save(id,g,s);
     const detail={...order,filledQuantity:order.filledQuantity??old?.filledQuantity??null,firstSeen:old?.firstSeen??now(),observedAt:now(),awaitingHistory:false};
+    onObserve?.(id,g,detail,old,alert);
     db.prepare('INSERT INTO portfolio_tracked_orders VALUES(?,?,?,?) ON CONFLICT(account_id,generation,order_id) DO UPDATE SET detail=excluded.detail').run(id,g,order.id,JSON.stringify(detail));
   }
-  function record(id,ctx,order){
-    const g=ctx.record.generation,s=state(id,g);observe(id,g,order,s);
+  function record(id,ctx,order,alert=true){
+    const g=ctx.record.generation,s=state(id,g);observe(id,g,order,s,alert);
     // Also refresh reservations after an accepted new order/cancellation request.
     s.revision++;s.nextCheckAt=0;save(id,g,s);
   }
   function restore(id,ctx,attempts){
     const g=ctx.record.generation;
     if(state(id,g).restoredAttempts)return;
-    for(const order of attempts)if(!db.prepare('SELECT 1 FROM portfolio_tracked_orders WHERE account_id=? AND generation=? AND order_id=?').get(id,g,order.id))record(id,ctx,order);
+    for(const order of attempts)if(!db.prepare('SELECT 1 FROM portfolio_tracked_orders WHERE account_id=? AND generation=? AND order_id=?').get(id,g,order.id))record(id,ctx,order,false);
     const s=state(id,g);s.restoredAttempts=true;save(id,g,s);
   }
   function result(id,g,s){
@@ -69,10 +70,10 @@ export function createOrderTracker(db,{now,broker,current,orderView,refreshBalan
           const unresolved=orders(id,g).some(o=>!terminal.has(o.status)&&!ids.has(o.id));
           if(!next||!unresolved||s.pages>=200){s.cursor=null;s.pages=0;s.seen=[];s.historyNextAt=now()+60000;}
           else s.cursor=next;
-        }catch(e){current(id,ctx);s.historyNextAt=now()+60000;s.historyError=e.upstreamStatus===403?'Final status needs History: Orders permission on the API key.':e.message;s.cursor=null;s.pages=0;s.seen=[];}
+        }catch(e){current(id,ctx);s.historyNextAt=now()+Math.max(60000,e.retryMs||0);s.historyError=e.upstreamStatus===403?'Final status needs History: Orders permission on the API key.':e.message;s.cursor=null;s.pages=0;s.seen=[];}
       }else if(!missing.length){s.cursor=null;s.pages=0;s.seen=[];s.historyError=null;}
       for(const order of orders(id,g).filter(o=>!terminal.has(o.status)&&!ids.has(o.id)))db.prepare('UPDATE portfolio_tracked_orders SET detail=? WHERE account_id=? AND generation=? AND order_id=?').run(JSON.stringify({...order,awaitingHistory:true}),id,g,order.id);
-    }catch(e){current(id,ctx);s.error=e.message;s.nextCheckAt=now()+60000;}
+    }catch(e){current(id,ctx);s.error=e.message;s.nextCheckAt=now()+Math.max(60000,e.retryMs||0);}
     // Recheck until successful, including after restart. Never treat a failed
     // balances refresh as evidence that the execution itself failed.
     if(s.syncedRevision<s.revision){
@@ -86,5 +87,6 @@ export function createOrderTracker(db,{now,broker,current,orderView,refreshBalan
     return result(id,g,s);
   }
   function remove(id){for(const table of ['portfolio_tracked_orders','portfolio_order_tracking'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
-  return {record,restore,poll,remove};
+  function needsMonitoring(id,g,hasAttempts){const s=state(id,g);return hasAttempts&&!s.restoredAttempts||s.syncedRevision<s.revision||orders(id,g).some(o=>!terminal.has(o.status));}
+  return {record,restore,poll,remove,needsMonitoring,read:(id,g)=>result(id,g,state(id,g))};
 }

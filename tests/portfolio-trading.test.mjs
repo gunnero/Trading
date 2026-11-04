@@ -66,6 +66,16 @@ test('concurrent submissions, disconnect and disable are blocked while a write i
 test('process interruption converts in-flight attempt to unknown on restart',async t=>{
  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);f.db.prepare("UPDATE portfolio_order_attempts SET state='SENDING' WHERE token=?").run(review.token);f.restart();assert.equal(f.service.read('a').blocked,true);await assert.rejects(()=>f.service.preview('a',input),/uncertain/);assert.equal(f.writes().length,0);
 });
+test('background monitor never retries uncertain submissions and skips an active user operation',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input);let release;f.source.delay=new Promise(r=>release=r);
+ f.source.write=()=>{throw Error('lost response');};const sending=f.service.submit('a',{token:review.token,confirmed:true});await new Promise(r=>setImmediate(r));const count=f.calls.length;
+ await f.service.monitor('a');assert.equal(f.calls.length,count);release();assert.equal((await sending).state,'UNKNOWN');
+ f.advance();await f.service.monitor('a');assert.equal(f.writes().length,1);assert.equal(f.service.read('a').blocked,true);f.restart();f.advance();await f.service.monitor('a');assert.equal(f.writes().length,1);assert.equal(f.service.read('a').blocked,true);
+});
+test('background broker rate-limit backoff survives restart and does not permit order writes',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path==='/equity/orders'?new Response('{}',{status:429,headers:{'content-type':'application/json','retry-after':'300'}}):null;
+ await f.service.monitor('a');assert.match(f.service.tracking('a').error,/rate limiting/);const count=f.calls.length;f.restart();f.advance(120000);await f.service.monitor('a');assert.equal(f.calls.length,count);f.advance(181000);await f.service.monitor('a');assert.equal(f.calls.length,count+1);assert.equal(f.writes().length,0);
+});
 test('cancellation is separately reviewed and confirmed, with no assumed final fill outcome',async t=>{
  const f=fixture(t);f.enable();const review=await f.service.preview('a',{action:'CANCEL',orderId:75});assert.equal(f.writes().length,0);const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes()[0].method,'DELETE');assert.equal(f.writes()[0].path,'/equity/orders/75');assert.match(result.message,/Cancellation requested/);assert.match(result.message,/fill/);
 });

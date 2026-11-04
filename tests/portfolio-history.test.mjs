@@ -91,8 +91,8 @@ test('background sampling records combined P/L without a browser and stops after
  f.advance(900001);summary.investments.unrealizedProfitLoss=120;
  try{
    t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
-   assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.calls.length,4);
-   f.service.disconnect(f.id,f.service.read().revision);f.advance(900001);t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));assert.equal(f.calls.length,4);
+   assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.calls.filter(call=>!call.url.includes('/history/orders')).length,4);
+   f.service.disconnect(f.id,f.service.read().revision);f.advance(900001);t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));assert.equal(f.calls.filter(call=>!call.url.includes('/history/orders')).length,4);
  }finally{summary.investments.unrealizedProfitLoss=100;}
 });
 test('reconnecting a different broker after a manual import cannot inherit the prior account history',async t=>{

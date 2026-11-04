@@ -5,7 +5,8 @@ import {randomUUID} from 'node:crypto';
 import {PORTFOLIO_LIMITS,portfolioText,portfolioNumber,portfolioCurrency,normalizePortfolioSnapshot} from '../src/data/portfolio.mjs';
 import {createPortfolioHistory,orderHistoryPath} from './portfolio-history.mjs';
 import {createPortfolioFunding,fundingHistoryPath} from './portfolio-funding.mjs';
-import {createPortfolioTrading} from './portfolio-trading.mjs';
+import {createPortfolioActivity} from './portfolio-activity.mjs';
+import {createPortfolioTrading,orderView} from './portfolio-trading.mjs';
 import {createPortfolioRebuild,dividendHistoryPath} from './portfolio-rebuild.mjs';
 import {defaultMarketService} from './market-data.mjs';
 
@@ -79,7 +80,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     },revision);
   }
   function removePerson(id,revision){return change(data=>{if(data.accounts.some(a=>a.personId===id))throw fail(400,'Remove this person’s accounts first.');if(!data.people.some(p=>p.id===id))throw fail(404,'Person not found.');data.people=data.people.filter(p=>p.id!==id);},revision);}
-  function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);rebuild.remove(id);return result;}
+  function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);activity.remove(id);rebuild.remove(id);return result;}
   function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
   async function request(path,secret){
     const validator=path.startsWith('/equity/history/orders?')?orderHistoryPath:path.startsWith('/equity/history/transactions?')?fundingHistoryPath:path.startsWith('/equity/history/dividends?')?dividendHistoryPath:null,historical=!!validator;
@@ -158,6 +159,8 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
     try{
       if(req.method==='GET'&&path==='/api/portfolio'){res.end(JSON.stringify(read()));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/activity'){res.end(JSON.stringify(activity.read(Object.fromEntries(url.searchParams))));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/notifications'){res.end(JSON.stringify(activity.notifications()));return;}
       const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|position|settings|preview|submit|acknowledge))?$/);
       if(tradeMatch&&req.method==='GET'){
         const [,id,action]=tradeMatch;
@@ -170,6 +173,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-opening-bell-client']!=='web')throw fail(415,'Use a JSON app request.');
       let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>2000000)throw fail(413,'Snapshot is too large (maximum 2 MB).');chunks.push(chunk);}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw fail(400,'Invalid JSON request.');}
+      if(req.method==='POST'&&path==='/api/portfolio/notifications/read'){res.end(JSON.stringify(activity.markRead(input)));return;}
       if(tradeMatch){
         const [,id,action]=tradeMatch;
         if(req.method!=='POST'||!['settings','preview','submit','acknowledge'].includes(action))throw fail(405,'Method not supported.');
@@ -205,7 +209,8 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     }catch(error){res.statusCode=error.status||500;res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.'}));}
   }
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
-  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,onBalances(id,fresh,generation){
+  const activity=createPortfolioActivity(db,{...historyOptions,orderView,accounts:()=>read().data,tracking:id=>trading.tracking(id)});
+  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
     if(closed||credential(id)?.generation!==generation)throw fail(409,'The account connection changed.');
     if(pending.has(id))throw fail(409,'An account refresh is already running.');
     const snapshot=normalizeTrading212(fresh.summary,fresh.positions,new Date(fresh.at).toISOString());
@@ -224,5 +229,18 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     const worker=async()=>{while(queue.length&&!closed){const a=queue.shift();try{await sync(a.id);}catch{ /* A removed/disconnected account needs no background retry. */ }}};
     await Promise.all([worker(),worker()]);
   },900000):null;sampler?.unref();
-  return {read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,funding,trading,rebuild,middleware,close(){closed=true;clearInterval(sampler);db.close();}};
+  let monitoring=false;
+  async function monitor(){
+    if(closed||monitoring)return;monitoring=true;
+    try{
+      const queue=read().data.accounts.filter(a=>a.connected);
+      const worker=async()=>{while(queue.length&&!closed){const {id}=queue.shift();
+        try{await trading.monitor(id);}catch{/* Per-account tracking state retains provider errors. */}
+        if(!closed)try{await activity.sync(id);}catch{/* Removed/reconnected account. */}
+      }};
+      await Promise.all([worker(),worker()]);
+    }finally{monitoring=false;}
+  }
+  const orderSampler=background?setInterval(monitor,15000):null;orderSampler?.unref();
+  return {monitor,activity,read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,funding,trading,rebuild,middleware,close(){closed=true;clearInterval(sampler);clearInterval(orderSampler);db.close();}};
 }

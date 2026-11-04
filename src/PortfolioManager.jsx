@@ -29,7 +29,7 @@ function Dialog({title,onClose,children,wide=false}){
   return <dialog ref={ref} className={`modal ${wide?'wide company-modal':'pm-dialog'}`} aria-labelledby="pm-dialog-title" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose();}}><div className="modal-inner"><header className="modal-header"><h2 id="pm-dialog-title">{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
 }
 
-export default function PortfolioManager({sheet,watchlist,setupInterval}){
+export default function PortfolioManager({sheet,watchlist,setupInterval,onActivity}){
   const [state,setState]=useState(null),[error,setError]=useState(''),[filter,setFilter]=useState('all'),[selected,setSelected]=useState(null),[dialog,setDialog]=useState(null),[refreshing,setRefreshing]=useState(false),[search,setSearch]=useState('');
   const [holdingView,setHoldingView]=useState(null),[tradeView,setTradeView]=useState(null);
   const current=useRef(null),active=useRef(false),syncing=useRef(false),dialogRef=useRef(null);dialogRef.current=dialog||tradeView;
@@ -58,7 +58,7 @@ export default function PortfolioManager({sheet,watchlist,setupInterval}){
   const stamp=a=>a.snapshot?.source==='api'?(a.lastSuccess?`Last sync ${clockStamp(a.lastSuccess)}`:'Never synced'):a.snapshot?.observedAt?`Observed ${clockStamp(a.snapshot.observedAt)}`:a.snapshot?'Source date unknown':'Connect or import a snapshot';
   function openAccount(a){setSelected(a.id);setSearch('');}
   return <div className="pm-page">
-    <PageHeader title="Portfolio Manager" description="Your friends’ portfolios, together in one place." actions={<><button className="button outline" disabled={refreshing||!!dialog} onClick={refresh}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
+    <PageHeader title="Portfolio Manager" description="Your friends’ portfolios, together in one place." actions={<>{onActivity&&<button className="button outline" onClick={onActivity}>Activity & alerts</button>}<button className="button outline" disabled={refreshing||!!dialog} onClick={refresh}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
     {error&&<div className="pm-alert" role="alert"><WarningCircle size={19}/><span>{error}</span><button className="text-button" onClick={load}>Reload latest</button></div>}
     {!state?<div className="panel pm-empty" role="status">Loading your portfolios…</div>:<>
       <div className="pm-filter-row"><div className="pm-people" aria-label="Filter by person"><button aria-pressed={filter==='all'} onClick={()=>{setFilter('all');setSelected(null);}}><Users size={17}/>Everyone <span>{people.length}</span></button>{people.map(p=><button key={p.id} aria-pressed={filter===p.id} onClick={()=>{setFilter(p.id);setSelected(null);}}><i>{initials(p.name)}</i>{p.name}</button>)}</div>{filter!=='all'&&<button className="icon-button" aria-label="Edit person" onClick={()=>setDialog({type:'person',person:people.find(p=>p.id===filter)})}><PencilSimple size={18}/></button>}</div>
