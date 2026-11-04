@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {cashOrderQuantity} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision} from '../src/data/portfolio-order-size.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {createOrderTracker} from './portfolio-order-tracker.mjs';
 
@@ -8,7 +8,7 @@ const bases={live:'https://live.trading212.com/api/v0',demo:'https://demo.tradin
 const activeStatuses=['LOCAL','UNCONFIRMED','CONFIRMED','NEW','PARTIALLY_FILLED','REPLACING'];
 const terminalStatuses=['CANCELLED','FILLED','REJECTED','REPLACED'];
 const numeric=value=>typeof value==='number'&&Number.isFinite(value);
-function quantity(value){if(!numeric(value)||value<=0||value>1000000||Number(value.toFixed(8))!==value)throw fail(400,'Enter a positive share quantity with up to 8 decimal places.');return value;}
+function quantity(value){if(!numeric(value)||value<=0||value>1000000)throw fail(400,'Enter a positive share quantity of no more than 1,000,000.');return value;}
 async function rejectionReason(res,secret){
   // Read only bounded problem details, never expose the raw upstream response.
   // A missing/broken error body must not change a definite HTTP rejection into
@@ -55,7 +55,23 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   const unresolved=id=>db.prepare("SELECT token FROM portfolio_order_attempts WHERE account_id=? AND state IN ('UNKNOWN','SENDING') LIMIT 1").get(id);
   const update=(token,state,detail)=>db.prepare('UPDATE portfolio_order_attempts SET state=?,detail=? WHERE token=?').run(state,JSON.stringify(detail),token);
   const publicAttempt=row=>({token:row.token,state:row.state,createdAt:row.created_at,...row.detail});
-  function read(id){const a=account(id);return {enabled:enabled(id),maxOrderValue:getOrderLimit(id),environment:a.environment,brokerId:a.snapshot?.brokerId||null,blocked:!!unresolved(id),attempts:db.prepare("SELECT * FROM portfolio_order_attempts WHERE account_id=? AND state<>'PREPARED' ORDER BY created_at DESC LIMIT 30").all(id).map(row=>publicAttempt({...row,detail:JSON.parse(row.detail)}))};}
+  function quantityRules(id){
+    const generation=credential(id)?.generation;if(!generation)return [];
+    // Reuse durable broker rejections, including those saved by older versions.
+    // Client-supplied precision is never authoritative. Keep rules scoped to the
+    // connection, instrument, side, order type and requested trading session.
+    const rules=new Map();
+    for(const row of db.prepare("SELECT detail FROM portfolio_order_attempts WHERE account_id=? AND generation=? AND state='REJECTED'").all(id,generation)){
+      const d=JSON.parse(row.detail);
+      if(d.action!=='ORDER'||d.brokerStatus!==400||d.brokerCode!=='quantity-precision-mismatch'||!['BUY','SELL'].includes(d.side)||!['MARKET','LIMIT'].includes(d.type))continue;
+      const match=/^Trading 212 rejected this order: invalid quantity precision ([0-8]) \(code: quantity-precision-mismatch\)$/.exec(d.message);
+      if(!match)continue;
+      const rule={ticker:d.ticker,type:d.type,side:d.side,extendedHours:d.extendedHours===true,precision:Number(match[1])},key=JSON.stringify([rule.ticker,rule.type,rule.side,rule.extendedHours]);
+      if(!rules.has(key)||rules.get(key).precision>rule.precision)rules.set(key,rule);
+    }
+    return [...rules.values()];
+  }
+  function read(id){const a=account(id);return {enabled:enabled(id),quantityRules:quantityRules(id),maxOrderValue:getOrderLimit(id),environment:a.environment,brokerId:a.snapshot?.brokerId||null,blocked:!!unresolved(id),attempts:db.prepare("SELECT * FROM portfolio_order_attempts WHERE account_id=? AND state<>'PREPARED' ORDER BY created_at DESC LIMIT 30").all(id).map(row=>publicAttempt({...row,detail:JSON.parse(row.detail)}))};}
   function context(id,requireEnabled=true){
     const a=account(id),record=credential(id);
     if(!record||a.platform!=='Trading 212'||a.snapshot?.source!=='api')throw fail(400,'Connect this Trading 212 account first.');
@@ -148,7 +164,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     return {shares,availableShares:available!==null&&shares!==null&&available<=shares?available:null,value:holding?nonnegative(wallet?.currentValue):0,
       price:priceMatch?nonnegative(holding.currentPrice):null,averagePrice:priceMatch?nonnegative(holding.averagePricePaid):null,cost,unrealized:profit,unrealizedPercent:profit!==null&&cost>0?profit/cost*100:null};
   }
-  async function validate(id,input,ctx){
+  async function validate(id,input,ctx,normalize=false){
     const {summary,positions,at}=await freshBalances(id,ctx);
     if(input.action==='CANCEL'){
       if(!Number.isSafeInteger(input.orderId)||input.orderId<0)throw fail(400,'Choose a valid pending order.');
@@ -174,7 +190,12 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const cashInput=input.cashAmount!==undefined;
     if(cashInput&&(!numeric(input.cashAmount)||input.cashAmount<=0||input.cashAmount>1e12))throw fail(400,'Enter a positive cash amount.');
     if(!(reference>0)&&(cashInput||input.type==='MARKET'&&(input.requestedCashAmount!=null||input.referencePrice!=null)))throw fail(400,'A current market reference price is unavailable. Refresh the quote and review again.');
-    const qty=quantity(cashInput?Number(cashOrderQuantity(input.cashAmount,reference)):input.quantity);
+    const quantityPrecision=orderQuantityPrecision(quantityRules(id),input);
+    const requestedQuantity=cashInput?null:quantity(input.quantity);
+    const rounded=cashInput?cashOrderQuantity(input.cashAmount,reference,quantityPrecision):roundedOrderQuantity(requestedQuantity,quantityPrecision);
+    if(!rounded)throw fail(400,`Use the ${10**-quantityPrecision} share sizing step, with a maximum of 1,000,000 shares. Adjust the quantity or cash amount.`);
+    const qty=Number(rounded);
+    if(!normalize&&qty!==input.quantity)throw fail(409,'The share precision changed. Review the adjusted quantity before confirming again.');
     if(input.side==='SELL'&&(!numeric(available)||qty>available+1e-9))throw fail(400,'The quantity exceeds shares available to trade. Shares reserved for orders or pies may be unavailable.');
     if(input.side==='BUY'&&instrument.maxOpenQuantity!==null&&qty+(position?.quantity||0)>instrument.maxOpenQuantity)throw fail(400,'This exceeds the broker’s maximum position size.');
     const estimate=reference===null?null:qty*reference;
@@ -182,14 +203,14 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(input.side==='BUY'&&(summary.cash.availableToTrade<=0||estimate!==null&&estimate>summary.cash.availableToTrade+1e-8))throw fail(400,'Not enough available cash for this order estimate.');
     const saleCost=input.side==='SELL'&&holding.cost!==null&&holding.shares>0?holding.cost*qty/holding.shares:null;
     const estimatedProfit=estimate!==null&&saleCost!==null?estimate-saleCost:null;
-    return {action:'ORDER',maxOrderValue,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,priceQuote:pricing?.priceQuote||null,estimate,
+    return {action:'ORDER',maxOrderValue,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,quantityPrecision,requestedQuantity:requestedQuantity!==null&&requestedQuantity!==qty?requestedQuantity:null,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,priceQuote:pricing?.priceQuote||null,estimate,
       currentShares:holding.shares,remainingShares:holding.shares===null?null:holding.shares+(input.side==='BUY'?qty:-qty),remainingCash:estimate===null?null:summary.cash.availableToTrade+(input.side==='SELL'?estimate:-estimate),estimatedProfit,estimatedProfitPercent:saleCost>0&&estimatedProfit!==null?estimatedProfit/saleCost*100:null,
       environment:ctx.a.environment,brokerId:ctx.a.snapshot.brokerId};
   }
   async function exclusive(id,fn){if(locks.has(id))throw fail(409,'An order operation is already running for this account.');locks.add(id);try{return await fn();}finally{locks.delete(id);}}
   async function preview(id,input){return exclusive(id,async()=>{
     const ctx=context(id);if(unresolved(id))throw fail(409,'Check the uncertain order in Trading 212 and mark it reviewed before submitting another order.');
-    const detail=await validate(id,input,ctx);current(id,ctx);const token=randomUUID(),at=now();
+    const detail=await validate(id,input,ctx,true);current(id,ctx);const token=randomUUID(),at=now();
     // A fresh review replaces unsent reviews from other tabs for this account.
     db.prepare("DELETE FROM portfolio_order_attempts WHERE account_id=? AND state='PREPARED'").run(id);
     db.prepare('INSERT INTO portfolio_order_attempts VALUES(?,?,?,?,?,?)').run(token,id,ctx.record.generation,at,'PREPARED',JSON.stringify({...detail,expiresAt:at+60000}));return publicAttempt(saved(token));

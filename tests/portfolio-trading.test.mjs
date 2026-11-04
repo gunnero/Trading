@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createTradePrice} from '../server/portfolio-trade-price.mjs';
 import {createPortfolioTrading} from '../server/portfolio-trading.mjs';
-import {cashOrderQuantity,orderPercentage} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,orderPercentage,roundedOrderQuantity,orderQuantityPrecision} from '../src/data/portfolio-order-size.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
 import {portfolioOrderLevels} from '../src/data/portfolio-order-levels.mjs';
 const input={side:'BUY',type:'LIMIT',ticker:'AMD_US_EQ',quantity:2.5,limitPrice:100,timeValidity:'DAY'};
@@ -39,7 +39,7 @@ test('SELL uses negative broker quantity and available shares rather than total 
  const review=await f.service.preview('a',{...input,side:'SELL',type:'MARKET',quantity:1.25});await f.service.submit('a',{token:review.token,confirmed:true});assert.deepEqual(JSON.parse(f.writes()[0].body),{ticker:'AMD_US_EQ',quantity:-1.25,extendedHours:false});
 });
 test('invalid quantities, currencies, prices, cash and instrument identities never send orders',async t=>{
- const f=fixture(t);f.enable();for(const quantity of [0,-1,NaN,Infinity,'1',.000000001,1.123456789])await assert.rejects(()=>f.service.preview('a',{...input,quantity}));
+ const f=fixture(t);f.enable();for(const quantity of [0,-1,NaN,Infinity,'1',.000000001,1000000.0000001])await assert.rejects(()=>f.service.preview('a',{...input,quantity}));
  for(const limitPrice of [0,-1,NaN,'100'])await assert.rejects(()=>f.service.preview('a',{...input,limitPrice}));
  await assert.rejects(()=>f.service.preview('a',{...input,ticker:'https://bad.test'}),/exact stock/);await assert.rejects(()=>f.service.preview('a',{...input,quantity:11}),/cash/);await assert.rejects(()=>f.service.preview('a',{...input,quantity:49}),/maximum position/);
  f.source.currency='EUR';f.connect();f.enable();f.advance();await assert.rejects(()=>f.service.preview('a',input),/currency/);assert.equal(f.writes().length,0);
@@ -66,7 +66,7 @@ test('broker problem details survive rejection and restart without resending or 
   f.source.write=()=>new Response(JSON.stringify(wrapped?{success:false,error:problem}:problem),{status:400,headers:{'content-type':'application/problem+json'}});
   const result=await f.service.submit('a',{token:review.token,confirmed:true});
   assert.equal(result.state,'REJECTED');assert.equal(result.brokerCode,'quantity-precision-mismatch');assert.equal(result.brokerStatus,400);assert.match(result.message,/invalid quantity precision 4/);
-  assert.equal(JSON.parse(f.writes()[0].body).quantity,1.23456789);f.restart();assert.equal(f.service.read('a').attempts[0].message,result.message);
+  assert.equal(JSON.parse(f.writes()[0].body).quantity,1.2345);f.restart();assert.equal(f.service.read('a').attempts[0].message,result.message);
   assert.equal((await f.service.submit('a',{token:review.token,confirmed:true})).message,result.message);assert.equal(f.writes().length,1);assert.equal(f.service.read('a').blocked,false);
  }
 });
@@ -75,6 +75,60 @@ test('broker rejection exposes only bounded text fields and redacts credentials'
  f.source.write=()=>json({code:'InsufficientFunds',message:'Available cash too low. fake-key fake-secret '+Buffer.from('fake-key:fake-secret').toString('base64')+' authorization=hidden '+ 'a'.repeat(700),secret:'private upstream',stack:'private stack'},400);
  const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.match(result.message,/Available cash too low/);assert.equal(result.brokerCode,'InsufficientFunds');
  assert.doesNotMatch(JSON.stringify(result),/fake-key|fake-secret|ZmFrZS1rZXk6ZmFrZS1zZWNyZXQ=|hidden|private upstream|private stack/);assert.ok(result.message.length<650);assert.match(result.message,/redacted/);
+});
+function savedPrecision(f,{precision=2,account='a',generation='first',type='MARKET',side='BUY',ticker='AMD_US_EQ',extendedHours=false,brokerCode='quantity-precision-mismatch',message}={}){
+ const detail={action:'ORDER',ticker,type,side,extendedHours,brokerStatus:400,brokerCode,message:message??`Trading 212 rejected this order: invalid quantity precision ${precision} (code: quantity-precision-mismatch)`};
+ f.db.prepare('INSERT INTO portfolio_order_attempts VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),account,generation,1,'REJECTED',JSON.stringify(detail));
+}
+test('reported FB quantity is rounded down at review, disclosed, and sent exactly once without changing holdings',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/instruments')?json([{ticker:'FB_US_EQ',name:'Meta Platforms',type:'STOCK',currencyCode:'USD'}]):path.endsWith('/positions')?json([{instrument:{ticker:'FB_US_EQ',currency:'USD'},quantity:5.60285878,quantityAvailableForTrading:5.60285878,currentPrice:100}]):null;
+ const review=await f.service.preview('a',{...input,ticker:'FB_US_EQ',type:'MARKET',quantity:0.9972397});
+ assert.equal(review.quantity,0.9972);assert.equal(review.requestedQuantity,0.9972397);assert.equal(review.quantityPrecision,4);assert.equal(review.currentShares,5.60285878);assert.equal(f.writes().length,0);
+ await f.service.submit('a',{token:review.token,confirmed:true,quantity:.9972397});assert.equal(JSON.parse(f.writes()[0].body).quantity,.9972);
+ f.restart();await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
+});
+test('decimal steps preserve exact boundaries and never round above shares or cash, including whole shares',()=>{
+ assert.equal(roundedOrderQuantity(.9972397),'0.9972');assert.equal(roundedOrderQuantity(.0001),'0.0001');assert.equal(roundedOrderQuantity(.00009999),'');assert.equal(roundedOrderQuantity(1.001,3),'1.001');
+ for(const precision of [0,1,2,3,4])for(const amount of [.0001,.29,.9972397,3.01234567,5.60285878,12345.6789]){
+  const shares=Number(roundedOrderQuantity(amount,precision));assert.ok(shares<=amount);assert.equal(Number(shares.toFixed(precision)),shares);
+  for(const percent of [25,50,75,100]){const qty=Number(orderPercentage({side:'BUY',percent,availableCash:amount,price:123.45,precision}));assert.ok(qty*123.45<=amount*percent/100+1e-12);}
+ }
+ assert.equal(cashOrderQuantity(199,100,0),'1');assert.equal(roundedOrderQuantity(1.9999,0),'1');assert.equal(roundedOrderQuantity(.9,0),'');
+ for(const precision of [-1,9,NaN,'4'])assert.equal(roundedOrderQuantity(1,precision),'');
+});
+test('broker precision survives restart beyond recent activity and applies only to its exact connection and order scope',async t=>{
+ const f=fixture(t);f.enable();savedPrecision(f);for(let i=0;i<35;i++)savedPrecision(f,{ticker:'OTHER_US_EQ',precision:0});f.restart();
+ const order={...input,type:'MARKET',quantity:1.23456789};assert.equal((await f.service.preview('a',order)).quantity,1.23);
+ for(const changed of [{side:'SELL'},{type:'LIMIT'},{extendedHours:true}])assert.equal((await f.service.preview('a',{...order,...changed})).quantity,1.2345);
+ f.service.configure('b',{enabled:true,authorized:true});assert.equal((await f.service.preview('b',order)).quantity,1.2345);
+ assert.equal(orderQuantityPrecision(f.service.read('a').quantityRules,order),2);f.connect();f.enable();f.advance();assert.deepEqual(f.service.read('a').quantityRules,[]);assert.equal((await f.service.preview('a',order)).quantity,1.2345);
+});
+test('a stricter broker rejection changes only a new review and never retries the rejected order',async t=>{
+ const f=fixture(t);f.enable();const order={...input,type:'MARKET',quantity:1.23456789};const review=await f.service.preview('a',order);
+ f.source.write=()=>json({type:'/api-errors/quantity-precision-mismatch',detail:'invalid quantity precision 2'},400);
+ const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,'REJECTED');assert.equal(result.quantity,1.2345);assert.equal(JSON.parse(f.writes()[0].body).quantity,1.2345);
+ f.restart();await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
+ const adjusted=await f.service.preview('a',order);assert.equal(adjusted.quantity,1.23);assert.equal(adjusted.requestedQuantity,1.23456789);assert.equal(f.writes().length,1);
+});
+test('legacy reviews and precision changes require a new review instead of silently resizing on submit',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',{...input,type:'MARKET',quantity:1.2345});
+ f.db.prepare('UPDATE portfolio_order_attempts SET detail=? WHERE token=?').run(JSON.stringify({...review,quantity:1.23456789}),review.token);
+ await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/precision changed/);
+ const next=await f.service.preview('a',{...input,type:'MARKET',quantity:1.2345});savedPrecision(f,{precision:0});
+ await assert.rejects(()=>f.service.submit('a',{token:next.token,confirmed:true}),/precision changed/);assert.equal(f.writes().length,0);
+});
+test('precision rules ignore unrelated errors and client hints; known whole-share limits apply to cash and shares',async t=>{
+ const f=fixture(t);f.enable();savedPrecision(f,{brokerCode:'other-code'});savedPrecision(f,{message:'invalid quantity precision 0'});savedPrecision(f,{precision:9});
+ assert.deepEqual(f.service.read('a').quantityRules,[]);let review=await f.service.preview('a',{...input,type:'MARKET',quantity:1.23456789,quantityPrecision:8});assert.equal(review.quantity,1.2345);
+ savedPrecision(f,{precision:0});review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:199});assert.equal(review.quantity,1);assert.equal(review.estimate,100);
+ await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',quantity:.99}),/1 share sizing step/);
+ await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:99}),/1 share sizing step/);assert.equal(f.writes().length,0);
+});
+test('full available sell rounds down, retains the fractional balance and leaves limit price precision unchanged',async t=>{
+ const f=fixture(t);f.enable();f.source.available=3.01234567;
+ const qty=Number(orderPercentage({side:'SELL',percent:100,availableShares:f.source.available}));const review=await f.service.preview('a',{...input,side:'SELL',quantity:qty,limitPrice:100.123456});
+ assert.equal(review.quantity,3.0123);assert.equal(review.availableShares,3.01234567);assert.equal(review.remainingShares,5-3.0123);assert.equal(review.limitPrice,100.123456);
+ await f.service.submit('a',{token:review.token,confirmed:true});const sent=JSON.parse(f.writes()[0].body);assert.equal(sent.quantity,-3.0123);assert.equal(sent.limitPrice,100.123456);
 });
 test('invalid, oversized and interrupted error bodies preserve a definite rejection without leaking payloads',async t=>{
  for(const response of [()=>new Response('<html>private upstream</html>',{status:400}),()=>json(null,400),()=>json(['private upstream'],400),()=>new Response('{bad private upstream',{status:400,headers:{'content-type':'application/json'}}),()=>json({detail:'private upstream '.repeat(2000)},400),()=>json({detail:'<html>private upstream</html>'},400),()=>new Response(new ReadableStream({start(controller){controller.error(Error('interrupted'));}}),{status:400,headers:{'content-type':'application/json'}})]){
@@ -141,21 +195,21 @@ test('position reads never overlap an order write and refresh after its outcome'
 });
 test('sell percentages floor fractional shares and never include reserved shares',()=>{
  const size=(availableShares,percent)=>orderPercentage({side:'SELL',availableShares,percent});
- assert.deepEqual([25,50,75,100].map(p=>size(3.01234567,p)),['0.75308641','1.50617283','2.25925925','3.01234567']);
- assert.equal(size(5.60285878,100),'5.60285878');assert.equal(size(1.123456789,100),'1.12345678');assert.equal(size(1e-8,100),'0.00000001');assert.equal(size(1e-8,25),'');assert.equal(size(0.000000019,100),'0.00000001');
+ assert.deepEqual([25,50,75,100].map(p=>size(3.01234567,p)),['0.753','1.5061','2.2592','3.0123']);
+ assert.equal(size(5.60285878,100),'5.6028');assert.equal(size(1.123456789,100),'1.1234');assert.equal(size(1e-8,100),'');assert.equal(size(1e-8,25),'');assert.equal(size(0.000000019,100),'');
  for(const amount of [0,null,undefined,NaN,-1,Infinity,'3'])assert.equal(size(amount,100),'');
  for(const percent of [0,10,101,'25'])assert.equal(size(3,percent),'');assert.equal(size(1000001,100),'');
 });
 test('buy percentages use available cash and chosen price without rounding above the budget',()=>{
  const size=(cash,price,percent=100)=>orderPercentage({side:'BUY',availableCash:cash,price,percent});
- assert.deepEqual([25,50,75,100].map(p=>size(1000,99,p)),['2.52525252','5.05050505','7.57575757','10.1010101']);
- assert.equal(size(0.3,0.1),'3');assert.equal(size(100,300),'0.33333333');assert.equal(size(1000000,1e7),'0.1');
+ assert.deepEqual([25,50,75,100].map(p=>size(1000,99,p)),['2.5252','5.0505','7.5757','10.101']);
+ assert.equal(size(0.3,0.1),'3');assert.equal(size(100,300),'0.3333');assert.equal(size(1000000,1e7),'0.1');
  for(const price of [0,null,undefined,NaN,-1,Infinity,'100'])assert.equal(size(1000,price),'');assert.equal(size(0,100),'');
 });
 
-test('cash amount sizes down to eight decimals and a reviewed quantity never resizes on submit',async t=>{
+test('cash amount sizes down to four decimals and a reviewed quantity never resizes on submit',async t=>{
  const f=fixture(t);f.enable();
- assert.equal(cashOrderQuantity(100,300),'0.33333333');assert.equal(cashOrderQuantity(0.3,0.1),'3');
+ assert.equal(cashOrderQuantity(100,300),'0.3333');assert.equal(cashOrderQuantity(0.3,0.1),'3');
  for(const amount of [null,0,-1,'100',Infinity,NaN])assert.equal(cashOrderQuantity(amount,100),'');
  let review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:125,quantity:999});
  assert.equal(review.quantity,1.25);assert.equal(review.requestedCashAmount,125);assert.equal(review.remainingShares,6.25);assert.equal(review.remainingCash,875);
@@ -163,7 +217,7 @@ test('cash amount sizes down to eight decimals and a reviewed quantity never res
  await f.service.submit('a',{token:review.token,confirmed:true,cashAmount:999});assert.equal(JSON.parse(f.writes()[0].body).quantity,1.25);
  f.advance();f.source.read=path=>path.endsWith('/positions')?json([]):null;
  await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/current market reference price/);
- review=await f.service.preview('a',{...input,cashAmount:100,limitPrice:300});assert.equal(review.quantity,0.33333333);assert.ok(review.estimate<=100);
+ review=await f.service.preview('a',{...input,cashAmount:100,limitPrice:300});assert.equal(review.quantity,0.3333);assert.ok(review.estimate<=100);
  await assert.rejects(()=>f.service.preview('a',{...input,cashAmount:1001}),/cash/);
 });
 test('sell review uses proportional account cost, remaining total shares and available cash',async t=>{
