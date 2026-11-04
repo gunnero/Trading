@@ -67,7 +67,7 @@ try {
  await period.getByRole('button',{name:'Upcoming',exact:true}).click();await expect(table).not.toContainText('Advance GDP');await expect(table).toContainText('ISM Manufacturing PMI');
  mark('Automatic next/following week, weekend events, day drill-down, custom validation, upcoming and midnight rollover retain notes and source dates');
  mode='slow';await period.getByRole('button',{name:'Next month',exact:true}).click();await expect(page.locator('.eco-table tbody tr')).toHaveCount(0);await expect(page.locator('.eco-releases')).toContainText('Connecting to source');await expect(table).toContainText('Later release');mode='ok';
- await page.reload();await expect(page.locator('h1')).toHaveText('Economic Calendar');expect(page.url()).toContain('#briefing');
+ await page.reload();await expect(page.locator('h1')).toHaveText('Economic Calendar');expect(page.url()).toContain('#markets/calendar');
  mode='stale';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.calendar-warning')).toContainText('provider reconnecting');await expect(table.locator('tbody tr')).toHaveCount(4);
  mode='unavailable';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.eco-releases')).toContainText('Source temporarily unavailable');await expect(table).toHaveCount(0);
  mode='empty';await page.getByRole('button',{name:'Refresh source'}).click();await expect(page.locator('.eco-releases')).toContainText('No matching events');
@@ -84,8 +84,8 @@ try {
   await expect(page.locator('.eco-next')).toBeVisible();await expect(page.locator('.eco-releases')).toBeVisible();
   await page.screenshot({path:dir+`/width-${width}.png`,fullPage:true});
  }
- await page.getByRole('navigation',{name:'Quick navigation'}).getByRole('button',{name:'Economic Calendar',exact:true}).click();await expect(page.locator('h1')).toHaveText('Economic Calendar');
- await page.getByRole('button',{name:'More navigation'}).click();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Economic Calendar',exact:true})).toBeVisible();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Economic Calendar',exact:true}).click();
+ await page.getByRole('navigation',{name:'Quick navigation'}).getByRole('button',{name:'Markets',exact:true}).click();await expect(page.locator('h1')).toHaveText('Economic Calendar');
+ await page.getByRole('button',{name:'More navigation'}).click();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Markets',exact:true})).toBeVisible();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Markets',exact:true}).click();
  await page.clock.setSystemTime(new Date('2026-11-02T15:01:00Z'));await page.clock.fastForward(60001);await expect(page.locator('.eco-next h2')).toHaveText('Later release');await expect(page.locator('#eco-table-title')).toHaveText('Today');await expect(page.locator('.eco-week-grid')).toContainText('Mon, Nov 2');mark('Countdown advances to the next release and current week rolls forward as time passes');
  expect(errors).toEqual([]);mark('Desktop/tablet/390/320px layout, drawer and bottom navigation work without horizontal overflow or runtime errors');
  writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors,ownerDataUsed:false},null,2));

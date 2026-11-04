@@ -25,7 +25,7 @@ try{
  // The second account must survive both full reload and leaving this route.
  await page.getByRole('button',{name:/Sam Fixture Trading 212/}).click();await page.reload();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');
  await page.locator('.pm-people').getByRole('button',{name:'Sam Fixture'}).click();await page.reload();await expect(page.locator('.pm-people button[aria-pressed=true]')).toContainText('Sam Fixture');await expect(page.locator('.pm-account-card')).toHaveCount(1);
- await page.getByRole('button',{name:'Activity & alerts',exact:true}).last().click();await page.getByRole('button',{name:'Portfolios',exact:true}).click();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');await expect(page.locator('.pm-account-card')).toHaveCount(1);
+ await page.getByRole('button',{name:'Activity & alerts',exact:true}).last().click();await page.getByRole('navigation',{name:'Portfolio sections'}).getByRole('button',{name:'Accounts',exact:true}).click();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');await expect(page.locator('.pm-account-card')).toHaveCount(1);
  await page.locator('.pm-people').getByRole('button',{name:/Everyone/}).click();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');
  mark('Last selected account and person filter survive reload and navigation; Everyone preserves the current account');
  await page.getByRole('button',{name:/Alex Fixture Trading 212/}).click();await page.getByLabel('Search holdings').fill('missing');await expect(page.getByText('No matching holdings.')).toBeVisible();await page.getByLabel('Search holdings').fill('');

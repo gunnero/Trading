@@ -68,7 +68,7 @@ try{
   await page.keyboard.press('Escape');
   if(width<=760){
    await page.getByRole('button',{name:'More navigation',exact:true}).click();await expect(sidebar).toBeVisible();
-   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'News',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
+   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Markets',exact:true}).click();await page.getByRole('navigation',{name:'Markets sections'}).getByRole('button',{name:'News',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
    await expect(compact).toBeVisible();if(width===390)await snap('market-clock-mobile-fixture');
   }
  }

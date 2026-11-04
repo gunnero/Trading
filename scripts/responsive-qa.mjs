@@ -63,7 +63,7 @@ try{
   expect(await mobile.evaluate(()=>document.body.style.overflow)).toBe('hidden');
   await mobile.keyboard.press('Shift+Tab');expect(await mobile.evaluate(()=>document.activeElement.closest('.sidebar')!==null)).toBe(true);
   await mobile.keyboard.press('Escape');await expect(quick.getByRole('button',{name:'More navigation'})).toBeFocused();
-  await quick.getByRole('button',{name:'More navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
+  await quick.getByRole('button',{name:'More navigation'}).tap();await mobile.locator('.sidebar').getByRole('button',{name:'Overview',exact:true}).tap();await mobile.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).tap();await expect(mobile).toHaveURL(/#levels$/);await mobile.reload();await expect(mobile.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await quick.getByRole('button',{name:'Overview',exact:true}).tap();const panel=mobile.locator('.chart-panel'),chart=panel.locator('.price-chart');await expect(chart).toBeVisible();
   await chart.scrollIntoViewIfNeeded();await expect(panel.locator('.touch-chart-shell')).toHaveAttribute('data-touch-active','false');
   const cdp=await mobile.context().newCDPSession(mobile),box=await chart.boundingBox(),start=await mobile.evaluate(()=>scrollY);
@@ -88,15 +88,15 @@ try{
   await perf.goto(runtime.url+'/#news');await expect(perf.getByRole('heading',{name:'Technology earnings and the Fed lead the week ahead'})).toBeVisible();
   const scripts=await Promise.all(scriptResponses);expect(scripts.length).toBeGreaterThan(0);
   expect(scripts.some(r=>r.name.includes('ChartCanvas'))).toBe(false);expect(await perf.locator('[_echarts_instance_]').count()).toBe(0);
-  for(const path of ['/api/market/setup','/api/market/chart','/api/market/level-history','/api/sentiment','/api/calendar','/api/earnings'])expect(requests.includes(path)).toBe(false);
+  for(const path of ['/api/market/setup','/api/market/chart','/api/market/level-history','/api/sentiment/details','/api/calendar','/api/earnings'])expect(requests.includes(path)).toBe(false);
   await perf.goto(runtime.url+'/#overview');await expect(perf.locator('.chart-panel .price-chart')).toBeVisible();await expect(perf.locator('.scan-details')).toContainText('stocks have levels');
   await perf.goto(runtime.url+'/#news');await expect(perf.getByRole('heading',{name:'Technology earnings and the Fed lead the week ahead'})).toBeVisible();const cut=requests.length;
   await perf.clock.fastForward(70000);await perf.waitForTimeout(50);
-  expect(requests.slice(cut).filter(path=>/setup|chart|level-history|sentiment|calendar|earnings/.test(path))).toEqual([]);
+  expect(requests.slice(cut).filter(path=>/setup|chart|level-history|sentiment\/details|calendar|earnings/.test(path))).toEqual([]);
   await perf.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
-  await perf.waitForTimeout(100);const hiddenCut=requests.length;await perf.clock.fastForward(11*60000);await perf.waitForTimeout(100);expect(requests.length).toBe(hiddenCut);
+  await perf.waitForTimeout(100);const hiddenCut=requests.length;await perf.clock.fastForward(11*60000);await perf.waitForTimeout(100);expect(requests.slice(hiddenCut).filter(path=>path!=='/api/transfers/summary')).toEqual([]);
   await perf.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});await expect.poll(()=>requests.length).toBeGreaterThan(hiddenCut);
-  await perf.close();mark('Cold News loads no chart engine or unused feeds; leaving Overview stops scan/chart polling; a hidden tab makes no refresh requests and resumes when visible');
+  await perf.close();mark('Cold News loads no chart engine or unused feeds; the shared sidebar sentiment remains available; leaving Overview stops scan/chart polling; hidden market feeds stop refreshing and resume when visible');
   expect(errors).toEqual([]);
   writeFileSync(`${dir}/checks.json`,JSON.stringify({result:'passed',checks,metrics,coldNewsScripts:scripts,errors},null,2)+'\n');
 }finally{await browser.close();await runtime.close();}

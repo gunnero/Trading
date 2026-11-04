@@ -16,7 +16,7 @@ const errors=[],checks=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 const mark=name=>{checks.push(name);console.log('PASS '+name);};
-const nav=(name='Economic Calendar')=>name==='Fear & Greed'?page.locator('.sidebar-account-area').getByRole('button',{name,exact:true}):page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true});
+const nav=(name='Economic Calendar')=>name==='Fear & Greed'?page.locator('.sidebar-account-area').getByRole('button',{name,exact:true}):page.getByRole('navigation',{name:name==='News'?'Markets sections':'Main navigation'}).getByRole('button',{name:name==='Economic Calendar'?'Markets':name,exact:true});
 const snap=async name=>{await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);});await page.screenshot({path:`docs/qa/${name}.png`,fullPage:true});};
 const noOverflow=async()=>expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
 const iso=new Date().toISOString();

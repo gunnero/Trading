@@ -1,4 +1,7 @@
 /* One page heading across the desk. Section/card headings stay independent. */
+.section-tabs{display:flex;gap:6px;overflow-x:auto;margin:-8px 0 24px;padding:0 0 8px;border-bottom:1px solid #26383f;max-width:100%}
+.section-tabs button{min-height:44px;display:flex;align-items:center;gap:9px;flex-shrink:0;padding:11px 16px;border:1px solid transparent;border-radius:4px;background:transparent;color:#9aafb9;font:inherit;cursor:pointer}
+.section-tabs button:hover{background:#15242b;color:#e8edf0}.section-tabs button[aria-current=page]{background:#173033;border-color:#245653;color:#25c5ae}.section-tabs button:focus-visible{outline:2px solid #25c5ae;outline-offset:-2px}
 .app-shell{--page-gutter:24px;--page-title-size:28px;--page-title-color:#e8edf0;--page-subtitle-color:#9aafb9}
 .app-shell .main-shell>main{padding:0 var(--page-gutter) 20px}
 .app-shell header.page-header{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:112px;padding:24px var(--page-gutter) 22px;margin:0 calc(-1 * var(--page-gutter)) 24px;border-bottom:1px solid #26383f;background:#0e161a;text-align:left;box-sizing:border-box}
@@ -20,3 +23,5 @@
 .app-shell .news-page .news-panel>.news-controls{padding-top:22px}
 @media(max-width:950px){.page-header-actions{max-width:45%}}
 @media(max-width:760px){.app-shell{--page-gutter:14px;--page-title-size:24px}.app-shell header.page-header{min-height:0;align-items:flex-start;flex-wrap:wrap;padding-top:20px;padding-bottom:18px;gap:16px;margin-bottom:20px}.page-header-copy{flex-basis:100%}.app-shell .page-header-menu{display:flex;min-height:44px;min-width:44px;margin-left:-7px}.app-shell .page-header-description{font-size:12px}.page-header-actions{max-width:100%;width:100%;justify-content:flex-start}.app-shell .page-header-actions .button{min-height:44px}.app-shell .levels-workbench>.page-header{margin-bottom:0}.app-shell .page-header-actions .segmented button{min-height:38px}.app-shell .page-market-context .market-groups.macro-strip{padding-bottom:16px;margin-bottom:20px}}
+
+@media print{.section-tabs{display:none!important}}

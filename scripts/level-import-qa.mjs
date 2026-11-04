@@ -12,7 +12,7 @@ const runtime=await testRuntime(),browser=await chromium.launch(launch),page=awa
 page.on('pageerror',e=>errors.push(e.message));page.on('request',req=>{if(req.url().includes('/api/market/'))requests.push(new URL(req.url()));});
 const mark=text=>{checks.push(text);console.log('PASS '+text);},read=async()=>await(await fetch(runtime.url+'/api/workspace')).json();
 const saved=()=>expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
-const nav=async name=>{if(await page.getByRole('button',{name:'Open navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true}).click();};
+const nav=async name=>{if(await page.getByRole('button',{name:'Open navigation',exact:true}).isVisible())await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:name==='Key levels'?'Overview':name,exact:true}).click();if(name==='Key levels')await page.locator('.page-header').getByRole('button',{name,exact:true}).click();};
 const openImport=async text=>{await page.getByRole('button',{name:'Import levels',exact:true}).first().click();await expect(page.getByLabel('Level sheet')).toHaveValue('');await page.getByLabel('Level sheet').fill(text);};
 const submit=()=>page.getByRole('dialog').getByRole('button',{name:'Import levels',exact:true}).click();
 const monday='LVLS 2026-10-26\nQQQ|1HR|S 720-719\nKO|Daily|D 65-64';

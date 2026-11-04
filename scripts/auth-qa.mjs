@@ -37,12 +37,12 @@ try{
   // Existing workspace edits still autosave through the protected API.
   await page.getByRole('button',{name:'Key levels',exact:true}).first().click();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   await page.reload();await expect(page.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Account and security'}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('navigation',{name:'Settings sections'}).getByRole('link',{name:'Account & security',exact:true}).click();await expect(account).toBeVisible();await account.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   await login(page,'');await expect(page.getByRole('alert')).toContainText('Check your sign-in details');
   await login(page,codes[0]);await expect(account).toBeVisible();
   mark('Sign-out hides private content; password-only login fails with MFA; recovery sign-in restores the saved page');
   // Expiry locks the mounted workspace rather than destroying pending editor state.
-  await page.getByRole('button',{name:'Account and security'}).click();await account.getByLabel('Current password',{exact:true}).fill('unsaved-field-preserved');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('navigation',{name:'Settings sections'}).getByRole('link',{name:'Account & security',exact:true}).click();await account.getByLabel('Current password',{exact:true}).fill('unsaved-field-preserved');
   store.db.prepare('DELETE FROM sessions').run();await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
   const lock=page.getByRole('dialog',{name:'Sign in to unlock your workspace'});await expect(lock).toBeVisible();await page.keyboard.press('Escape');await expect(lock).toBeVisible();
   await login(page,codes[1]);await expect(lock).toHaveCount(0);await expect(account.getByLabel('Current password',{exact:true})).toHaveValue('unsaved-field-preserved');await account.getByLabel('Current password',{exact:true}).fill('');
@@ -51,7 +51,7 @@ try{
   await account.getByRole('button',{name:'Sign out all devices'}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();await expect(second.getByRole('heading',{name:'Welcome back.'})).toBeVisible();expect(await second.locator('main').count()).toBe(0);await second.close();
   mark('Sign out all devices revokes server sessions and clears private content in other tabs');
   for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/login-${width}.png`});}
-  await login(page,codes[2]);await expect(page.locator('main')).toBeVisible();await page.getByRole('button',{name:'Account and security'}).click();
+  await login(page,codes[2]);await expect(page.locator('main')).toBeVisible();await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('navigation',{name:'Settings sections'}).getByRole('link',{name:'Account & security',exact:true}).click();
   for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:900});expect(await account.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await account.getByRole('button',{name:'Sign out',exact:true}).scrollIntoViewIfNeeded();await expect(account.getByRole('button',{name:'Sign out',exact:true})).toBeInViewport();}
   mark('Login and security settings fit 320px, phone, tablet and desktop widths; session controls remain accessible');
   await expect(account).toContainText('Stay signed in for 30 days');
@@ -68,7 +68,7 @@ try{
   reopened=remembered.pages()[0];await prepare(reopened);await reopened.goto(runtime.url+'/#levels');
   await expect(reopened.getByRole('heading',{name:'Key levels',exact:true})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session').value).toBe(savedCookie.value);
-  await reopened.getByRole('button',{name:'Account and security'}).click();
+  await reopened.getByRole('button',{name:'Settings',exact:true}).click();await reopened.getByRole('navigation',{name:'Settings sections'}).getByRole('link',{name:'Account & security',exact:true}).click();
   await reopened.getByRole('region',{name:'Account & security'}).getByRole('button',{name:'Sign out',exact:true}).click();
   await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session')).toBeUndefined();

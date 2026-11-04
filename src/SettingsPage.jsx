@@ -10,7 +10,7 @@ import {sentimentDisplay,sentimentScore} from './data/sentiment.mjs';
 
 import './settings.css';
 
-const categories=[{id:'transfers',label:'Transfers & Costs',icon:ArrowsLeftRight},{id:'watchlist',label:'Watchlist',icon:Tag},{id:'charts',label:'Charts',icon:ChartLine},{id:'connections',label:'Connections',icon:PlugsConnected},{id:'account',label:'Account',icon:ShieldCheck},{id:'workspace',label:'Workspace',icon:HardDrives}];
+const categories=[{id:'transfers',label:'Transfers & Costs',icon:ArrowsLeftRight},{id:'watchlist',label:'Watchlist',icon:Tag},{id:'charts',label:'Charts',icon:ChartLine},{id:'connections',label:'Connections',icon:PlugsConnected},{id:'account',label:'Account & security',icon:ShieldCheck},{id:'workspace',label:'Workspace',icon:HardDrives}];
 export const settingsCategory=route=>{const id=route.split('/')[1];return categories.some(item=>item.id===id)?id:'charts';};
 function Connections(){
   const {briefingTime,zoneLabel}=useDisplayTime();

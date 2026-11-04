@@ -109,7 +109,7 @@ try {
   await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
   mark('Watchlist import, deduplication and restore');
 
-  await nav('Key levels').click();
+  await nav('Overview').click();await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();
   await expect(page.getByText(/40 instruments · 141 zones/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Search levels' }).fill('NOW');
   await expect(page.getByText('Gap', { exact: true })).toBeVisible();
