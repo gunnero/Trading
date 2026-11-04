@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createTradePrice} from '../server/portfolio-trade-price.mjs';
 import {createPortfolioTrading} from '../server/portfolio-trading.mjs';
-import {cashOrderQuantity,orderPercentage,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,sellRemainder} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,cashPercentage,orderPercentage,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,sellRemainder} from '../src/data/portfolio-order-size.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
 import {portfolioOrderLevels} from '../src/data/portfolio-order-levels.mjs';
 const input={side:'BUY',type:'LIMIT',ticker:'AMD_US_EQ',quantity:2.5,limitPrice:100,timeValidity:'DAY'};
@@ -284,29 +284,36 @@ test('buy percentages use available cash and chosen price without rounding above
  assert.equal(size(0.3,0.1),'3');assert.equal(size(100,300),'0.3333');assert.equal(size(1000000,1e7),'0.1');
  for(const price of [0,null,undefined,NaN,-1,Infinity,'100'])assert.equal(size(1000,price),'');assert.equal(size(0,100),'');
 });
-test('Market buy shortcuts cap at 95% cash with cent and share rounding while other percentages and sells retain their meaning',()=>{
+test('Market and Limit buy shortcuts use the full available cash with share rounding',()=>{
  const size=(percent,extra={})=>orderPercentage({side:'BUY',type:'MARKET',availableCash:1000,price:99,percent,...extra});
- assert.deepEqual([25,50,75,100].map(p=>size(p)),['2.5252','5.0505','7.5757','9.5959']);
- assert.equal(marketBuyCashLimit(100.01),95);assert.equal(marketBuyCashLimit(.3),.28);assert.equal(marketBuyCashLimit(.01),0);assert.equal(marketBuyCashLimit(0),0);
+ assert.deepEqual([25,50,75,100].map(p=>size(p)),['2.5252','5.0505','7.5757','10.101']);
+ for(const cash of [100.01,.3,.01,0,100.005])assert.equal(marketBuyCashLimit(cash),cash);
  for(const cash of [null,undefined,'100',NaN,Infinity,-1]){assert.equal(marketBuyCashLimit(cash),null);assert.equal(size(100,{availableCash:cash}),'');}
- assert.equal(size(100,{price:0}),'');assert.equal(size(100,{availableCash:.01}),'');assert.equal(size(100,{precision:2}),'9.59');
- assert.equal(size(100,{type:'LIMIT'}),'10.101');assert.equal(size(100,{side:'SELL',availableShares:3.01234567}),'3.01234567');assert.equal(size(100,{side:'SELL',availableShares:3.0123}),'3.0123');
+ assert.equal(size(100,{price:0}),'');assert.equal(size(100,{availableCash:.01}),'0.0001');assert.equal(size(100,{precision:2}),'10.1');
+ assert.equal(size(100,{type:'LIMIT'}),'10.101');assert.equal(size(100,{side:'SELL',availableShares:3.01234567}),'3.01234567');
  for(const cash of [.01,.02,.03,.3,1,100.01,1566.57,1000000])for(const price of [.01,.1,99,625.75])for(const percent of [25,50,75,100]){
-  const q=size(percent,{availableCash:cash,price});if(q)assert.ok(Number(q)*price<=marketBuyCashLimit(cash)+1e-8);
+  const q=size(percent,{availableCash:cash,price});if(q)assert.ok(Number(q)*price<=cash+1e-8);
  }
 });
-test('Market buy budget uses broker available cash, blocks oversized cash/manual shares and applies at confirmation without resizing',async t=>{
+test('cash-mode percentages floor partial cents and preserve the entire balance at 100%',()=>{
+ assert.deepEqual([25,50,75,100].map(p=>cashPercentage(61.37,p)),['15.34','30.68','46.02','61.37']);
+ assert.equal(cashPercentage(100.04,75),'75.03');assert.equal(cashPercentage(.01,100),'0.01');assert.equal(cashPercentage(.01,25),'');assert.equal(cashPercentage(100.005,100),'100.005');
+ for(const amount of [null,undefined,NaN,Infinity,-1,0,'100'])assert.equal(cashPercentage(amount,100),'');
+ for(const percent of [0,10,101,'100'])assert.equal(cashPercentage(100,percent),'');
+});
+test('full-cash buys preview and submit once while reduced balances block the fixed review without resizing',async t=>{
  const f=fixture(t);f.enable();
  // Free cash already excludes reserved funds; do not deduct reservations twice.
  f.source.read=path=>path.endsWith('/summary')?json({id:123,currency:'USD',cash:{availableToTrade:f.source.cash,reservedForOrders:300,inPies:50}}):null;
  const position=await f.service.position('a','AMD_US_EQ');assert.equal(position.availableCash,1000);
- for(const sizing of [{quantity:10},{cashAmount:1000},{quantity:9.5001,marketCashLimit:1000}])await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',...sizing}),/950.00 cash budget/);
+ for(const sizing of [{quantity:10.0001},{cashAmount:1001},{quantity:11,marketCashLimit:2000}])await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',...sizing}),/Not enough available cash/);
  const quantity=Number(orderPercentage({side:'BUY',type:'MARKET',percent:100,availableCash:position.availableCash,price:position.price}));
- const review=await f.service.preview('a',{...input,type:'MARKET',quantity});assert.equal(review.quantity,9.5);assert.equal(review.estimate,950);assert.equal(review.marketCashLimit,950);assert.equal(review.remainingCash,50);assert.equal(f.writes().length,0);
+ const sharesReview=await f.service.preview('a',{...input,type:'MARKET',quantity});assert.equal(sharesReview.quantity,10);
+ const review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:1000});assert.equal(review.quantity,10);assert.equal(review.requestedCashAmount,1000);assert.equal(review.estimate,1000);assert.equal(review.marketCashLimit,1000);assert.equal(review.remainingCash,0);assert.equal(f.writes().length,0);
  f.advance(6000);f.source.cash=990;
- await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/940.50 cash budget/);assert.equal(f.writes().length,0);
- assert.equal(JSON.parse(f.db.prepare('SELECT detail FROM portfolio_order_attempts WHERE token=?').get(review.token).detail).quantity,9.5);
- f.source.cash=1000;f.advance(6000);await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(JSON.parse(f.writes()[0].body).quantity,9.5);
+ await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/Not enough available cash/);assert.equal(f.writes().length,0);
+ assert.equal(JSON.parse(f.db.prepare('SELECT detail FROM portfolio_order_attempts WHERE token=?').get(review.token).detail).quantity,10);
+ f.source.cash=1000;f.advance(6000);await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(JSON.parse(f.writes()[0].body).quantity,10);
  f.restart();await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
  const limit=await f.service.preview('a',{...input,cashAmount:1000});assert.equal(limit.estimate,1000);assert.equal(limit.marketCashLimit,null);
 });
@@ -448,9 +455,9 @@ test('unheld stock market quotes size cash and percentages without chart prices;
 });
 test('market quote loss or a higher estimate blocks submission of a priced review before writing',async t=>{
  const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;f.source.quote=(key,at)=>marketResult('AMD',at);
- const review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:950});
+ const review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:1000});
  f.source.quote=()=>({status:'unavailable'});await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/reference price is unavailable/);assert.equal(f.writes().length,0);
- f.source.quote=(key,at)=>marketResult('AMD',at,201);await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/cash budget/);assert.equal(f.writes().length,0);
+ f.source.quote=(key,at)=>marketResult('AMD',at,201);await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/Not enough available cash/);assert.equal(f.writes().length,0);
  f.source.quote=()=>{throw Error('provider outage');};assert.equal((await f.service.position('a','AMD_US_EQ')).price,null);
  await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100,limitPrice:1}),/reference price is unavailable/);
  assert.equal((await f.service.preview('a',{...input,limitPrice:50})).referencePrice,50);

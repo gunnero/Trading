@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,MARKET_BUY_BUFFER_PERCENT,exactOrderQuantity} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,exactOrderQuantity} from '../src/data/portfolio-order-size.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {createOrderTracker} from './portfolio-order-tracker.mjs';
 
@@ -223,7 +223,6 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const maxOrderValue=orderLimit(id,estimate,summary.currency);
     if(input.side==='BUY'&&(summary.cash.availableToTrade<=0||estimate!==null&&estimate>summary.cash.availableToTrade+1e-8))throw fail(400,'Not enough available cash for this order estimate.');
     const marketCashLimit=input.side==='BUY'&&input.type==='MARKET'?marketBuyCashLimit(summary.cash.availableToTrade):null;
-    if(marketCashLimit!==null&&estimate!==null&&estimate>marketCashLimit+1e-8)throw fail(400,`This Market buy exceeds the ${summary.currency} ${marketCashLimit.toFixed(2)} cash budget. The app leaves ${MARKET_BUY_BUFFER_PERCENT}% of available cash for price changes and charges. Refresh the holding and reduce the amount or use 100% to size with this buffer, then review again.`);
     const saleCost=input.side==='SELL'&&holding.cost!==null&&holding.shares>0?holding.cost*qty/holding.shares:null;
     const estimatedProfit=estimate!==null&&saleCost!==null?estimate-saleCost:null;
     return {action:'ORDER',maxOrderValue,marketCashLimit,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,quantityPrecision,sellAll,requestedQuantity:requestedQuantity!==null&&requestedQuantity!==qty?requestedQuantity:null,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,priceQuote:pricing?.priceQuote||null,estimate,
