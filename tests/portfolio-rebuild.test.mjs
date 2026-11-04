@@ -102,7 +102,7 @@ test('paused price requests retry automatically after backoff without rereading 
 });
 
 test('corporate-action blockers retain a complete import; legacy failures resume calculation without a broker reread',async t=>{
- const f=fixture(t);f.input.orders[0].fill.type='STOCK_SPLIT';f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
+ const f=fixture(t);f.input.orders[0].fill.type='STOCK_TRANSFER';f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
  const blocked=f.service.read('a');assert.equal(blocked.status,'blocked');assert.equal(blocked.stage,'validation');assert.equal(blocked.pages,3);assert.equal(blocked.records,5);assert.equal(blocked.historyComplete,true);assert.equal(blocked.canResume,true);assert.match(blocked.message,/corporate actions/);assert.deepEqual(blocked.points,[]);
  const old=JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state);old.status='unavailable';old.retryAt=0;delete old.stage;f.db.prepare('UPDATE portfolio_rebuild_state SET state=?').run(JSON.stringify(old));
  f.restart();f.service.start('a',{});await f.service.sync('a');assert.equal(f.calls.length,3);assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.read('a').pages,3);assert.deepEqual(f.service.values('a'),[]);
@@ -123,4 +123,73 @@ test('completed instrument prices survive a later price failure and disk restart
  f.options.prices=async key=>{keys.push(key);if(key==='NASDAQ:TSLA'&&outage)throw Error('Price service unavailable');return key==='NASDAQ:AMD'?priceHistory():{...priceHistory(),points:priceHistory().points.map(p=>({...p,value:100}))};};
  f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'paused');assert.equal(f.service.read('a').priced,1);
  f.restart(true);outage=false;f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.deepEqual(keys,['NASDAQ:AMD','NASDAQ:TSLA','NASDAQ:TSLA']);assert.equal(f.calls.length,3);assert.equal(f.service.values('a').at(-1).value,1093);
+});
+
+// Synthetic quantities/costs: a paired replacement must not become a cash trade.
+function splitFixture(ratio=10){
+ const stock={ticker:'NFLX_US_EQ',name:'Netflix',currency:'USD',isin:'US64110L1061'},at='2025-11-17T08:30:00Z';
+ const execution=(id,side,quantity,netValue,filledAt)=>{const row=trade(id,side,quantity,netValue,filledAt);row.order.instrument={...stock};return row;};
+ const sell=execution(2,'SELL',-.25,250,at),buy=execution(3,'BUY',.25*ratio,250,at);
+ sell.fill={...sell.fill,type:'STOCK_SPLIT',price:1000};buy.fill={...buy.fill,type:'STOCK_SPLIT',price:1000/ratio};
+ const input={snapshot:{source:'api',brokerId:'1',currency:'USD',cash:1025,accountValue:1025,fetchedAt:'2025-11-20T22:00:00Z',holdings:[]},transactions:[{reference:'deposit',type:'DEPOSIT',currency:'USD',amount:1000,dateTime:'2025-11-14T12:00:00Z'}],dividends:[],orders:[execution(1,'BUY',.25,250,'2025-11-14T15:00:00Z'),buy,sell,execution(4,'SELL',.25*ratio,275,'2025-11-19T15:00:00Z')]};
+ const history={currency:'USD',shareBasis:'historical',splitAdjustments:[{at:time('2025-11-17T14:30:00Z'),ratio}],points:['14','17','18','19','20'].map((d,i)=>({at:time(`2025-11-${d}T21:00:00Z`),value:[1000,1000/ratio,1080/ratio,1100/ratio,1110/ratio][i]}))};
+ return {input,history};
+}
+test('paired forward and reverse splits preserve cash and valuation before subsequent sales',()=>{
+ for(const ratio of [10,.1]){
+  const {input,history}=splitFixture(ratio),ledger=portfolioLedger(input);
+  assert.equal(ledger.cash,1025);assert.equal(ledger.splits.length,1);assert.equal(ledger.events.filter(e=>e.split).length,1);assert.equal(ledger.events.find(e=>e.split).cash,0);
+  const points=rebuildPortfolioValues(ledger,{NFLX_US_EQ:history},'USD');assert.deepEqual(points.map(p=>p.value),[1000,1000,1000,1000,1020,1025,1025]);
+ }
+});
+test('a split also reconciles an open holding and repeated splits',()=>{
+ const {input,history}=splitFixture();input.orders.pop();input.snapshot.cash=750;input.snapshot.holdings=[{ticker:'NFLX_US_EQ',quantity:2.5}];
+ const sell=structuredClone(input.orders[2]),buy=structuredClone(input.orders[1]);
+ sell.fill={...sell.fill,id:5,quantity:-2.5,price:100,filledAt:'2025-11-18T08:30:00Z'};buy.fill={...buy.fill,id:6,quantity:5,price:50,filledAt:sell.fill.filledAt};input.orders.push(sell,buy);input.snapshot.holdings[0].quantity=5;
+ history.splitAdjustments.push({at:time('2025-11-18T14:30:00Z'),ratio:2});history.points.slice(2).forEach(p=>p.value/=2);
+ const ledger=portfolioLedger(input);assert.equal(ledger.splits.length,2);assert.deepEqual(rebuildPortfolioValues(ledger,{NFLX_US_EQ:history},'USD').map(p=>p.value),[1000,1000,1000,1000,1020,1025,1027.5]);
+});
+test('eight-decimal fractional split shares tolerate cent-rounded cost records without changing cash',()=>{
+ const {input,history}=splitFixture();
+ for(const row of input.orders){row.fill.quantity=Math.sign(row.fill.quantity)*(row.fill.id===1||row.fill.id===2?.01234567:.1234567);row.fill.walletImpact.netValue=row.fill.id===4?13.58:12.35;}
+ input.snapshot.cash=1001.23;
+ const ledger=portfolioLedger(input),values=rebuildPortfolioValues(ledger,{NFLX_US_EQ:history},'USD');
+ assert.ok(Math.abs(ledger.cash-1001.23)<1e-9);assert.ok(Math.abs(values[0].value-values[3].value)<1e-9);assert.ok(Math.abs(values.at(-1).value-1001.23)<1e-9);
+});
+test('unpaired, ambiguous, mismatched or partial replacements cannot publish split history',()=>{
+ for(const change of [
+  i=>i.orders.splice(1,1),i=>i.orders[1].fill.filledAt='2025-11-17T08:31:00Z',i=>i.orders[1].fill.price=101,
+  i=>i.orders[1].fill.walletImpact.netValue=251,i=>i.orders[1].fill.quantity=-2.5,i=>i.orders[2].fill.quantity=.25,
+  i=>i.orders[1].order.status='PARTIALLY_FILLED',i=>i.orders[1].order.instrument.isin='DIFFERENT',
+  i=>{i.orders[0].fill.quantity=.5;},i=>i.orders.push({...structuredClone(i.orders[1]),fill:{...i.orders[1].fill,id:5}}),
+  i=>i.orders[2].fill.type='STOCK_TRANSFER',i=>i.orders[1].fill.walletImpact.currency='EUR'
+ ]){const {input}=splitFixture();change(input);assert.throws(()=>portfolioLedger(input));}
+});
+test('split dates, ratios and historical price basis must agree with the price source',()=>{
+ for(const change of [h=>delete h.splitAdjustments,h=>h.splitAdjustments=[],h=>h.shareBasis='adjusted',h=>h.splitAdjustments[0].ratio=2,h=>h.splitAdjustments[0].at+=day,h=>h.splitAdjustments.push({...h.splitAdjustments[0]})]){
+  const {input,history}=splitFixture();change(history);assert.throws(()=>rebuildPortfolioValues(portfolioLedger(input),{NFLX_US_EQ:history},'USD'),/split date or ratio/);
+ }
+ const {input,history}=splitFixture();history.points.splice(1,1);assert.throws(()=>rebuildPortfolioValues(portfolioLedger(input),{NFLX_US_EQ:history},'USD'),/price after the stock split/);
+});
+test('future split rows do not enter an older anchor, and intraday replacements remain unsupported',()=>{
+ const {input}=splitFixture();input.snapshot.fetchedAt='2025-11-14T22:00:00Z';input.snapshot.cash=750;input.snapshot.holdings=[{ticker:'NFLX_US_EQ',quantity:.25}];assert.equal(portfolioLedger(input).splits.length,0);
+ const current=splitFixture();current.input.orders[1].fill.filledAt=current.input.orders[2].fill.filledAt='2025-11-17T16:00:00Z';assert.throws(()=>rebuildPortfolioValues(portfolioLedger(current.input),{NFLX_US_EQ:current.history},'USD'),/split date or ratio/);
+});
+test('split-adjusted Yahoo prices and broker share replacements produce no artificial split-day loss',()=>{
+ const {input,history}=splitFixture(),payload=yahooPayload('NFLX'),r=payload.chart.result[0];
+ r.meta.dataGranularity='1d';r.timestamp=['14','17','18','19','20'].map(d=>time(`2025-11-${d}T14:30:00Z`)/1000);
+ const closes=[100,100,108,110,111];r.indicators.quote[0]={open:closes,close:closes,low:closes,high:closes,volume:closes.map(()=>100)};
+ r.events={splits:{one:{date:history.splitAdjustments[0].at/1000,numerator:10,denominator:1}}};
+ const parsed=parsePortfolioPrices(payload,resolveSymbol('NASDAQ:NFLX'),time(input.snapshot.fetchedAt));assert.equal(parsed.points[0].value,1000);assert.equal(parsed.shareBasis,'historical');assert.deepEqual(parsed.splitAdjustments,history.splitAdjustments);
+ assert.deepEqual(rebuildPortfolioValues(portfolioLedger(input),{NFLX_US_EQ:parsed},'USD').map(p=>p.value),[1000,1000,1000,1000,1020,1025,1025]);
+});
+test('a saved legacy split blocker resumes after restart without reading broker pages again',async t=>{
+ const f=fixture(t,{disk:true}),{input,history}=splitFixture();Object.assign(f.input,input);f.a.snapshot=input.snapshot;f.options.now=()=>time(input.snapshot.fetchedAt);let verified=false,priceCalls=0;
+ f.options.prices=async key=>{assert.equal(key,'NASDAQ:NFLX');priceCalls++;return verified?history:{...history,splitAdjustments:[]};};
+ f.restart();f.service.start('a',{});await f.service.sync('a');
+ const saved=JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state);saved.status='blocked';saved.stage='validation';saved.retryAt=null;f.db.prepare('UPDATE portfolio_rebuild_state SET state=?').run(JSON.stringify(saved));
+ f.restart(true);f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.read('a').priced,0);assert.match(f.service.read('a').message,/split date or ratio/);
+ verified=true;f.restart(true);f.service.start('a',{});await f.service.sync('a');
+ assert.equal(f.calls.length,3);assert.equal(priceCalls,2);assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').pages,3);assert.equal(f.service.read('a').anchorAt,input.snapshot.fetchedAt);assert.equal(f.service.read('a').from,time('2025-11-14T21:00:00Z'));assert.equal(f.service.values('a').at(-1).value,1025);
+ f.restart(true);assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').length,7);
 });

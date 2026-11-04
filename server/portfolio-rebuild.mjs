@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {portfolioListing} from '../src/data/portfolio-listings.mjs';
-import {portfolioLedger,rebuildPortfolioValues} from '../src/data/portfolio-rebuild.mjs';
+import {portfolioLedger,rebuildPortfolioValues,verifyPortfolioSplits} from '../src/data/portfolio-rebuild.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {fundingHistoryPath} from './portfolio-funding.mjs';
 
@@ -74,6 +74,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
           const instrument=ledger.instruments[s.priced],listing=portfolioListing(instrument,s.listings);
           if(!listing)throw Error('No verified historical price listing for '+instrument.name+' ('+instrument.ticker+'). Add its exact listing to the watchlist, then retry using saved history.');
           retryable=true;const history=await prices(listing.id,ledger.from,ledger.to);retryable=false;if(!current())return safeRead();
+          verifyPortfolioSplits(ledger.splits.filter(split=>split.ticker===instrument.ticker),history);
           db.prepare('INSERT OR REPLACE INTO portfolio_rebuild_items VALUES(?,?,?,?,?)').run(id,s.scan,'prices',instrument.ticker,JSON.stringify(history));s.priced++;s.failures=0;save(id,s);
         }
         if(s.priced===ledger.instruments.length){

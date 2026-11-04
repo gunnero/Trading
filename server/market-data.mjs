@@ -171,7 +171,7 @@ export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
   // Yahoo closes are split-adjusted. Reconstruct prices in the share units
   // held at each date; dividend-adjusted closes are intentionally not used.
   const points=parseCandles(payload,asset,'D',cutoff,{full:true}).map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
-  return {currency:result.meta.currency,points,provider:'Yahoo Finance',basis:'Daily close; split adjustments reversed to historical share units'};
+  return {currency:result.meta.currency,points,provider:'Yahoo Finance',shareBasis:'historical',splitAdjustments:splits,basis:'Daily close; split adjustments reversed to historical share units'};
 }
 export function parseBenchmarkPrices(payload,asset,cutoff=Date.now()){
   const r=resultOf(payload,asset),adjusted=r.indicators?.adjclose?.[0]?.adjclose;
