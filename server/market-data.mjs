@@ -165,7 +165,7 @@ const historyVenues={NASDAQ:{sources:['NMS','NGM','NCM'],zone:'America/New_York'
 export function resolvePortfolioPriceSymbol(key,expected){
   if(key==='LSE:VUAA'||key==='SIX:EQAC')expected={exchange:key.split(':')[0],currency:'USD',type:'ETF'};
   if(expected){
-    const [exchange,symbol,...extra]=String(key).split(':'),venue=historyVenues[exchange];
+    const [exchange,symbol,...extra]=String(key).split(':'),venue=Object.hasOwn(historyVenues,exchange)?historyVenues[exchange]:null;
     if(!venue||extra.length||expected.exchange!==exchange||expected.currency!=='USD'||!['ETF','EQUITY'].includes(expected.type)||!/^([A-Z][A-Z0-9.]{0,9})$/.test(symbol||'')||(venue.suffix&&expected.type!=='ETF'))return null;
     return {key,symbol:venue.suffix?symbol+venue.suffix:symbol.replaceAll('.','-'),kind:'equity',portfolioExpected:expected,portfolioVenue:venue,...(venue.suffix?{portfolioDailyZone:venue.zone}:{})};
   }

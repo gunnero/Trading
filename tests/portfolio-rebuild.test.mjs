@@ -86,6 +86,10 @@ test('broker catalog automatically resolves supported exact listings without usi
  assert.equal(portfolioCatalogListing(eqac,[catalog[0],catalog[0]]),null);
  assert.equal(portfolioCatalogListing({...eqac,isin:''},catalog),null);
  assert.equal(portfolioCatalogListing(eqac,[{...catalog[0],exchange:'London Stock Exchange'}]),null);
+ for(const exchange of ['constructor','__proto__','toString']){
+  assert.equal(portfolioCatalogListing(eqac,[{...catalog[0],exchange}]),null);
+  assert.equal(resolvePortfolioPriceSymbol(exchange+':TEST',{exchange,currency:'USD',type:'ETF'}),null);
+ }
 });
 test('historical listings identify USD London VUAA and NYSE Visa without borrowing another share class',()=>{
  assert.equal(portfolioHistoryListing(vuaa).id,'LSE:VUAA');

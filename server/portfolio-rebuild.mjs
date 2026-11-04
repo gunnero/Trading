@@ -73,10 +73,11 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
         // Saved rows, not an array offset, identify completed instruments. This
         // also resumes old scans whose first missing listing stopped the loop.
         const savedPrices=new Set(db.prepare("SELECT item_id FROM portfolio_rebuild_items WHERE account_id=? AND scan=? AND kind='prices'").all(id,s.scan).map(r=>r.item_id));
-        const listingFor=i=>portfolioHistoryListing(i,s.listings)||s.catalogListings[i.ticker];
+        const own=(map,key)=>Object.hasOwn(map,key)?map[key]:null;
+        const listingFor=i=>portfolioHistoryListing(i,s.listings)||own(s.catalogListings,i.ticker);
         const updateChecks=()=>{
           s.priced=ledger.instruments.filter(i=>savedPrices.has(i.ticker)).length;
-          s.listingChecks=ledger.instruments.map(i=>({ticker:i.ticker,name:i.name,currency:i.instrumentCurrency,listing:listingFor(i)?.id||null,status:savedPrices.has(i.ticker)?'saved':s.priceIssues[i.ticker]?'unavailable':listingFor(i)?'pending':'unmatched',message:s.priceIssues[i.ticker]||null}));
+          s.listingChecks=ledger.instruments.map(i=>({ticker:i.ticker,name:i.name,currency:i.instrumentCurrency,listing:listingFor(i)?.id||null,status:savedPrices.has(i.ticker)?'saved':own(s.priceIssues,i.ticker)?'unavailable':listingFor(i)?'pending':'unmatched',message:own(s.priceIssues,i.ticker)}));
         };
         updateChecks();
         if(readListings&&!s.catalogChecked&&s.listingChecks.some(i=>i.status==='unmatched')){
@@ -90,7 +91,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
           }catch{if(!current())return safeRead();s.listingMessage='Automatic listing lookup is unavailable. Check Metadata read permission, then retry; saved history and prices will be reused.';}
           s.catalogChecked=true;updateChecks();s.retryAt=now()+60000;save(id,s);return safeRead();
         }
-        const queue=ledger.instruments.filter(i=>!savedPrices.has(i.ticker)&&listingFor(i)&&!s.priceIssues[i.ticker]);
+        const queue=ledger.instruments.filter(i=>!savedPrices.has(i.ticker)&&listingFor(i)&&!own(s.priceIssues,i.ticker));
         for(const instrument of queue.slice(0,2)){
           const listing=listingFor(instrument);
           try{

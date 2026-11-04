@@ -55,7 +55,7 @@ export function portfolioCatalogListing(holding,catalog=[]) {
   if(holding?.instrumentCurrency!=='USD'||!/^([A-Z]{2}[A-Z0-9]{9}[0-9])$/.test(holding.isin||''))return null;
   const matches=catalog.filter(i=>i.ticker===holding.ticker);
   if(matches.length!==1)return null;
-  const i=matches[0],exchange=historyExchanges[i.exchange],symbol=i.shortName;
+  const i=matches[0],exchange=Object.hasOwn(historyExchanges,i.exchange)?historyExchanges[i.exchange]:null,symbol=i.shortName;
   if(!exchange||i.isin!==holding.isin||i.currencyCode!==holding.instrumentCurrency||!['STOCK','ETF'].includes(i.type)||!/^([A-Z][A-Z0-9.]{0,9})$/.test(symbol||''))return null;
   // Do not silently follow a ticker rename or borrow an alternate share class.
   // Explicitly verified historical aliases remain in portfolioHistoryListing.
