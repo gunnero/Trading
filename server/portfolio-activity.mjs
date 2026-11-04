@@ -88,6 +88,7 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
       // Refresh the recent page between older pages, so a long initial import
       // cannot delay new executions. Both requests share the persisted backoff.
       const head=s.complete&&!s.cursor&&now()<(s.rescanAt||0)||!!s.cursor&&s.headAt<=now(),path=head?FIRST:s.cursor||FIRST;
+      if(!head&&!s.cursor)s.scanStartedAt=now();
       const raw=await request(path,decode(record,id));if(scope(id,g)!==key)throw fail(409,'The account changed.');
       const page=normalizeActivityPage(raw,now(),orderView);
       if(!head&&page.next&&(page.next===path||s.seen.includes(page.next)))throw Error('Order history repeated a page.');
@@ -96,7 +97,7 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
       if(head&&!s.cursor)s.nextAt=now()+60000;
       if(!head){
         s.pages++;s.seen.push(path);s.cursor=page.next;
-        if(!page.next){s.complete=true;s.completedAt=now();s.rescanAt=now()+86400000;s.cursor=null;s.pages=0;s.seen=[];s.nextAt=now()+60000;}
+        if(!page.next){s.complete=true;s.completedAt=now();s.coveredThrough=s.scanStartedAt||s.startedAt;s.rescanAt=now()+86400000;s.cursor=null;s.pages=0;s.seen=[];s.nextAt=now()+60000;}
         else if(s.pages>=200){s.error='History exceeds 10,000 records. The imported portion is available; older records need a separate export.';s.nextAt=now()+3600000;s.cursor=null;s.pages=0;s.seen=[];s.complete=false;}
       }
     }catch(e){
@@ -120,7 +121,7 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
   }
   function health(id){const s=tracking(id);return s?{checkedAt:s.checkedAt,error:s.error,historyError:s.historyError,balanceError:s.balanceError,historyPending:s.historyPending}:null;}
   function read(filters={}){
-    const kind=filters.kind||'trades',table={trades:'portfolio_activity_fills',orders:'portfolio_activity_orders',alerts:'portfolio_activity_events'}[kind];if(typeof table!=='string')throw fail(400,'Choose Trades, Orders or Alerts.');
+    const kind=filters.kind||'trades',table={trades:'portfolio_activity_fills',journal:'portfolio_activity_fills',orders:'portfolio_activity_orders',alerts:'portfolio_activity_events'}[kind];if(typeof table!=='string')throw fail(400,'Choose Trades, Orders or Alerts.');
     const offset=Number(filters.offset||0);if(!Number.isSafeInteger(offset)||offset<0||offset>1000000)throw fail(400,'Invalid page.');
     const s=selection(filters);if(kind==='orders'&&(filters.from||filters.to))s.where+=" AND json_extract(detail,'$.createdAt') IS NOT NULL";const total=db.prepare(`SELECT count(*) n FROM ${table} WHERE ${s.where}`).get(...s.params).n;
     const rows=db.prepare(`SELECT * FROM ${table} WHERE ${s.where} ORDER BY at DESC,${kind==='alerts'?'id':'item_id'} DESC LIMIT 50 OFFSET ?`).all(...s.params,offset);
@@ -137,5 +138,9 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
     const s=selection();db.prepare(`UPDATE portfolio_activity_events SET read_at=? WHERE ${s.where} AND id<=? AND read_at IS NULL`).run(now(),...s.params,input.through);return notifications();
   }
   function remove(id){for(const table of ['portfolio_activity_orders','portfolio_activity_fills','portfolio_activity_events','portfolio_activity_sync'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
-  return {sync,observe,rejected,read,notifications,markRead,remove};
+  function ledger(id,bounds=null){const s=selection({account:id}),g=credential(id)?.generation,key=identity(account(id)),saved=g?state(id,g,key):null;
+    if(bounds){s.where+=' AND at>=? AND at<?';s.params.push(bounds.from,bounds.to);}
+    return {items:db.prepare(`SELECT * FROM portfolio_activity_fills WHERE ${s.where} ORDER BY at,item_id`).all(...s.params).map(s.decorate),complete:!!saved?.complete,coveredThrough:saved?.coveredThrough||saved?.startedAt||null,checkedAt:saved?.checkedAt||null,error:saved?.error||null};}
+  function priceAlert(id,g,eventKey,detail){notify(id,scope(id,g),eventKey,{...detail,kind:'price',status:'PRICE_ALERT'});}
+  return {sync,observe,rejected,read,notifications,markRead,remove,ledger,priceAlert};
 }

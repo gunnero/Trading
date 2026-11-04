@@ -1,3 +1,4 @@
+import PortfolioJournal from './PortfolioJournal';
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {lazy,Suspense,useEffect,useId,useMemo,useRef,useState} from 'react';
@@ -117,7 +118,7 @@ export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,o
   let tradeId='';try{tradeId=decodeURIComponent(encodedId||'');}catch{}
   const selected=workspace.data.journal?.trades.find(trade=>trade.id===tradeId);
   return <div className="journal-page"><PageHeader title="Trade journal" description="Review the trade. Refine the next one." actions={<button className="button outline" onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review<CaretRight size={16}/></button>}/>
-    <nav className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans <span>{workspace.data.plans.length}</span></button></nav>
-    {tab==='plans'?<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>:<>{tradeId&&!selected&&<p className="journal-help amber" role="status">This trade is no longer in the journal.</p>}<JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade}/></>}
+    <nav className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Broker trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans <span>{workspace.data.plans.length}</span></button></nav>
+    {tab==='broker'?<PortfolioJournal/>:tab==='plans'?<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>:<>{tradeId&&!selected&&<p className="journal-help amber" role="status">This trade is no longer in the journal.</p>}<JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade}/></>}
   </div>;
 }

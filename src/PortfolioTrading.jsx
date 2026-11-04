@@ -1,3 +1,4 @@
+import {StockHours} from './PortfolioHours';
 import {useEffect,useRef,useState} from 'react';
 import {apiFetch} from './auth-client';
 import {useDisplayTime} from './DisplayTime';
@@ -102,6 +103,7 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
         <label>Find a stock or ETF<input aria-label="Find a stock or ETF" value={query} onChange={e=>{setQuery(e.target.value);setInstrument(null);}} placeholder="Name, broker ticker or ISIN" autoComplete="off"/></label>
         {!instrument&&matches.length>0&&<div className="pm-instrument-results" aria-label="Broker instruments">{matches.map(item=><button type="button" key={item.ticker} onClick={()=>{setInstrument(item);setMatches([]);}}><strong>{item.name}</strong><span>{item.ticker} · {item.currency} · {item.type}</span></button>)}</div>}
         {instrument&&<p className="pm-selected-instrument">{instrument.name} · {instrument.ticker} · {instrument.currency} <button type="button" className="text-button" onClick={()=>setInstrument(null)}>Change</button></p>}
+        {instrument&&<StockHours accountId={account.id} connected={account.connected} ticker={instrument.ticker} name={instrument.name}/>}
         {instrument&&<section className="pm-order-holding" aria-label="Current holding">
           <div className="pm-section-heading"><h3>Current holding</h3><button type="button" className="text-button" disabled={busy||holding?.loading||position&&now-position.checkedAt<5000} onClick={()=>setHoldingRefresh(value=>value+1)}>Refresh holding</button></div>
           {holding?.loading||!holding?<p role="status">Checking shares and value…</p>:holding.error?<p role="status">{holding.error}</p>:<>

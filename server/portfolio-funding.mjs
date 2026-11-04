@@ -80,5 +80,15 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     }catch(e){if(current()){s.error=e.historyPermission?'Enable History: Transactions read permission on the Trading 212 key to load net deposits and account return.':e.status?'Funding history is temporarily unavailable. Holdings remain connected.':e.message;s.retryAt=now()+Math.max(60000,e.retryMs||300000);save(id,s);}}
     finally{if(pending.get(id)===token)pending.delete(id);}
   }
-  return {record,read,sync,remove};
+  function ledger(id){
+    const a=account(id),s=state(id),snap=a.snapshot,valid=snap?.source==='api'&&s.brokerId===snap.brokerId&&s.environment===a.environment;
+    if(!valid)return {complete:false,flows:[],values:[],coveredThrough:null};
+    const values=db.prepare('SELECT at,value,currency FROM portfolio_valuations WHERE account_id=? ORDER BY at').all(id);
+    if(Number.isFinite(snap.accountValue)&&Number.isFinite(Date.parse(snap.fetchedAt)))values.push({at:Date.parse(snap.fetchedAt),value:snap.accountValue,currency:snap.currency});
+    if(s.completedValuation)values.push(s.completedValuation);
+    const first=values.length?Math.min(...values.map(v=>v.at)):Infinity;
+    values.push(...historicalValues(id).filter(v=>v.at<first).map(v=>({...v,currency:snap.currency,estimated:true})));
+    return {complete:!!s.completedScan,coveredThrough:s.coveredThrough||null,error:s.error||null,values,flows:s.completedScan?db.prepare('SELECT reference AS id,at,amount,currency,type FROM portfolio_cashflows WHERE account_id=? AND scan=? ORDER BY at').all(id,s.completedScan):[]};
+  }
+  return {record,read,sync,remove,ledger};
 }

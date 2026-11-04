@@ -16,7 +16,7 @@ export function orderView(order){
   return {id:order.id,ticker,name:typeof label==='string'?label.slice(0,160):ticker,strategy:order.strategy||'QUANTITY',side:order.side,type:order.type,status:order.status,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:numeric(order.limitPrice)?order.limitPrice:null,currency:code(order.currency)||code(order.instrument?.currency),priceCurrency:code(order.instrument?.currency)||code(order.priceCurrency)||code(order.currency),createdAt:typeof order.createdAt==='string'&&Number.isFinite(Date.parse(order.createdAt))?order.createdAt:null};
 }
 
-export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected}){
+export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected,readCatalog}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_trading_settings(account_id TEXT PRIMARY KEY,generation TEXT NOT NULL,enabled INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_order_attempts(token TEXT PRIMARY KEY,account_id TEXT NOT NULL,generation TEXT NOT NULL,created_at INTEGER NOT NULL,state TEXT NOT NULL,detail TEXT NOT NULL);`);
   // A process may have died after sending an order and before saving its reply.
@@ -64,7 +64,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   async function catalog(id,ctx){
     const cached=catalogs.get(id);if(cached?.generation===ctx.record.generation&&cached.until>now())return cached.items;
     const key=id+':catalog';if((readBackoff.get(key)||0)>now())throw fail(429,'Wait a minute before refreshing the instrument list.');readBackoff.set(key,now()+60000);
-    const raw=await broker('/equity/metadata/instruments',ctx.secret);current(id,ctx);
+    const raw=readCatalog?await readCatalog(id):await broker('/equity/metadata/instruments',ctx.secret);current(id,ctx);
     if(!Array.isArray(raw)||raw.length>40000)throw fail(502,'The broker instrument list is unavailable.');
     const items=raw.filter(r=>['STOCK','ETF'].includes(r.type)&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),currency:r.currencyCode,type:r.type,isin:r.isin||'',maxOpenQuantity:numeric(r.maxOpenQuantity)?r.maxOpenQuantity:null}));
     catalogs.delete(id);catalogs.set(id,{generation:ctx.record.generation,until:now()+3600000,items});

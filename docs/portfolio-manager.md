@@ -46,6 +46,20 @@ A single-use 60-second review freezes the exact account, LIVE/DEMO environment, 
 
 Order attempts are stored before sending to the fixed live/demo broker host. Reusing a consumed review never sends another order. A timeout, malformed reply, server error or interrupted process leaves an uncertain attempt and blocks another submission. The user must inspect Trading 212’s pending orders and trade history before marking it reviewed. There are no automatic retries of broker writes. Disabling trading or disconnecting does not cancel existing broker orders. No real orders or owner broker credentials are used in automated tests.
 
+## Portfolio insights, journal and trading hours
+
+**Portfolio insights → Combined exposure** groups known holdings by security and account currency, with each person’s position and concentration underneath. Demo accounts are excluded. Weights exclude cash and holdings without a value; snapshot dates and disconnected/manual sources remain visible. Share classes and instrument currencies stay separate.
+
+**Price alerts** supports an above/below price crossing or entry into a saved supply, demand or gap zone for a connected holding with a verified Yahoo listing. Checks run on the server every minute, even with the browser closed. The first fresh quote sets a baseline; gaps over 30 minutes reset it. A rule fires once, creates an in-app notification in Activity & alerts, and can be re-armed. Saved zone prices and dates are frozen when the rule is created. Delayed quotes and polling can miss brief touches. No alert places an order or sends an external message.
+
+**Trade journal → Broker trades** automatically lists confirmed stock executions, including separate partial fills. Reasoning and review notes are saved against the exact account and execution with revision checks. Broker refreshes preserve them. These records stay separate from manually matched options trades. Export this page downloads the current 50-row journal page, including notes.
+
+**Monthly reports** shows each account’s recorded or reconstructed return, calculated money-weighted rate, executions, supplied execution charges, cash movements and cash distributions. Select a month and person, then export CSV or Print / PDF. Imports resume while the report is visible; History: Orders, History: Transactions and History: Dividends permissions are needed for their respective sections. Partial imports and valuation gaps are explicit. Reports never treat today’s value as a missing historical month end, invent missing fees, combine currencies, or subtract fees and distributions again from account-wide return. CSV exports preserve original values and neutralize spreadsheet formulas in text.
+
+Holding rows, holding details and the trade ticket show a clickable **stock session dot**: green for the regular session, amber for pre-market/after-hours, purple for overnight, gray for closed or unavailable. The exact instrument’s `workingScheduleId` is joined to Trading 212’s exchange events; times follow the configured display timezone. Metadata read permission is required. Schedules refresh every ten minutes, respect broker backoff and become unavailable outside coverage or when stale. These are scheduled hours, not monitoring for halts or a guarantee that an order will be accepted. Market orders in this desk continue to use the regular session only.
+
+The new caches, rules, distribution imports and journal notes are additive tables in the private `portfolio.sqlite` database. Back up this database with the existing runtime state. Account removal removes its related data; disconnecting pauses checks while preserving saved records.
+
 ## Sources and verification
 
 API schemas and authentication were checked against the official documentation on 2026-11-03:
@@ -56,7 +70,9 @@ API schemas and authentication were checked against the official documentation o
 - [Trading 212 positions](https://docs.trading212.com/api/positions)
 - [Trading 212 order API](https://docs.trading212.com/api/orders)
 - [Trading 212 historical orders](https://docs.trading212.com/api/historical-events/orders_1)
+- [Trading 212 instruments and exchange schedules](https://docs.trading212.com/api/instruments) — schema verified 2026-11-04
+- [Trading 212 market hours](https://helpcentre.trading212.com/hc/en-us/articles/360008818178-What-are-the-markets-opening-and-closing-times)
 - [Authentication and rate limits](https://docs.trading212.com/api/section/authentication)
 - [API key setup and permissions](https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key)
 
-Run `npm run build` and `npm run test:portfolio` (unit, account CRUD, holding details and performance browser checks). Connector tests use isolated fake account responses. Private imports, photographs and owner screenshots belong only in ignored data/QA directories, never in public source or test fixtures.
+Run `npm run build` and `npm run test:portfolio` (unit checks and six browser suites covering accounts, holding details, performance, orders, activity and insights). Connector tests use isolated fake account responses. Private imports, photographs and owner screenshots belong only in ignored data/QA directories, never in public source or test fixtures.
