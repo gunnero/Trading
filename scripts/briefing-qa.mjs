@@ -104,7 +104,7 @@ try {
  await page.getByRole('button',{name:'Clear',exact:true}).click();await expect(page.getByRole('meter')).toHaveCount(0);mark('Manual CNN score, rating, source date and clear action');
  await page.unroute('**/api/sentiment');await page.locator('.sentiment-panel').getByRole('button',{name:'Refresh source'}).click();await expect(page.getByRole('meter')).toHaveAttribute('aria-valuenow',live.sentimentScore);
  await nav('News').click();await page.getByRole('button',{name:'My watchlist',exact:true}).click();await page.getByRole('combobox',{name:'News symbol'}).selectOption('NVDA');
- await expect(page.getByText(/Yahoo headlines for NVDA/)).toBeVisible();await expect(page.locator('.news-article').first()).toBeVisible({timeout:20000});await snap('watchlist-news-live');mark('Actual ticker-specific Yahoo news');
+ await page.locator('.news-footer summary').click();await expect(page.getByText(/Yahoo headlines for NVDA/)).toBeVisible();await page.locator('.news-footer summary').click();await expect(page.locator('.news-article').first()).toBeVisible({timeout:20000});await snap('watchlist-news-live');mark('Actual ticker-specific Yahoo news');
  for(const width of [1024,800,390,360]){
   await page.setViewportSize({width,height:900});await noOverflow();
   await expect(page.getByRole('heading',{name:'News',exact:true,level:1})).toBeVisible();
@@ -152,7 +152,7 @@ try {
  await expect(page.locator('.news-article').filter({hasText:'headline missing'}).locator('.news-image')).toHaveCount(0);
  await expect(page.locator('.news-article').filter({hasText:'headline broken'}).locator('.news-image')).toHaveCount(0);
  await expect(page.locator('.news-article')).toHaveCount(3);
- newsResult={...newsResult,status:'stale'};await page.locator('.news-panel').getByRole('button',{name:'Refresh source',exact:true}).click();
+ newsResult={...newsResult,status:'stale'};await page.locator('.news-page').getByRole('button',{name:'Refresh source',exact:true}).click();
  await expect(page.locator('.news-panel')).toContainText('Showing cached headlines');await nav('Overview').click();
  await expect(page.locator('.overview-news')).toContainText('Cached headlines');
  newsResult={status:'unavailable',source,data:null};await page.reload();

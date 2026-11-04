@@ -1,4 +1,3 @@
-import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import { useState } from 'react';
 import { Gauge, Newspaper, CaretRight, Factory, ArrowUpRight } from '@phosphor-icons/react';
@@ -31,11 +30,11 @@ export function SidebarSentiment({briefing,active,onOpen}) {
   const title=reading?`CNN Fear & Greed · ${sentimentScore(reading.score)} / 100 · ${rating} · ${isManual?'Manual reading':display.label} · ${marketTime(reading.observedAt)} ${zoneLabel}`:'CNN Fear & Greed · '+status;
   return <button className={`nav-item sidebar-sentiment ${active?'active':''}`} data-tone={tone} aria-label="Fear & Greed" aria-describedby="sidebar-sentiment-description" title={title} aria-current={active?'page':undefined} onClick={onOpen}>
     <span className="sidebar-sentiment-heading"><Gauge size={17} aria-hidden="true"/><span className="sidebar-sentiment-label">Fear & Greed</span><CaretRight size={14} aria-hidden="true"/></span>
-    <span className="sidebar-sentiment-copy" id="sidebar-sentiment-description"><span id="sidebar-sentiment-reading" className="sidebar-sentiment-reading"><span className="sidebar-sentiment-score"><strong>{reading?sentimentScore(reading.score):'—'}</strong>{reading&&<small>/ 100</small>}</span>{rating&&<span className="sidebar-sentiment-rating">{rating}</span>}</span>{status&&<small className="sidebar-sentiment-status">{status}</small>}</span>
+    <span className="sidebar-sentiment-copy" id="sidebar-sentiment-description"><span id="sidebar-sentiment-reading" className="sidebar-sentiment-reading"><span className="sidebar-sentiment-score"><strong>{Number.isFinite(reading?.score)?Math.round(reading.score):'—'}</strong>{reading&&<small>/ 100</small>}</span>{rating&&<span className="sidebar-sentiment-rating">{rating}</span>}</span>{status&&<small className="sidebar-sentiment-status">{status}</small>}</span>
     {reading&&<meter className="sidebar-sentiment-meter" min="0" max="100" value={reading.score} aria-hidden="true"/>}
   </button>;
 }
-function NewsImage({image,priority=false}) {
+export function NewsImage({image,priority=false}) {
   const [failed,setFailed]=useState(null);
   if (!image?.url || failed===image.url) return null;
   return <span className="news-image"><img src={image.url} alt={image.alt || ''} loading={priority?'eager':'lazy'} decoding="async" referrerPolicy="no-referrer" onError={()=>setFailed(image.url)}/></span>;
@@ -113,7 +112,4 @@ export function NewsPanel({watchlist,marketFeed,fixedSymbol=null}) {
     {feed.status==='stale' && <p className="calendar-warning" role="status">Showing cached headlines while the source reconnects.</p>}
     <div className="news-bottom"><FeedStatus feed={feed}/><span className="small-copy muted">Publisher images where available · refreshes every 10 min · links may require a subscription</span></div>
   </section>;
-}
-export function NewsPage({watchlist,marketFeed,marketContext}) {
-  return <div className="briefing-page news-page"><PageHeader title="News" description="U.S. market headlines and catalysts for your watchlist." actions={<SourceLink href={YAHOO}>Yahoo Finance</SourceLink>}/><div className="page-market-context">{marketContext}</div><NewsPanel watchlist={watchlist} marketFeed={marketFeed}/></div>;
 }

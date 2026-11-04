@@ -13,7 +13,7 @@ export function useSectionNavigation(selected){
   return ref;
 }
 
-export function PageHeader({title,description,actions,id,level=1}){
+export function PageHeader({title,description,actions,id,level=1,beforeNavigation}){
   const navigation=useContext(PageNavigation);
   const Heading=level===2?'h2':'h1';
   const tabs=useSectionNavigation(navigation?.selected);
@@ -22,5 +22,5 @@ export function PageHeader({title,description,actions,id,level=1}){
       <Heading id={id}>{title}</Heading>
     </div>{description&&<p className="page-header-description">{description}</p>}</div>
     {actions&&<div className="page-header-actions">{actions}</div>}
-  </header>{level===1&&navigation?.sections&&<nav ref={tabs} className="section-tabs" aria-label={navigation.sectionsLabel}>{navigation.sections.map(({id,title,route})=><button key={id} type="button" aria-label={title} aria-current={navigation.selected===id?'page':undefined} onClick={()=>navigation.navigate(route)}>{title}{id==='activity'&&navigation.unread>0&&<span className="pa-badge" aria-label={`${navigation.unread} unread alerts`}>{navigation.unread>99?'99+':navigation.unread}</span>}</button>)}</nav>}</>;
+  </header>{beforeNavigation}{level===1&&navigation?.sections&&<nav ref={tabs} className="section-tabs" aria-label={navigation.sectionsLabel}>{navigation.sections.map(({id,title,route})=><button key={id} type="button" aria-label={title} aria-current={navigation.selected===id?'page':undefined} onClick={()=>navigation.navigate(route)}>{title}{id==='activity'&&navigation.unread>0&&<span className="pa-badge" aria-label={`${navigation.unread} unread alerts`}>{navigation.unread>99?'99+':navigation.unread}</span>}</button>)}</nav>}</>;
 }

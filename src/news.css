@@ -1,0 +1,52 @@
+/* Approved compact News page; company news keeps its existing scoped layout. */
+.news-page{min-width:0;container-type:inline-size}
+.app-shell .news-page header.page-header{min-height:82px;padding:15px 0 8px;margin:0;border:0;gap:16px}
+.app-shell .news-page .page-header h1{font-size:28px}
+.app-shell .news-page .page-header-description{font-size:12px;margin-top:3px}
+.news-source-status{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:10px;line-height:1.6}
+.news-source-status a:hover{color:var(--primary)}
+.news-source-status .icon-button{color:var(--primary);width:28px;height:28px;min-width:28px}
+.news-quotes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-block:1px solid var(--border);padding:4px 0}
+.news-quotes button{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 9px;min-width:0;font-size:12px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.news-quotes button+button{border-left:1px solid var(--border);padding-left:26px}
+.news-quotes button:hover{background:var(--panel-hover)}
+.news-quotes button>strong{font-weight:700}.news-quotes button>span:not(.sr-only){font-weight:600}.news-quotes b{font-size:11px;font-weight:600}
+.news-quotes small{font-size:10px}
+.app-shell .news-page .section-tabs{margin:0 0 14px;padding:0;min-height:33px}
+.app-shell .news-page .section-tabs button{padding:6px 12px;min-height:31px;font-size:12px}
+.news-page .news-panel{margin:0;border:0;background:transparent;border-radius:0;overflow:visible}
+.app-shell .news-page .news-panel>.news-controls{padding:0;margin:0 0 13px;gap:11px;display:flex;align-items:center;flex-wrap:wrap}
+.news-page .news-controls .segmented{padding:0;border:0;background:transparent;gap:7px;display:flex}
+.news-page .news-controls .segmented button{border:1px solid var(--border);border-radius:4px;padding:4px 12px;min-height:25px;font-size:11px;line-height:1.4;color:var(--text)}
+.news-page .news-controls .segmented button.selected{background:var(--selection);border-color:var(--selection);color:var(--text)}
+.news-page .news-controls select{width:166px;background:transparent;padding:4px 10px;font-size:11px;min-height:25px;border-radius:4px}
+.news-page .news-controls .check-label{margin:0;font-size:11px;color:var(--text);gap:7px}
+.news-page .news-controls input[type=checkbox]{width:15px;height:15px}
+.news-page .news-list{display:block;border:0}
+.news-page .news-article{display:flex;align-items:center;gap:12px;padding:3px 4px;border:0;border-bottom:1px solid var(--border);background:transparent;min-width:0}
+.news-page .news-article:nth-child(even){border-right:0}
+.news-page .news-article h3{font-size:12px;font-weight:600;line-height:1.45;margin:0;max-width:none;overflow-wrap:anywhere}
+.news-page .news-article-meta{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-top:1px}
+.news-page .news-meta{font-size:10px;line-height:1.45;gap:4px;color:var(--muted)}
+.news-page .news-article>svg{margin-left:auto;color:var(--muted);flex:none}
+.news-page .news-lead{padding:10px 14px 8px;background:var(--selection);border:0;border-radius:6px;margin-bottom:14px}
+.news-page .news-lead:hover,.news-page .news-article:hover{background:var(--panel-hover)}
+.news-page .news-lead-label{font-size:12px;color:var(--primary);font-weight:600;text-transform:none;letter-spacing:0;margin:0 0 3px}
+.news-page .news-lead h3{font-size:22px;line-height:1.25;font-weight:700;letter-spacing:-.55px;margin:0}
+.news-page .news-lead .news-meta{font-size:11px}
+.news-read-original{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--primary);font-weight:500}
+.news-image-note{font-size:10px;color:var(--muted);margin:7px 0 0;padding-top:6px;border-top:1px solid var(--border);line-height:1.4}
+.news-group{margin-top:14px}
+.news-group h2{font-size:15px;font-weight:700;line-height:1.4;margin:0;padding:0 0 5px;border-bottom:1px solid var(--border);letter-spacing:-.2px}
+.news-page .news-article .news-image{width:72px;aspect-ratio:4/3;border-radius:4px}
+.news-page .news-lead .news-image{width:32%;aspect-ratio:16/10;max-height:180px}
+.news-page .news-article:has(.news-image),.news-page .news-lead:has(.news-image){gap:14px}
+.news-warning{font-size:11px;color:var(--amber);line-height:1.7;margin-top:14px}
+.news-footer{padding-top:10px;margin-top:22px;border-top:1px solid var(--border);color:var(--muted);font-size:10px;line-height:1.6}
+.news-footer>div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.news-footer details{margin-top:4px}.news-footer summary{cursor:pointer;width:fit-content}.news-footer p{margin-top:8px;line-height:1.7}
+@container(min-width:1050px){.news-page .news-article{padding:10px 4px}.news-page .news-article h3{font-size:14px}.news-page .news-lead{padding:15px 18px}.news-page .news-lead h3{font-size:25px}.news-page .news-meta,.news-footer,.news-source-status{font-size:11px}.news-group h2{font-size:17px}}
+@media(max-width:760px){.app-shell .news-page header.page-header{flex-wrap:wrap;padding:18px 0 10px;gap:10px}.news-page .page-header-actions{width:100%}.news-source-status{justify-content:space-between;width:100%;font-size:11px}.news-source-status .icon-button{min-width:36px;height:36px}.news-quotes button{gap:5px;padding:0 5px;font-size:11px}.news-quotes button+button{padding-left:10px}.news-quotes button>b{font-size:10px}.news-page .news-controls .segmented button,.news-page .news-controls select{min-height:36px;font-size:12px}.news-page .news-controls select{width:145px}.news-page .news-controls .check-label{font-size:12px;min-height:36px}.news-page .news-article{padding:10px 3px}.news-page .news-article h3{font-size:13px}.news-page .news-lead{padding:13px}.news-page .news-lead h3{font-size:20px}.news-page .news-meta{font-size:11px}.news-page .news-lead:has(.news-image){flex-wrap:wrap}.news-page .news-lead .news-image{width:100%;aspect-ratio:16/9;max-height:none}.news-page .news-article .news-image{width:64px}.news-page .news-lead .news-image{width:100%}.news-footer{font-size:11px}}
+@media(max-width:600px){.app-shell .news-page .page-header h1{font-size:27px}}
+
+@media(max-width:760px){.news-quotes button{display:grid;grid-template-columns:auto 1fr;gap:3px 5px;text-align:left}.news-quotes button>span:not(.sr-only){text-align:right}.news-quotes button>b,.news-quotes button>small{grid-column:1/-1}}

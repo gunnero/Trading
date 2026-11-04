@@ -17,12 +17,13 @@ const TransfersPage=React.lazy(()=>import('./TransfersPage'));
 const PortfolioManager=React.lazy(()=>import('./PortfolioManager'));
 import { PriceChart, Sparkline } from './Charts';
 import { TIMEFRAMES } from './data/candles';
-import { useBriefing, BriefingStrip, NewsPage, SidebarSentiment, TV_SCRIPT } from './Briefing';
+import { useBriefing, BriefingStrip, SidebarSentiment, TV_SCRIPT } from './Briefing';
 import { formatDate, formatPrice, zoneText, zoneName, parseLevels, mergeLevelSheets, parseWatchlist, matchingInstrument, locate, toneFor } from './data/market';
 import { useWorkspace } from './useWorkspace';
 import { MarketClock, MarketHours } from './MarketClock';
 import {MarketContextChart} from './MarketContextChart';
 import EconomicCalendar from './EconomicCalendar';
+const NewsPage=React.lazy(()=>import('./NewsPage'));
 import {MarketGroups} from './MarketGroups';
 import {marketGroups,CONTEXT_INSTRUMENTS} from './data/market-context.mjs';
 import {useZoneRoles,ZoneRoleStatus} from './ZoneRoles';
@@ -219,7 +220,7 @@ function SessionDesk({workspace}) {
         {section === 'earnings' && <React.Suspense fallback={<p role="status">Loading earnings…</p>}><EarningsPage watchlist={watchlist} sheet={sheet} now={briefing.now} onInspect={inspect} onLevels={item=>openLevel(item,sheet,false)} onBoard={()=>navigate('levels')}/></React.Suspense>}
         {section === 'journal' && <React.Suspense fallback={<p role="status">Loading trade journal…</p>}><TradeJournal workspace={workspace} tab={['plans','broker','review'].includes(route.split('/')[1])?route.split('/')[1]:'trades'} tradeId={route.split('/')[1]==='review'?undefined:route.split('/')[2]} reviewDay={route.split('/')[2]} onReviewDay={day=>navigate(`journal/review/${day}`)} onTab={tab=>navigate(`journal/${tab}`)} onClearTrade={()=>navigate('journal/trades')} onNewPlan={()=>navigate('overview')} onReview={day=>navigate(day?`review/${day}`:'review')}/></React.Suspense>}
         {section === 'settings' && <SettingsPage transfersContent={<React.Suspense fallback={<p role="status">Loading transfers…</p>}><TransfersPage/></React.Suspense>} category={category} watchlistContent={<WatchlistTable watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onImport={() => setDialog('watch-import')} onAdd={()=>setDialog('watch-add')} onRemove={removeSymbol} removedEntry={removedEntry} onUndoRemove={undoRemove} onDismissRemove={()=>setRemovedEntry(null)}/>} workspace={workspace} onAccount={()=>navigate('settings/account')} onLogout={logout} logoutBusy={logoutBusy} logoutError={logoutError}/>}
-        {section === 'news' && <NewsPage watchlist={watchlist} marketFeed={briefing.news} marketContext={marketContext}/>}
+        {section === 'news' && <React.Suspense fallback={<p role="status">Loading headlines…</p>}><NewsPage watchlist={watchlist} marketFeed={briefing.news} quotes={quotes} onOpenMarket={symbol=>{setLevelView(null);setMacroSymbol(symbol);setDialog('macro-chart');}}/></React.Suspense>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel} onBack={()=>navigate('overview')}/ >}
 
         <div className={`workspace-save-status ${workspace.status==='error'||workspace.status==='conflict'?'needs-attention':''}`} role="status" aria-live="polite"><span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span><div>{['error','conflict'].includes(workspace.status)&&<>{workspace.status==='error'&&<button onClick={workspace.retry}>Retry save</button>}<button onClick={workspace.reload}>Load saved version</button></>}<button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button></div></div>
