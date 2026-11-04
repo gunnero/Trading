@@ -89,7 +89,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
             for(const i of ledger.instruments){const match=portfolioCatalogListing(i,catalog);if(match)s.catalogListings[i.ticker]=match;}
             s.listingMessage=null;
           }catch{if(!current())return safeRead();s.listingMessage='Automatic listing lookup is unavailable. Check Metadata read permission, then retry; saved history and prices will be reused.';}
-          s.catalogChecked=true;updateChecks();s.retryAt=now()+60000;save(id,s);return safeRead();
+          s.catalogChecked=true;updateChecks();s.retryAt=now()+1000;save(id,s);return safeRead();
         }
         const queue=ledger.instruments.filter(i=>!savedPrices.has(i.ticker)&&listingFor(i)&&!own(s.priceIssues,i.ticker));
         for(const instrument of queue.slice(0,2)){
@@ -115,7 +115,10 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
           s.message=`Chart not ready: ${unresolved.length} instrument${unresolved.length===1?' needs':'s need'} a verified listing or daily prices. All imported records and completed prices are saved. ${unresolved.length===1&&unresolved[0].message?unresolved[0].message:'See the full list below.'}`;
         }
       }
-      if(current()){s.retryAt=['ready','blocked'].includes(s.status)?null:now()+60000;save(id,s);}
+      // Broker pagination keeps its rate-limit spacing. Once imported, daily
+      // prices use the market service's own cache/concurrency/backoff; do not
+      // insert a minute of idle time between its bounded two-instrument passes.
+      if(current()){s.retryAt=['ready','blocked'].includes(s.status)?null:now()+(s.kind<kinds.length?60000:1000);save(id,s);}
     }catch(e){if(current()){
       const automatic=retryable&&!e.historyPermission&&![400,401,403,404].includes(e.status),failures=(s.failures||0)+1;
       save(id,{...s,status:automatic?'paused':'blocked',failures,message:e.historyPermission?'Enable History: Orders, History: Transactions and History: Dividends read permissions to rebuild older balances.':e.message||'Historical reconstruction is unavailable.',retryAt:automatic?now()+Math.max(60000,e.retryMs||Math.min(900000,60000*2**Math.min(failures-1,4))):null});

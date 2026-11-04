@@ -22,9 +22,15 @@ try{
   {ticker:'EQACs_EQ',name:'Invesco EQQQ Nasdaq-100 (Acc)',currency:'USD',listing:'SIX:EQAC',status:'saved'},
   {ticker:'UNKNOWN_US_EQ',name:'Unmatched fixture fund',currency:'USD',status:'unmatched'},
   {ticker:'MISSING_US_EQ',name:'Unavailable fixture stock',currency:'USD',listing:'NASDAQ:MISSING',status:'unavailable',message:'Yahoo Finance has no daily history for NASDAQ:MISSING.'}
- ]},starts=0;
+ ]},starts=0,automatic=false,syncs=0,active=0,maxActive=0,failSync=false;
  await page.route(/\/api\/portfolio\/accounts\/[^/]+\/history(?:\/rebuild\/sync|\/rebuild|\/sync|\?.*)?$/,async route=>{
   if(new URL(route.request().url()).pathname.endsWith('/rebuild')){starts++;rebuild={...rebuild,status:'loading',stage:'listings',message:null};}
+  if(automatic&&new URL(route.request().url()).pathname.endsWith('/rebuild/sync')){
+   syncs++;active++;maxActive=Math.max(maxActive,active);await new Promise(resolve=>setTimeout(resolve,150));active--;
+   if(failSync){await route.fulfill({status:503,json:{message:'Temporary pricing outage'}});return;}
+   const priced=Math.min(rebuild.instruments,rebuild.priced+2);
+   rebuild={...rebuild,priced,status:priced===rebuild.instruments?'ready':'loading',retryAt:priced===rebuild.instruments?null:Date.now()+1000};
+  }
   await route.fulfill({json:{rebuild,accountReturn:{amount:200,ratePercent:20,netDeposits:1000,valuePoints:[{at:now-86400000,value:1190},{at:now,value:1200}],valuationTrackingFrom:now-86400000,recordedFrom:now-86400000,to:now}}});
  });
  await page.goto(runtime.url+'/#portfolio');const panel=page.getByRole('region',{name:'Account summary'}),detail=panel.locator('.pm-history-explainer').first();
@@ -38,5 +44,14 @@ try{
  await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(detail).toContainText('The older chart is still being built');await detail.getByText('Historical instruments · 2 / 4 ready',{exact:true}).click();await expect(detail).toContainText('Waiting for prices · NASDAQ:UNKNOWN');
  rebuild={...rebuild,status:'ready',priced:4,listingChecks:rebuild.listingChecks.map(i=>({...i,status:'saved'}))};await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(detail.getByText('Reconstructed history is available. Estimated points are identified on the chart.')).toBeAttached();
  expect(starts).toBe(1);expect(await read('/api/workspace')).toEqual(before);expect(errors).toEqual([]);mark('Progress survives reload; one retry retains saved records, advances through matching and prices, and reports ready only on completion');
+ automatic=true;rebuild={...rebuild,status:'loading',stage:'prices',priced:5,instruments:24,retryAt:Date.now()+1000,listingChecks:[]};
+ const started=Date.now();await page.reload();await expect(detail).toContainText('5 of 24 instruments priced');await expect(detail).toContainText('Prices continue automatically as each batch finishes');
+ await expect.poll(()=>rebuild.status,{timeout:20000}).toBe('ready');await expect(detail).toContainText('24 of 24 instruments priced');
+ expect(syncs).toBe(10);expect(maxActive).toBe(1);expect(starts).toBe(1);expect(Date.now()-started).toBeLessThan(20000);mark('5 of 24 prices reaches completion automatically in under 20 seconds with no overlapping batches or new import');
+ rebuild={...rebuild,status:'paused',priced:5,retryAt:Date.now()+10000};const savedSyncs=syncs;await page.reload();await expect(detail).toContainText('Import paused');await page.waitForTimeout(2200);expect(syncs).toBe(savedSyncs);mark('Reload respects a saved provider retry deadline without issuing another sync');
+ rebuild={...rebuild,status:'loading',retryAt:Date.now()-1};failSync=true;await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(panel).toContainText('Temporary pricing outage');const failedSyncs=syncs;await page.waitForTimeout(2200);expect(syncs).toBe(failedSyncs);mark('Network/service failures back off instead of creating a rapid retry loop');
+ failSync=false;await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+ await page.waitForTimeout(1500);expect(syncs).toBe(failedSyncs);
+ await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});await expect.poll(()=>syncs).toBeGreaterThan(failedSyncs);await page.goto(runtime.url+'/#overview');const stoppedSyncs=syncs;await page.waitForTimeout(2200);expect(syncs).toBe(stoppedSyncs);expect(errors).toEqual([]);mark('Hidden pages pause work; visibility resumes it and leaving the portfolio stops its timer');
  writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors,productionMutations:false},null,2)+'\n');
 }finally{await browser.close();await runtime.close();}

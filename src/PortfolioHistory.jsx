@@ -17,18 +17,28 @@ export function PortfolioHistory({account,watchlist=[]}){
   const [range,setRange]=useState('MAX'),[state,setState]=useState(null),[error,setError]=useState(''),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false);
   const {clockStamp,displayDay,zoneLabel}=useDisplayTime(),key=account.id+'|'+range,snap=account.snapshot;
   useEffect(()=>{
-    const controller=new AbortController();let pending=false;
+    const controller=new AbortController();let pending=false,timer;
     async function load(){
-      if(pending||document.hidden)return;pending=true;setBusy(true);setError('');
+      clearTimeout(timer);
+      if(pending||document.hidden||controller.signal.aborted)return;pending=true;setBusy(true);setError('');
+      let nextDelay=60000;
       try{
         const accept=result=>{if(!controller.signal.aborted)setState({...result,key});};
-        const saved=await request(account.id,range,controller.signal);accept(saved);
-        if(account.connected)accept(await request(account.id,range,controller.signal,['loading','paused'].includes(saved.rebuild?.status)?'rebuild/sync':'sync'));
+        let result=await request(account.id,range,controller.signal);accept(result);
+        if(account.connected){
+          const rebuilding=['loading','paused'].includes(result.rebuild?.status);
+          // A saved provider retry deadline applies even after refresh or a tab
+          // switch. Avoid redundant syncs until that deadline has passed.
+          if(!rebuilding||!(result.rebuild.retryAt>Date.now())){
+            result=await request(account.id,range,controller.signal,rebuilding?'rebuild/sync':'sync');accept(result);
+          }
+          if(['loading','paused'].includes(result.rebuild?.status))nextDelay=Math.max(1000,Math.min(60000,(result.rebuild.retryAt||Date.now()+60000)-Date.now()));
+        }
       }catch(e){if(!controller.signal.aborted)setError(e.message||'Account history is unavailable.');}
-      finally{pending=false;if(!controller.signal.aborted)setBusy(false);}
+      finally{pending=false;if(!controller.signal.aborted){setBusy(false);if(!document.hidden)timer=setTimeout(load,nextDelay);}}
     }
-    load();const timer=setInterval(load,60000);document.addEventListener('visibilitychange',load);
-    return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',load);};
+    load();document.addEventListener('visibilitychange',load);
+    return()=>{controller.abort();clearTimeout(timer);document.removeEventListener('visibilitychange',load);};
   },[key,account.connected,refresh]);
   const data=state?.key===key?state:null,rebuildState=data?.rebuild,r=data?.accountReturn,reported=snap?.source!=='api'&&range==='MAX';
   async function rebuild(){setBusy(true);setError('');try{const result=await request(account.id,range,new AbortController().signal,'rebuild',{listings:watchlist});setState({...result,key});setRefresh(n=>n+1);}catch(e){setError(e.message);}finally{setBusy(false);}}
@@ -52,7 +62,7 @@ export function PortfolioHistory({account,watchlist=[]}){
       <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
       <p>Uses historical daily stock prices from Yahoo Finance. Supports matching account and stock currencies, verified listings, ordinary trades and paired stock splits verified against the price history. Transfers, other corporate actions or missing prices may prevent a reliable rebuild.</p>
       {rebuildState?.pages>0&&<p role="status">{rebuildState.pages} pages saved{Number.isFinite(rebuildState.records)?` · ${rebuildState.records} records`:''} · {rebuildState.priced}{rebuildState.instruments?` of ${rebuildState.instruments}`:''} instruments priced. Progress is saved on the server and survives refreshes.</p>}
-      {rebuildState?.status==='loading'?<p role="status">{rebuildState.historyComplete?(rebuildState.stage==='listings'?'Matching historical instruments with Trading 212…':'Transactions saved · checking balances and collecting daily prices. The older chart is still being built.'):'Reading older history…'} Keep this page open; it continues each minute.</p>:<>
+      {rebuildState?.status==='loading'?<p role="status">{rebuildState.historyComplete?(rebuildState.stage==='listings'?'Matching historical instruments with Trading 212…':'Transactions saved · checking balances and collecting daily prices. The older chart is still being built.'):'Reading older history…'} {rebuildState.historyComplete?'Prices continue automatically as each batch finishes. Keep this page open; completed prices are saved.':'Keep this page open; broker history continues each minute.'}</p>:<>
         {rebuildState?.status==='paused'&&<p role="status">Import paused. Saved pages will be reused. {rebuildState.retryAt?`Automatic retry after ${clockStamp(rebuildState.retryAt)} ${zoneLabel} while this page is open.`:'It resumes automatically while this page is open.'}</p>}
         {['blocked','unavailable'].includes(rebuildState?.status)&&rebuildState?.canResume&&<p role="status">{rebuildState.historyComplete?(rebuildState.stage==='prices'?'Transactions saved; older chart not ready.':'History import complete. The chart needs additional information before it can be calculated.'):'History import stopped at the next unread page.'} Saved history is retained; retrying will reuse it.</p>}
         <button className="button outline" disabled={busy||rebuildState?.retryAt>Date.now()} onClick={rebuild}>{rebuildState?.canResume?(rebuildState.historyComplete?'Retry using saved history':'Resume history import'):rebuildState?.status==='ready'?'Rebuild history again':'Rebuild older history'}</button>

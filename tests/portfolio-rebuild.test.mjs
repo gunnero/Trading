@@ -39,7 +39,7 @@ function fixture(t,{disk=false}={}){
  const dir=disk?mkdtempSync(join(tmpdir(),'portfolio-resume-')):null,file=dir?join(dir,'fixture.sqlite'):':memory:';let db=new DatabaseSync(file);t.after(()=>{db.close();if(dir)rmSync(dir,{recursive:true,force:true});});const input=ledgerInput();let now=NOW,generation='one';const a={environment:'demo',snapshot:input.snapshot},calls=[];const source={bad:false,hold:false};
  const options={now:()=>now,credential:()=>({generation}),decode:()=>({}),account:()=>a,isClosed:()=>false,request:async path=>{calls.push(path);if(source.hold)return {items:[],nextPagePath:'/equity/history/orders?cursor=1&limit=50'};return {items:path.includes('/orders')?input.orders:path.includes('/transactions')?input.transactions:input.dividends,nextPagePath:null};},prices:async key=>{assert.equal(key,'NASDAQ:AMD');if(source.bad)throw Error('prices unavailable');return priceHistory();}};
  let service=createPortfolioRebuild(db,options);
- return {get db(){return db;},options,a,input,source,calls,get service(){return service;},advance:()=>now+=61000,restart:(reopen=false)=>{if(reopen){db.close();db=new DatabaseSync(file);}service=createPortfolioRebuild(db,options);},connect:()=>generation='two'};
+ return {get db(){return db;},options,a,input,source,calls,get service(){return service;},advance:(ms=61000)=>now+=ms,restart:(reopen=false)=>{if(reopen){db.close();db=new DatabaseSync(file);}service=createPortfolioRebuild(db,options);},connect:()=>generation='two'};
 }
 test('scan persists progress, publishes atomically and keeps a prior chart during a failed retry',async t=>{
  const f=fixture(t);f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'loading');assert.equal(f.service.values('a').length,0);assert.equal(f.calls.length,3);
@@ -186,6 +186,33 @@ function addHolding(f,ticker,isin='',name=ticker){
  f.input.orders.push({...trade(id,'BUY',1,100,'2026-10-20T14:00Z'),order:{id,side:'BUY',status:'FILLED',instrument:{ticker,isin,name,currency:'USD'}}});
  f.input.snapshot.cash-=100;f.input.snapshot.holdings.push({ticker,quantity:1});
 }
+test('24 instruments progress in bounded batches without minute waits and resume saved prices after restart',async t=>{
+ const f=fixture(t,{disk:true}),keys=[];
+ f.input.transactions[0].amount+=3000;f.input.snapshot.cash+=3000;
+ const listings=Array.from({length:23},(_,i)=>{const symbol='FIX'+i;addHolding(f,symbol+'_US_EQ');return {id:'NASDAQ:'+symbol,symbol,ticker:symbol,exchange:'NASDAQ',group:'STOCKS'};});
+ f.options.prices=async key=>{keys.push(key);return priceHistory();};f.restart();
+ f.service.start('a',{listings});await f.service.sync('a');const anchor=f.service.read('a').anchorAt;
+ for(let batch=1;batch<=12;batch++){
+  const wait=f.service.read('a').retryAt-f.options.now();assert.equal(wait,1000);
+  await f.service.sync('a');assert.equal(keys.length,(batch-1)*2,'deadline prevents early requests');
+  f.advance(wait);await f.service.sync('a');assert.equal(keys.length,batch*2);assert.equal(f.service.read('a').priced,batch*2);
+  if(batch===3)f.restart(true);
+ }
+ assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').anchorAt,anchor);assert.equal(f.calls.length,3);
+ assert.equal(new Set(keys).size,24);assert.equal(f.options.now()-NOW,12000);assert.equal(f.service.read('a').retryAt,null);
+});
+test('broker-page spacing and provider retry deadlines still apply to fast price batches',async t=>{
+ const f=fixture(t,{disk:true});let page=0;
+ f.options.request=async path=>{f.calls.push(path);return {items:[],nextPagePath:'/equity/history/orders?cursor='+(++page)+'&limit=50'};};
+ f.restart();f.service.start('a',{});await f.service.sync('a');assert.equal(f.calls.length,3);assert.equal(f.service.read('a').retryAt-NOW,60000);
+ f.advance(1000);await f.service.sync('a');assert.equal(f.calls.length,3);
+ f.service.remove('a');f.options.request=async path=>({items:path.includes('/orders')?f.input.orders:path.includes('/transactions')?f.input.transactions:f.input.dividends,nextPagePath:null});
+ let priceCalls=0;f.options.prices=async()=>{priceCalls++;throw Object.assign(Error('Rate limited'),{status:429,retryMs:300000});};f.restart();
+ f.service.start('a',{});await f.service.sync('a');f.advance(1000);await f.service.sync('a');const paused=f.service.read('a');
+ assert.equal(paused.status,'paused');assert.equal(paused.retryAt-f.options.now(),300000);
+ f.restart(true);f.advance(299999);await f.service.sync('a');assert.equal(priceCalls,1);
+ f.options.prices=async()=>{priceCalls++;return priceHistory();};f.restart();f.advance(1);await f.service.sync('a');assert.equal(priceCalls,2);assert.equal(f.service.read('a').status,'ready');
+});
 test('all missing listings are reported together while supported instruments after them still get saved',async t=>{
  const f=fixture(t,{disk:true});addHolding(f,'UNKNOWN_US_EQ');addHolding(f,eqac.ticker,eqac.isin);addHolding(f,'SECOND_US_EQ');addHolding(f,'TSLA_US_EQ','US88160R1014');
  const prices=[];f.options.prices=async key=>{prices.push(key);return priceHistory();};f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
