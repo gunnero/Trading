@@ -175,10 +175,10 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(req.method==='GET'&&path==='/api/portfolio/journal'){res.end(JSON.stringify(reports.journal(Object.fromEntries(url.searchParams))));return;}
       const hoursMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/hours$/);
       if(req.method==='GET'&&hoursMatch){res.end(JSON.stringify(await metadata.hours(hoursMatch[1],url.searchParams.get('ticker'))));return;}
-      const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|position|settings|preview|submit|acknowledge))?$/);
+      const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|position|attempt|settings|preview|submit|acknowledge))?$/);
       if(tradeMatch&&req.method==='GET'){
         const [,id,action]=tradeMatch;
-        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q')||''):action==='orders'?await trading.pending(id):action==='position'?await trading.position(id,url.searchParams.get('ticker')):null;
+        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q')||''):action==='orders'?await trading.pending(id):action==='position'?await trading.position(id,url.searchParams.get('ticker')):action==='attempt'?trading.attempt(id,url.searchParams.get('token')):null;
         if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));return;
       }
       const historyMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/history(?:\/(sync|rebuild|rebuild\/sync))?$/);

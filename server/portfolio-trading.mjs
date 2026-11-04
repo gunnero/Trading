@@ -72,6 +72,15 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     return [...rules.values()];
   }
   function read(id){const a=account(id);return {enabled:enabled(id),quantityRules:quantityRules(id),maxOrderValue:getOrderLimit(id),environment:a.environment,brokerId:a.snapshot?.brokerId||null,blocked:!!unresolved(id),attempts:db.prepare("SELECT * FROM portfolio_order_attempts WHERE account_id=? AND state<>'PREPARED' ORDER BY created_at DESC LIMIT 30").all(id).map(row=>publicAttempt({...row,detail:JSON.parse(row.detail)}))};}
+  function attempt(id,token){
+    const ctx=context(id,false);
+    if(typeof token!=='string'||!/^[a-f0-9-]{36}$/.test(token))throw fail(400,'Choose a valid order confirmation.');
+    const row=saved(token);
+    if(!row||row.account_id!==id||row.generation!==ctx.record.generation)throw fail(409,'This confirmation is unavailable for the current connection. Check its outcome in Trading 212.');
+    // A delayed POST can still arrive while a review is valid. Only an expired,
+    // idle PREPARED review proves no submission can still start from this token.
+    return {attempt:publicAttempt(row),inFlight:locks.has(id),notSubmitted:row.state==='PREPARED'&&row.detail.expiresAt<=now()&&!locks.has(id)};
+  }
   function context(id,requireEnabled=true){
     const a=account(id),record=credential(id);
     if(!record||a.platform!=='Trading 212'||a.snapshot?.source!=='api')throw fail(400,'Connect this Trading 212 account first.');
@@ -244,5 +253,5 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   function acknowledge(id,input){context(id,false);const row=saved(input.token);if(!row||row.account_id!==id||row.state!=='UNKNOWN'||input.checkedBroker!==true)throw fail(400,'Confirm you checked this attempt in Trading 212.');update(row.token,'REVIEWED',{...row.detail,message:'Marked reviewed after checking Trading 212. This does not assert an execution outcome.'});return read(id);}
   function assertIdle(id){if(locks.has(id))throw fail(409,'Wait for the current order operation before changing this account.');}
   function remove(id){assertIdle(id);catalogs.delete(id);balances.delete(id);tracker.remove(id);db.prepare('DELETE FROM portfolio_trading_settings WHERE account_id=?').run(id);db.prepare('DELETE FROM portfolio_order_attempts WHERE account_id=?').run(id);}
-  return {read,configure,search,pending,monitor,tracking,position,preview,submit,acknowledge,assertIdle,remove};
+  return {read,attempt,configure,search,pending,monitor,tracking,position,preview,submit,acknowledge,assertIdle,remove};
 }

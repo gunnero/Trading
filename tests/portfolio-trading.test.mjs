@@ -400,3 +400,37 @@ test('account reconnection during a market quote lookup invalidates position and
   f.source.quote=(key,at)=>{f.connect();return marketResult('AMD',at);};await assert.rejects(()=>action==='position'?f.service.position('a','AMD_US_EQ'):f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/connection/);assert.equal(f.writes().length,0);
  }
 });
+
+test('saved confirmation lookup is read-only, scoped to account and connection, and does not require trading enabled',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input),reads=f.calls.length;
+ assert.equal(f.service.attempt('a',review.token).attempt.state,'PREPARED');assert.equal(f.service.attempt('a',review.token).notSubmitted,false);
+ assert.throws(()=>f.service.attempt('b',review.token),/unavailable/);assert.throws(()=>f.service.attempt('a','bad-token'),/valid order/);assert.throws(()=>f.service.attempt('a',crypto.randomUUID()),/unavailable/);
+ assert.equal(f.calls.length,reads);await f.service.submit('a',{token:review.token,confirmed:true});const afterSubmit=f.calls.length;
+ f.service.configure('a',{enabled:false});assert.equal(f.service.attempt('a',review.token).attempt.token,review.token);
+ f.connect();assert.throws(()=>f.service.attempt('a',review.token),/unavailable/);assert.equal(f.calls.length,afterSubmit);assert.equal(f.writes().length,1);
+});
+test('a lost confirmation response recovers accepted and rejected receipts by token without a second broker write',async t=>{
+ for(const rejected of [false,true]){
+  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);
+  if(rejected)f.source.write=()=>json({code:'insufficient-free-for-stocks-buy',message:'Insufficient funds'},400);
+  const sent=await f.service.submit('a',{token:review.token,confirmed:true}),calls=f.calls.length;
+  f.restart();const recovered=f.service.attempt('a',review.token);
+  assert.equal(recovered.attempt.state,rejected?'REJECTED':'ACCEPTED');assert.equal(recovered.attempt.message,sent.message);assert.equal(recovered.attempt.quantity,2.5);assert.equal(recovered.notSubmitted,false);
+  assert.equal(f.calls.length,calls);assert.equal(f.writes().length,1);
+ }
+});
+test('only an expired idle unsent review is classified as not submitted',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input);
+ assert.equal(f.service.attempt('a',review.token).notSubmitted,false);f.advance(60000);
+ assert.equal(f.service.attempt('a',review.token).notSubmitted,true);
+ await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/expired/);assert.equal(f.writes().length,0);
+});
+test('a pending broker write remains in flight after review expiry; startup uncertainty is retained',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input);
+ let release;f.source.delay=new Promise(resolve=>release=resolve);const sending=f.service.submit('a',{token:review.token,confirmed:true});
+ while(f.writes().length===0)await new Promise(resolve=>setImmediate(resolve));f.advance();
+ const pending=f.service.attempt('a',review.token);assert.equal(pending.attempt.state,'SENDING');assert.equal(pending.inFlight,true);assert.equal(pending.notSubmitted,false);
+ release();await sending;assert.equal(f.service.attempt('a',review.token).attempt.state,'ACCEPTED');assert.equal(f.writes().length,1);
+ f.db.prepare("UPDATE portfolio_order_attempts SET state='SENDING' WHERE token=?").run(review.token);f.restart();
+ assert.equal(f.service.attempt('a',review.token).attempt.state,'UNKNOWN');assert.equal(f.service.attempt('a',review.token).notSubmitted,false);assert.equal(f.service.read('a').blocked,true);assert.equal(f.writes().length,1);
+});
