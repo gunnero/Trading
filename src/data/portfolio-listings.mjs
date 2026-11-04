@@ -38,20 +38,24 @@ export function portfolioHoldingLabel(holding,watchlist=[]){
 // Vanguard identifies IE00BFMXXD54 / VUAA / VUAA.L under USD–London:
 // https://www.vanguard.co.uk/professional/product/etf/equity/9694/sp-500-ucits-etf-usd-accumulating
 // Keep it separate from the US-only interactive chart and order-quote resolver.
-// Historical broker IDs retained after completed business combinations. Require
-// the resulting common-share ISIN, never the old SPAC units or warrants.
+// Historical broker IDs can differ from current exchange symbols. Require
+// the current common-share ISIN, never old securities, SPAC units or warrants.
 // https://ir.bigbear.ai/news-events/press-releases/detail/26/bigbear-ai-announces-completion-of-business-combination
 // https://s27.q4cdn.com/787306631/files/doc_news/Hims-Hers-Press-Release-Deal-Close-FINAL.pdf
 // Trading 212 verifies current NYSE listings and ISINs at /invest/BBAI.US and /invest/HIMS.US.
+// Sandisk's 2025 independent Nasdaq listing is distinct from its former security:
+// https://investor.sandisk.com/news-releases/news-release-details/sandisk-celebrates-nasdaq-listing-after-completing-separation
+// https://www.trading212.com/trading-instruments/invest/SNDK.US
 const historyAliases={
-  GIG_US_EQ:{symbol:'BBAI',isin:'US08975B1098'},
-  OAC_US_EQ:{symbol:'HIMS',isin:'US4330001060'},
+  GIG_US_EQ:{symbol:'BBAI',isin:'US08975B1098',exchange:'NYSE'},
+  OAC_US_EQ:{symbol:'HIMS',isin:'US4330001060',exchange:'NYSE'},
+  SNDK1_US_EQ:{symbol:'SNDK',isin:'US80004C2008',exchange:'NASDAQ'},
 };
 export function portfolioHistoryListing(holding,watchlist=[]) {
   if(holding&&Object.hasOwn(historyAliases,holding.ticker)){
-    const {symbol,isin}=historyAliases[holding.ticker];
+    const {symbol,isin,exchange}=historyAliases[holding.ticker];
     if(holding.isin!==isin||holding.instrumentCurrency!=='USD')return null;
-    return {id:`NYSE:${symbol}`,symbol,ticker:symbol,exchange:'NYSE',group:'STOCKS',providerCheck:{exchange:'NYSE',currency:'USD',type:'EQUITY'}};
+    return {id:`${exchange}:${symbol}`,symbol,ticker:symbol,exchange,group:'STOCKS',providerCheck:{exchange,currency:'USD',type:'EQUITY'}};
   }
   if(holding?.ticker==='VUAAl_EQ'&&holding.isin==='IE00BFMXXD54'&&holding.instrumentCurrency==='USD')
     return {id:'LSE:VUAA',symbol:'VUAA',ticker:'VUAA',exchange:'LSE',group:'FUND'};
