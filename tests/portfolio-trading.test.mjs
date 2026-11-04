@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createPortfolioTrading} from '../server/portfolio-trading.mjs';
-import {orderPercentage} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,orderPercentage} from '../src/data/portfolio-order-size.mjs';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
+import {portfolioOrderLevels} from '../src/data/portfolio-order-levels.mjs';
 const input={side:'BUY',type:'LIMIT',ticker:'AMD_US_EQ',quantity:2.5,limitPrice:100,timeValidity:'DAY'};
 function fixture(t){
  const db=new DatabaseSync(':memory:');t.after(()=>db.close());let at=1000000,generation='first',closed=false;
@@ -13,7 +14,7 @@ function fixture(t){
   if(options.method!=='GET'){if(source.delay)await source.delay;if(source.write)return source.write(path,options);if(options.method==='DELETE')return new Response(null,{status:200});const d=JSON.parse(options.body);return json({id:75,ticker:d.ticker,side:d.quantity<0?'SELL':'BUY',type:path.endsWith('/limit')?'LIMIT':'MARKET',quantity:d.quantity,status:'NEW',filledQuantity:0});}
   if(source.read){const result=source.read(path);if(result)return result;}
   if(path==='/equity/account/summary')return json({id:123,currency:'USD',cash:{availableToTrade:source.cash}});
-  if(path==='/equity/positions')return json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:source.available,currentPrice:100,walletImpact:{currency:'USD',currentValue:500}}]);
+  if(path==='/equity/positions')return json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:source.available,currentPrice:100,averagePricePaid:95,walletImpact:{totalCost:475,unrealizedProfitLoss:25,currency:'USD',currentValue:500}}]);
   if(path==='/equity/metadata/instruments')return json([{ticker:'AMD_US_EQ',name:'Advanced Micro Devices',type:'STOCK',currencyCode:source.currency,maxOpenQuantity:source.max}]);
   const order={id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,status:'NEW'};
   if(path==='/equity/orders')return json([order]);if(path==='/equity/orders/75')return json(order);throw Error('Unexpected endpoint '+path);
@@ -79,15 +80,15 @@ test('live environment requires its own explicit enablement and routes only to t
 
 test('current holding distinguishes owned shares/value from available shares and reuses a fresh read for review',async t=>{
  const f=fixture(t);await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),/Enable/);assert.equal(f.calls.length,0);f.enable();
- const position=await f.service.position('a','AMD_US_EQ');assert.deepEqual(position,{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:5,availableShares:3,value:500,price:100,availableCash:1000,checkedAt:1000000});
+ const position=await f.service.position('a','AMD_US_EQ');assert.deepEqual(position,{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:5,availableShares:3,value:500,price:100,averagePrice:95,cost:475,unrealized:25,unrealizedPercent:25/475*100,availableCash:1000,checkedAt:1000000});
  await f.service.preview('a',{...input,side:'SELL',quantity:3});assert.equal(f.calls.filter(c=>c.path==='/equity/positions').length,1);assert.equal(f.writes().length,0);
  f.advance(6000);f.source.available=1.12345678;assert.equal((await f.service.position('a','AMD_US_EQ')).availableShares,1.12345678);
  await assert.rejects(()=>f.service.preview('a',{...input,side:'SELL',quantity:3}),/available/);assert.equal(f.writes().length,0);
 });
 test('unheld instruments have zero positions while missing existing fields stay unknown',async t=>{
  const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/positions')?json([]):null;
- assert.deepEqual(await f.service.position('a','AMD_US_EQ'),{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:0,availableShares:0,value:0,price:null,availableCash:1000,checkedAt:1000000});
- f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'EUR'},quantity:5,quantityAvailableForTrading:6,currentPrice:100,walletImpact:{currency:'EUR',currentValue:500}}]):null;
+ assert.deepEqual(await f.service.position('a','AMD_US_EQ'),{ticker:'AMD_US_EQ',currency:'USD',instrumentCurrency:'USD',shares:0,availableShares:0,value:0,price:null,averagePrice:null,cost:0,unrealized:null,unrealizedPercent:null,availableCash:1000,checkedAt:1000000});
+ f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'EUR'},quantity:5,quantityAvailableForTrading:6,currentPrice:100,averagePricePaid:95,walletImpact:{totalCost:475,unrealizedProfitLoss:25,currency:'EUR',currentValue:500}}]):null;
  const missing=await f.service.position('a','AMD_US_EQ');assert.equal(missing.shares,5);for(const key of ['availableShares','value','price'])assert.equal(missing[key],null);
  f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ'}}]):null;
  const partial=await f.service.position('a','AMD_US_EQ');for(const key of ['shares','availableShares','value','price'])assert.equal(partial[key],null);
@@ -116,4 +117,86 @@ test('buy percentages use available cash and chosen price without rounding above
  assert.deepEqual([25,50,75,100].map(p=>size(1000,99,p)),['2.52525252','5.05050505','7.57575757','10.1010101']);
  assert.equal(size(0.3,0.1),'3');assert.equal(size(100,300),'0.33333333');assert.equal(size(1000000,1e7),'0.1');
  for(const price of [0,null,undefined,NaN,-1,Infinity,'100'])assert.equal(size(1000,price),'');assert.equal(size(0,100),'');
+});
+
+test('cash amount sizes down to eight decimals and a reviewed quantity never resizes on submit',async t=>{
+ const f=fixture(t);f.enable();
+ assert.equal(cashOrderQuantity(100,300),'0.33333333');assert.equal(cashOrderQuantity(0.3,0.1),'3');
+ for(const amount of [null,0,-1,'100',Infinity,NaN])assert.equal(cashOrderQuantity(amount,100),'');
+ let review=await f.service.preview('a',{...input,type:'MARKET',cashAmount:125,quantity:999});
+ assert.equal(review.quantity,1.25);assert.equal(review.requestedCashAmount,125);assert.equal(review.remainingShares,6.25);assert.equal(review.remainingCash,875);
+ f.advance(6000);f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:3,currentPrice:120}]):null;
+ await f.service.submit('a',{token:review.token,confirmed:true,cashAmount:999});assert.equal(JSON.parse(f.writes()[0].body).quantity,1.25);
+ f.advance();f.source.read=path=>path.endsWith('/positions')?json([]):null;
+ await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',cashAmount:100}),/current broker price/);
+ review=await f.service.preview('a',{...input,cashAmount:100,limitPrice:300});assert.equal(review.quantity,0.33333333);assert.ok(review.estimate<=100);
+ await assert.rejects(()=>f.service.preview('a',{...input,cashAmount:1001}),/cash/);
+});
+test('sell review uses proportional account cost, remaining total shares and available cash',async t=>{
+ const f=fixture(t);f.enable();let review=await f.service.preview('a',{...input,side:'SELL',quantity:2,limitPrice:90});
+ assert.equal(review.currentShares,5);assert.equal(review.remainingShares,3);assert.equal(review.remainingCash,1180);assert.equal(review.estimatedProfit,-10);assert.equal(review.estimatedProfitPercent,-10/190*100);
+ review=await f.service.preview('a',{...input,side:'SELL',cashAmount:250});assert.equal(review.quantity,2.5);assert.equal(review.estimatedProfit,12.5);
+ await assert.rejects(()=>f.service.preview('a',{...input,side:'SELL',cashAmount:400}),/available/);
+ f.advance();f.source.read=path=>path.endsWith('/positions')?json([{instrument:{ticker:'AMD_US_EQ',currency:'USD'},quantity:5,quantityAvailableForTrading:3,currentPrice:100,averagePricePaid:95,walletImpact:{currency:'EUR',totalCost:475,unrealizedProfitLoss:25}}]):null;
+ review=await f.service.preview('a',{...input,side:'SELL'});assert.equal(review.estimatedProfit,null);assert.equal(review.estimatedProfitPercent,null);
+ const position=await f.service.position('a','AMD_US_EQ');assert.equal(position.averagePrice,95);assert.equal(position.unrealized,null);assert.equal(position.unrealizedPercent,null);assert.equal(f.writes().length,0);
+});
+const trackedOrder=(status='NEW',filledQuantity=0)=>({id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,status,filledQuantity});
+test('automatic tracking follows partial fills through confirmed history, refreshes balances once per change and survives restart',async t=>{
+ const f=fixture(t);f.enable();let stage=0;
+ f.source.read=path=>path==='/equity/orders'?json(stage===0?[trackedOrder()]:stage===1?[trackedOrder('PARTIALLY_FILLED',1)]:[]):path==='/equity/history/orders'?json({items:[{order:trackedOrder('FILLED',2.5)},{order:trackedOrder('PARTIALLY_FILLED',1)}],nextPagePath:null}):null;
+ let data=await f.service.pending('a');assert.equal(data.orders[0].status,'NEW');assert.equal(data.revision,0);
+ const calls=f.calls.length;await f.service.pending('a');assert.equal(f.calls.length,calls);
+ f.advance(15000);stage=1;data=await f.service.pending('a');assert.equal(data.orders[0].status,'PARTIALLY_FILLED');assert.equal(data.orders[0].filledQuantity,1);assert.equal(data.revision,1);assert.equal(data.syncedRevision,1);assert.equal(f.calls.filter(c=>c.path.endsWith('/positions')).length,1);
+ f.restart();f.advance(15000);stage=2;data=await f.service.pending('a');assert.equal(data.orders[0].status,'FILLED');assert.equal(data.orders[0].filledQuantity,2.5);assert.equal(data.revision,2);assert.equal(data.syncedRevision,2);
+ f.advance();data=await f.service.pending('a');assert.equal(data.revision,2);assert.equal(f.calls.filter(c=>c.path.endsWith('/positions')).length,2);assert.equal(f.writes().length,0);
+});
+test('disappearance, denied history and mismatched history IDs never imply a fill',async t=>{
+ const f=fixture(t);f.enable();await f.service.pending('a');f.advance();
+ f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({},403):null;
+ let data=await f.service.pending('a');assert.equal(data.orders[0].status,'NEW');assert.equal(data.orders[0].awaitingHistory,true);assert.match(data.historyError,/History: Orders/);assert.equal(data.revision,0);
+ f.advance();f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[{order:{...trackedOrder('FILLED',2.5),ticker:'MSFT_US_EQ'}}],nextPagePath:null}):null;
+ data=await f.service.pending('a');assert.equal(data.orders[0].status,'NEW');assert.match(data.historyError,/identity/);assert.equal(data.revision,0);
+ f.advance();f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[{order:{...trackedOrder('FILLED',2.5),id:99}}],nextPagePath:null}):null;
+ data=await f.service.pending('a');assert.equal(data.orders[0].awaitingHistory,true);assert.equal(data.revision,0);assert.equal(f.writes().length,0);
+});
+test('terminal cancellations and rejections reconcile without fabricating fills; cancellation can lose a race to a fill',async t=>{
+ for(const status of ['CANCELLED','REJECTED','FILLED']){
+  const f=fixture(t);f.enable();const review=await f.service.preview('a',{action:'CANCEL',orderId:75});await f.service.submit('a',{token:review.token,confirmed:true});
+  f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[{order:trackedOrder(status,status==='FILLED'?2.5:0)}],nextPagePath:null}):null;
+  const data=await f.service.pending('a');assert.equal(data.orders[0].status,status);assert.equal(data.orders[0].filledQuantity,status==='FILLED'?2.5:0);assert.equal(data.syncedRevision,data.revision);assert.equal(f.writes().length,1);assert.equal(f.writes()[0].method,'DELETE');
+ }
+});
+test('tracking follows safe resumable history cursors and retains a failed balance refresh for retry',async t=>{
+ const f=fixture(t);f.enable();await f.service.pending('a');f.advance();let historyCalls=0,broken=true;
+ f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?(++historyCalls===1?json({items:[],nextPagePath:'/api/v0/equity/history/orders?cursor=12&limit=50'}):json({items:[{order:trackedOrder('FILLED',2.5)}],nextPagePath:null})):path.endsWith('/positions')&&broken?json({},502):null;
+ await f.service.pending('a');f.restart();f.advance(20000);let data=await f.service.pending('a');assert.equal(data.orders[0].status,'FILLED');assert.equal(data.syncedRevision,0);assert.match(data.balanceError,/waiting/);assert.ok(f.calls.some(c=>c.url.endsWith('?limit=50&cursor=12')));
+ broken=false;f.advance(15000);data=await f.service.pending('a');assert.equal(data.syncedRevision,data.revision);assert.equal(data.balanceError,null);assert.equal(f.writes().length,0);
+});
+test('tracking backoff persists and old connection orders cannot leak into a reconnected account',async t=>{
+ const f=fixture(t);f.enable();await f.service.pending('a');f.advance();f.source.read=path=>path==='/equity/orders'?json({},429):null;
+ let data=await f.service.pending('a');assert.match(data.error,/rate limiting/);const calls=f.calls.length;f.restart();f.advance(15000);data=await f.service.pending('a');assert.equal(f.calls.length,calls);assert.equal(data.orders[0].id,75);
+ f.connect();await assert.rejects(()=>f.service.pending('a'),/Enable/);f.enable();f.source.read=path=>path==='/equity/orders'?json([]):null;data=await f.service.pending('a');assert.deepEqual(data.orders,[]);assert.equal(data.syncedRevision,0);
+});
+test('saved chart level choices require the correct listing and currency and preserve zone edges and source dates',()=>{
+ const instrument={ticker:'AMD_US_EQ',currency:'USD',isin:'US0079031078'},sheet={date:'2026-11-04',instruments:{AMD:{futures:false,timeframe:'4h',sourceDate:'2026-11-03',zones:[{type:'S',low:101,high:105},{type:'D',low:95,high:95},{type:'G',low:90,high:92}]},QQQ:{futures:false,zones:[{type:'D',low:400,high:410}]}}};
+ const levels=portfolioOrderLevels(instrument,'USD',sheet);assert.equal(levels.listing,'NASDAQ:AMD');assert.equal(levels.date,'2026-11-03');assert.equal(levels.timeframe,'4h');assert.deepEqual(levels.options.map(o=>o.price),[101,105,95,90,92]);
+ assert.equal(portfolioOrderLevels({...instrument,ticker:'NFLX_US_EQ',isin:''},'USD',sheet),null);
+ assert.equal(portfolioOrderLevels(instrument,'EUR',sheet),null);assert.equal(portfolioOrderLevels({...instrument,isin:'wrong'},'USD',sheet),null);
+ assert.equal(portfolioOrderLevels(instrument,'USD',{...sheet,instruments:{AMD:{...sheet.instruments.AMD,futures:true}}}),null);
+});
+
+test('accepted attempts from the previous release resume tracking while uncertain attempts never get matched by guesswork',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input);await f.service.submit('a',{token:review.token,confirmed:true});
+ f.db.exec('DELETE FROM portfolio_tracked_orders; DELETE FROM portfolio_order_tracking;');f.restart();
+ f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[{order:trackedOrder('FILLED',2.5)}],nextPagePath:null}):null;
+ const data=await f.service.pending('a');assert.equal(data.orders[0].status,'FILLED');assert.equal(data.syncedRevision,data.revision);assert.equal(f.writes().length,1);
+ f.db.exec('DELETE FROM portfolio_tracked_orders; DELETE FROM portfolio_order_tracking;');f.db.prepare("UPDATE portfolio_order_attempts SET state='UNKNOWN' WHERE token=?").run(review.token);
+ assert.deepEqual((await f.service.pending('a')).orders,[]);assert.equal(f.service.read('a').blocked,true);assert.equal(f.writes().length,1);
+});
+test('untrusted history cursors never leave the broker allowlist and repeated pages stay unresolved',async t=>{
+ for(const nextPagePath of ['https://attacker.invalid/collect','/api/v0/equity/history/orders?limit=50&cursor=1&token=bad','/api/v0/equity/history/orders?limit=50']){
+  const f=fixture(t);f.enable();await f.service.pending('a');f.advance();f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?json({items:[],nextPagePath}):null;
+  const data=await f.service.pending('a');assert.ok(data.historyError);assert.equal(data.orders[0].status,'NEW');assert.equal(data.orders[0].awaitingHistory,true);assert.equal(f.calls.filter(c=>c.path==='/equity/history/orders').length,1);assert.equal(f.writes().length,0);
+ }
 });

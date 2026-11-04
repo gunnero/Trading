@@ -77,7 +77,7 @@ export default function PortfolioManager({sheet,watchlist,setupInterval}){
       </section>}
     </>}
     {dialog&&<PortfolioDialog key={`${dialog.type}-${dialog.account?.id||dialog.person?.id||'new'}`} dialog={dialog} people={people} accounts={allAccounts} mutate={mutate} reload={load} onClose={()=>setDialog(null)} onSelect={id=>{setFilter('all');setSelected(id);}}/>}
-    {tradeView&&tradedAccount&&<Dialog title="Trade / orders" onClose={()=>setTradeView(null)}><PortfolioTrading key={tradedAccount.id} account={tradedAccount} owner={personName(tradedAccount.personId)} initialHolding={tradeView.holding} initialSide={tradeView.side}/></Dialog>}
+    {tradeView&&tradedAccount&&<Dialog title="Trade / orders" onClose={()=>setTradeView(null)}><PortfolioTrading key={tradedAccount.id} account={tradedAccount} owner={personName(tradedAccount.personId)} initialHolding={tradeView.holding} initialSide={tradeView.side} sheet={sheet} watchlist={watchlist} onPortfolioChange={load}/></Dialog>}
     {holdingView&&<Dialog wide title={`${viewedHolding?.name||holdingView.ticker} · holding details`} onClose={()=>setHoldingView(null)}>{viewedHolding?<HoldingDetail key={`${holdingView.accountId}:${holdingView.ticker}`} holding={viewedHolding} account={viewedAccount} owner={personName(viewedAccount.personId)} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onTrade={side=>{setTradeView({accountId:viewedAccount.id,holding:viewedHolding,side});setHoldingView(null);}}/>:<p className="pm-no-results">This holding is no longer in the latest account snapshot.</p>}</Dialog>}
   </div>;
 }

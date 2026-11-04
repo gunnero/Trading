@@ -144,3 +144,20 @@ test('currency totals never mix USD/EUR or treat a missing account as zero',()=>
  const totals=portfolioTotals([{snapshot:{currency:'USD',accountValue:100}},{snapshot:{currency:'EUR',accountValue:200}},{snapshot:{currency:'USD',accountValue:null}},{snapshot:null},{environment:'demo',snapshot:{currency:'USD',accountValue:900}}]);
  assert.deepEqual(totals,[{currency:'USD',value:100,known:1,accounts:2},{currency:'EUR',value:200,known:1,accounts:1}]);
 });
+
+test('confirmed execution refreshes the persisted account snapshot and survives service restart',async t=>{
+ let filled=false;
+ const f=fixture(t,async(url,options)=>{
+  assert.equal(options.method,'GET');
+  if(url.endsWith('/summary'))return json({...summary,cash:{availableToTrade:filled?20:10,reservedForOrders:20,inPies:10}});
+  if(url.endsWith('/positions'))return json(filled?[]:positions);
+  if(url.endsWith('/equity/orders'))return json(filled?[]:[{id:75,ticker:'TEST_US_EQ',type:'MARKET',side:'SELL',quantity:2.12345678,status:'NEW',filledQuantity:0}]);
+  if(url.includes('/history/orders?'))return json({items:[{order:{id:75,ticker:'TEST_US_EQ',type:'MARKET',side:'SELL',quantity:2.12345678,status:'FILLED',filledQuantity:2.12345678}}],nextPagePath:null});
+  throw Error('Unexpected endpoint');
+ });
+ await f.service.connect(f.id,credentials,f.revision());f.service.trading.configure(f.id,{enabled:true,authorized:true});
+ await f.service.trading.pending(f.id);const before=f.service.read();assert.equal(before.data.accounts[0].snapshot.holdings.length,1);
+ filled=true;f.advance(15000);const tracked=await f.service.trading.pending(f.id);assert.equal(tracked.orders[0].status,'FILLED');assert.equal(tracked.balanceError,null);
+ const refreshed=f.service.read();assert.ok(refreshed.revision>before.revision);assert.equal(refreshed.data.accounts[0].snapshot.holdings.length,0);assert.equal(refreshed.data.accounts[0].snapshot.cash,50);
+ f.restart();assert.deepEqual(f.service.read(),refreshed);assert.equal((await f.service.trading.pending(f.id)).orders[0].status,'FILLED');
+});

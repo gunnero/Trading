@@ -205,7 +205,14 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     }catch(error){res.statusCode=error.status||500;res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.'}));}
   }
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
-  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs});
+  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,onBalances(id,fresh,generation){
+    if(closed||credential(id)?.generation!==generation)throw fail(409,'The account connection changed.');
+    if(pending.has(id))throw fail(409,'An account refresh is already running.');
+    const snapshot=normalizeTrading212(fresh.summary,fresh.positions,new Date(fresh.at).toISOString());
+    checkIdentity(id,snapshot,find(id).environment);
+    change(data=>Object.assign(data.accounts.find(a=>a.id===id),{snapshot,lastSuccess:snapshot.fetchedAt,lastAttempt:snapshot.fetchedAt,error:null}));
+    history.record(id,snapshot);backoff(id,now()+TTL);
+  }});
   const rebuild=createPortfolioRebuild(db,{...historyOptions,prices});
   const funding=createPortfolioFunding(db,{...historyOptions,historicalValues:rebuild.values}),history=createPortfolioHistory(db,{...historyOptions,funding});
   const readHistory=(id,range)=>({...history.read(id,range),rebuild:rebuild.read(id)});

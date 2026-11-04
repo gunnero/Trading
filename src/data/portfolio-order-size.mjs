@@ -8,7 +8,11 @@ function decimal(value){
 }
 export function orderPercentage({side,percent,availableShares,availableCash,price}){
   if(![25,50,75,100].includes(percent)||!['BUY','SELL'].includes(side))return '';
-  const amount=decimal(side==='SELL'?availableShares:availableCash),cost=side==='SELL'?{n:1n,d:1n}:decimal(price);
+  return sizedQuantity(side==='SELL'?availableShares:availableCash,side==='SELL'?1:price,percent);
+}
+export function cashOrderQuantity(amount,price){return sizedQuantity(amount,price,100);}
+function sizedQuantity(value,price,percent){
+  const amount=decimal(value),cost=decimal(price);
   if(!amount||!cost||cost.n===0n)return '';
   const units=amount.n*BigInt(percent)*100000000n*cost.d/(100n*amount.d*cost.n);
   if(units===0n||units>100000000000000n)return '';
