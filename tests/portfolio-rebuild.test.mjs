@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {portfolioLedger,rebuildPortfolioValues} from '../src/data/portfolio-rebuild.mjs';
 import {createPortfolioRebuild,dividendHistoryPath} from '../server/portfolio-rebuild.mjs';
@@ -31,19 +34,19 @@ test('dividend pagination accepts only the fixed endpoint with constrained curso
  assert.equal(dividendHistoryPath('/api/v0/equity/history/dividends?cursor=12&limit=50'),'/equity/history/dividends?limit=50&cursor=12');
  for(const path of ['/equity/history/orders?limit=50','https://bad.test/equity/history/dividends?limit=50','/equity/history/dividends?url=x','/equity/history/dividends?limit=50&limit=1',undefined])assert.throws(()=>dividendHistoryPath(path));
 });
-function fixture(t){
- const db=new DatabaseSync(':memory:');t.after(()=>db.close());const input=ledgerInput();let now=NOW,generation='one';const a={environment:'demo',snapshot:input.snapshot},calls=[];const source={bad:false,hold:false};
+function fixture(t,{disk=false}={}){
+ const dir=disk?mkdtempSync(join(tmpdir(),'portfolio-resume-')):null,file=dir?join(dir,'fixture.sqlite'):':memory:';let db=new DatabaseSync(file);t.after(()=>{db.close();if(dir)rmSync(dir,{recursive:true,force:true});});const input=ledgerInput();let now=NOW,generation='one';const a={environment:'demo',snapshot:input.snapshot},calls=[];const source={bad:false,hold:false};
  const options={now:()=>now,credential:()=>({generation}),decode:()=>({}),account:()=>a,isClosed:()=>false,request:async path=>{calls.push(path);if(source.hold)return {items:[],nextPagePath:'/equity/history/orders?cursor=1&limit=50'};return {items:path.includes('/orders')?input.orders:path.includes('/transactions')?input.transactions:input.dividends,nextPagePath:null};},prices:async key=>{assert.equal(key,'NASDAQ:AMD');if(source.bad)throw Error('prices unavailable');return priceHistory();}};
  let service=createPortfolioRebuild(db,options);
- return {db,options,a,input,source,calls,get service(){return service;},advance:()=>now+=61000,restart:()=>service=createPortfolioRebuild(db,options),connect:()=>generation='two'};
+ return {get db(){return db;},options,a,input,source,calls,get service(){return service;},advance:()=>now+=61000,restart:(reopen=false)=>{if(reopen){db.close();db=new DatabaseSync(file);}service=createPortfolioRebuild(db,options);},connect:()=>generation='two'};
 }
 test('scan persists progress, publishes atomically and keeps a prior chart during a failed retry',async t=>{
  const f=fixture(t);f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'loading');assert.equal(f.service.values('a').length,0);assert.equal(f.calls.length,3);
  f.restart();f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').length,4);const old=f.service.values('a');
- f.advance();f.a.snapshot.fetchedAt=new Date(f.options.now()).toISOString();f.service.start('a',{});await f.service.sync('a');f.advance();f.source.bad=true;await f.service.sync('a');assert.equal(f.service.read('a').status,'unavailable');assert.deepEqual(f.service.values('a'),old);
+ f.advance();f.a.snapshot.fetchedAt=new Date(f.options.now()).toISOString();f.service.start('a',{});await f.service.sync('a');f.advance();f.source.bad=true;await f.service.sync('a');assert.equal(f.service.read('a').status,'paused');assert.deepEqual(f.service.values('a'),old);
 });
 test('repeated cursors and changed credential generation stop incomplete reconstruction',async t=>{
- const f=fixture(t);f.source.hold=true;f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'unavailable');assert.equal(f.service.values('a').length,0);
+ const f=fixture(t);f.source.hold=true;f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.values('a').length,0);
  f.advance();f.advance();f.advance();f.advance();f.advance();f.advance();f.a.snapshot.fetchedAt=new Date(f.options.now()).toISOString();f.source.hold=false;f.service.start('a',{});f.connect();await f.service.sync('a');assert.equal(f.service.read('a').status,'unavailable');assert.match(f.service.read('a').message,/connection changed/);
 });
 test('reconstruction expands return history with estimated daily baselines; deposits remain excluded',()=>{
@@ -67,4 +70,57 @@ test('daily price service uses fixed Yahoo daily history, a bounded shared cache
 
 test('unfilled order identifiers cannot overwrite an execution with the same numeric identifier',async t=>{
  const f=fixture(t);f.input.orders.push({order:{id:1,status:'CANCELLED',side:'BUY',instrument}});f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').at(-1).value,1093);
+});
+
+test('eleven saved pages survive a failed next request, process restart and resume without rereading',async t=>{
+ const f=fixture(t,{disk:true}),paths=[];let outage=true;
+ f.options.request=async path=>{
+   paths.push(path);
+   if(path.includes('/orders')){
+     const page=Number(new URL(path,'https://fixture.test').searchParams.get('cursor')||0);
+     if(page===11&&outage)throw Object.assign(Error('Broker temporarily unavailable'),{retryMs:180000});
+     return {items:page===0?f.input.orders:[{order:{id:100+page,status:'CANCELLED'}}],nextPagePath:page<11?`/equity/history/orders?cursor=${page+1}&limit=50`:null};
+   }
+   return {items:path.includes('/transactions')?f.input.transactions:f.input.dividends,nextPagePath:null};
+ };
+ f.restart();f.service.start('a',{});
+ for(let i=0;i<4;i++){await f.service.sync('a');f.advance();}
+ const paused=f.service.read('a');assert.equal(paused.pages,11);assert.equal(paused.records,12);assert.equal(paused.status,'paused');assert.equal(paused.canResume,true);assert.equal(paused.historyComplete,false);
+ const saved=f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state,scan=JSON.parse(saved).scan;
+ f.restart(true);assert.equal(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state,saved);
+ await f.service.sync('a');assert.equal(paths.length,12);assert.throws(()=>f.service.start('a',{}),/retry window/);
+ outage=false;f.advance();f.advance();f.advance();
+ // Resuming accepts an old anchor rather than requiring a new account snapshot.
+ f.service.start('a',{});assert.equal(JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state).scan,scan);
+ await f.service.sync('a');f.advance();await f.service.sync('a');
+ assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').pages,14);assert.equal(f.service.read('a').records,16);assert.equal(paths.length,15);assert.equal(new Set(paths.slice(0,11)).size,11);assert.equal(paths[11],paths[12]);assert.equal(f.service.values('a').at(-1).value,1093);
+});
+
+test('paused price requests retry automatically after backoff without rereading broker pages',async t=>{
+ const f=fixture(t);f.service.start('a',{});await f.service.sync('a');f.advance();f.source.bad=true;await f.service.sync('a');const calls=f.calls.length;
+ assert.equal(f.service.read('a').status,'paused');f.source.bad=false;await f.service.sync('a');assert.equal(f.service.read('a').status,'paused');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.calls.length,calls);
+});
+
+test('corporate-action blockers retain a complete import; legacy failures resume calculation without a broker reread',async t=>{
+ const f=fixture(t);f.input.orders[0].fill.type='STOCK_SPLIT';f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
+ const blocked=f.service.read('a');assert.equal(blocked.status,'blocked');assert.equal(blocked.stage,'validation');assert.equal(blocked.pages,3);assert.equal(blocked.records,5);assert.equal(blocked.historyComplete,true);assert.equal(blocked.canResume,true);assert.match(blocked.message,/corporate actions/);assert.deepEqual(blocked.points,[]);
+ const old=JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state);old.status='unavailable';old.retryAt=0;delete old.stage;f.db.prepare('UPDATE portfolio_rebuild_state SET state=?').run(JSON.stringify(old));
+ f.restart();f.service.start('a',{});await f.service.sync('a');assert.equal(f.calls.length,3);assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.read('a').pages,3);assert.deepEqual(f.service.values('a'),[]);
+ // A changed connection must never resume another credential generation's scan.
+ f.connect();assert.equal(f.service.read('a').canResume,false);f.a.snapshot.fetchedAt=new Date(f.options.now()).toISOString();f.service.start('a',{});assert.equal(f.service.read('a').pages,0);assert.notEqual(JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state).scan,old.scan);
+});
+
+test('a malformed page rolls back its rows and cursor together, then resumes that page only',async t=>{
+ const f=fixture(t);let invalid=true;f.options.request=async path=>{
+   f.calls.push(path);return path.includes('/orders')?{items:f.input.orders,nextPagePath:null}:path.includes('/transactions')?{items:invalid?[f.input.transactions[0],{amount:123}]:f.input.transactions,nextPagePath:null}:{items:f.input.dividends,nextPagePath:null};
+ };f.restart();f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.read('a').pages,1);assert.equal(f.service.read('a').records,2);
+ invalid=false;f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.calls.filter(path=>path.includes('/orders')).length,1);assert.equal(f.service.read('a').records,5);
+});
+
+test('completed instrument prices survive a later price failure and disk restart',async t=>{
+ const f=fixture(t,{disk:true}),keys=[];let outage=true;
+ f.input.orders.push({...trade(5,'BUY',1,100,'2026-10-20T15:00Z'),order:{id:5,side:'BUY',status:'FILLED',instrument:{ticker:'TSLA_US_EQ',name:'Tesla',currency:'USD',isin:'US88160R1014'}}});f.input.snapshot.cash-=100;f.input.snapshot.holdings.push({ticker:'TSLA_US_EQ',quantity:1});
+ f.options.prices=async key=>{keys.push(key);if(key==='NASDAQ:TSLA'&&outage)throw Error('Price service unavailable');return key==='NASDAQ:AMD'?priceHistory():{...priceHistory(),points:priceHistory().points.map(p=>({...p,value:100}))};};
+ f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'paused');assert.equal(f.service.read('a').priced,1);
+ f.restart(true);outage=false;f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.deepEqual(keys,['NASDAQ:AMD','NASDAQ:TSLA','NASDAQ:TSLA']);assert.equal(f.calls.length,3);assert.equal(f.service.values('a').at(-1).value,1093);
 });

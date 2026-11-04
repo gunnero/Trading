@@ -23,14 +23,14 @@ export function PortfolioHistory({account,watchlist=[]}){
       try{
         const accept=result=>{if(!controller.signal.aborted)setState({...result,key});};
         const saved=await request(account.id,range,controller.signal);accept(saved);
-        if(account.connected)accept(await request(account.id,range,controller.signal,saved.rebuild?.status==='loading'?'rebuild/sync':'sync'));
+        if(account.connected)accept(await request(account.id,range,controller.signal,['loading','paused'].includes(saved.rebuild?.status)?'rebuild/sync':'sync'));
       }catch(e){if(!controller.signal.aborted)setError(e.message||'Account history is unavailable.');}
       finally{pending=false;if(!controller.signal.aborted)setBusy(false);}
     }
     load();const timer=setInterval(load,60000);document.addEventListener('visibilitychange',load);
     return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',load);};
   },[key,account.connected,refresh]);
-  const data=state?.key===key?state:null,r=data?.accountReturn,reported=snap?.source!=='api'&&range==='MAX';
+  const data=state?.key===key?state:null,rebuildState=data?.rebuild,r=data?.accountReturn,reported=snap?.source!=='api'&&range==='MAX';
   async function rebuild(){setBusy(true);setError('');try{const result=await request(account.id,range,new AbortController().signal,'rebuild',{listings:watchlist});setState({...result,key});setRefresh(n=>n+1);}catch(e){setError(e.message);}finally{setBusy(false);}}
   const amount=reported?snap.totalReturn:r?.amount,rate=reported?snap.returnPercent:r?.ratePercent,net=reported?snap.netDeposits:r?.netDeposits;
   const points=r?.valuePoints||[],partial=['partial','insufficient'].includes(r?.coverage),tone=amount>0?'green':amount<0?'red':'';
@@ -48,10 +48,15 @@ export function PortfolioHistory({account,watchlist=[]}){
     <div className="pm-periods" aria-label="Account chart period">{PORTFOLIO_RANGES.map(p=><button key={p} className={range===p?'selected':''} aria-pressed={range===p} onClick={()=>setRange(p)}>{p}</button>)}</div>
     {r?.valuationTrackingFrom&&<p className="pm-history-state">{r.reconstructedFrom?`Estimated daily history from ${displayDay(r.reconstructedFrom)} through ${displayDay(r.reconstructedTo)}; recorded balances from ${displayDay(r.recordedFrom)}`:`Recorded chart from ${displayDay(r.valuationTrackingFrom)}`} · {snap?.fetchedAt?`updated ${clockStamp(snap.fetchedAt)} ${zoneLabel}`:'saved observations'}</p>}
     <div className="pm-cash-row"><span>CASH</span><strong>{money(snap?.cash,snap?.currency)}</strong></div>
-    {account.connected&&<details className="pm-history-explainer" open={data?.rebuild?.status==='loading'||data?.rebuild?.status==='unavailable'}><summary>Older account history</summary>
+    {account.connected&&<details className="pm-history-explainer" open={['loading','paused','blocked','unavailable'].includes(rebuildState?.status)}><summary>Older account history</summary>
       <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
       <p>Uses historical daily stock prices from Yahoo Finance. Currently supports matching account and stock currencies, verified listings and ordinary trades. Transfers, corporate actions or missing prices may prevent a reliable rebuild.</p>
-      {data?.rebuild?.status==='loading'?<p role="status">Rebuilding older history · {data.rebuild.pages} pages read · {data.rebuild.priced} instruments priced. Keep this page open; it continues each minute.</p>:<button className="button outline" disabled={busy} onClick={rebuild}>{data?.rebuild?.status==='ready'?'Rebuild history again':'Rebuild older history'}</button>}
+      {rebuildState?.pages>0&&<p role="status">{rebuildState.pages} pages saved{Number.isFinite(rebuildState.records)?` · ${rebuildState.records} records`:''} · {rebuildState.priced} instruments priced. Progress is saved on the server and survives refreshes.</p>}
+      {rebuildState?.status==='loading'?<p role="status">{rebuildState.historyComplete?'History import complete · checking balances and historical prices.':'Reading older history…'} Keep this page open; it continues each minute.</p>:<>
+        {rebuildState?.status==='paused'&&<p role="status">Import paused. Saved pages will be reused. {rebuildState.retryAt?`Automatic retry after ${clockStamp(rebuildState.retryAt)} ${zoneLabel} while this page is open.`:'It resumes automatically while this page is open.'}</p>}
+        {['blocked','unavailable'].includes(rebuildState?.status)&&rebuildState?.canResume&&<p role="status">{rebuildState.historyComplete?'History import complete. The chart needs additional information before it can be calculated.':'History import stopped at the next unread page.'} Saved history is retained; retrying will reuse it.</p>}
+        <button className="button outline" disabled={busy||rebuildState?.retryAt>Date.now()} onClick={rebuild}>{rebuildState?.canResume?(rebuildState.historyComplete?'Retry using saved history':'Resume history import'):rebuildState?.status==='ready'?'Rebuild history again':'Rebuild older history'}</button>
+      </>}
       {data?.rebuild?.message&&<p role="status">{data.rebuild.message}</p>}
       {data?.rebuild?.status==='ready'&&<p>Reconstructed history is available. Estimated points are identified on the chart.</p>}
     </details>}
