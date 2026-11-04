@@ -3,9 +3,9 @@ import {ArrowsClockwise} from '@phosphor-icons/react';
 import {apiFetch} from './auth-client';
 import {useDisplayTime} from './DisplayTime';
 import {PORTFOLIO_RANGES} from './data/portfolio-history.mjs';
+import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {PortfolioValueChart} from './PortfolioValueChart';
 
-const money=(v,c)=>Number.isFinite(v)&&c?new Intl.NumberFormat('en-US',{style:'currency',currency:c,maximumFractionDigits:2}).format(v):'—';
 const percent=v=>Number.isFinite(v)?`${v>0?'+':''}${v.toFixed(2)}%`:'—';
 async function request(accountId,range,signal,action='',body={}){
   const path=`/api/portfolio/accounts/${accountId}/history${action?'/'+action:'?'+new URLSearchParams({range})}`;
@@ -13,6 +13,7 @@ async function request(accountId,range,signal,action='',body={}){
   const result=await res.json();if(!res.ok)throw Error(result.message||'Account history is unavailable.');return result;
 }
 export function PortfolioHistory({account,watchlist=[]}){
+  const {money,hideBalances}=usePortfolioPrivacy();
   const [range,setRange]=useState('MAX'),[state,setState]=useState(null),[error,setError]=useState(''),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false);
   const {clockStamp,displayDay,zoneLabel}=useDisplayTime(),key=account.id+'|'+range,snap=account.snapshot;
   useEffect(()=>{
@@ -43,7 +44,7 @@ export function PortfolioHistory({account,watchlist=[]}){
     {status&&<p className="pm-history-state" role="status">{status}</p>}
     {partial&&<p className="pm-history-state pm-period-coverage" role="status">{partialReturn?`Partial ${range} · Return and rate cover ${clockStamp(r.baselineAt)} to ${clockStamp(r.to)} ${zoneLabel}. Full ${range} history is not available yet.`:'Waiting for two recorded balances in this period and complete funding history to calculate return.'}</p>}
     {r?.estimated&&<p className="pm-history-state" role="status">Estimated return · Uses a reconstructed daily balance at {clockStamp(r.baselineAt)} {zoneLabel}. Daily closing prices can differ from Trading 212’s prices and period boundaries.</p>}
-    {points.length?<PortfolioValueChart key={key} points={points} currency={snap?.currency}/>:<div className="pm-chart-empty" role="status">{data?'Your account chart builds as balances are recorded.':'Loading account chart…'}</div>}
+    {hideBalances?<div className="portfolio-privacy-note">Account chart hidden while balances are private.</div>:points.length?<PortfolioValueChart key={key} points={points} currency={snap?.currency}/>:<div className="pm-chart-empty" role="status">{data?'Your account chart builds as balances are recorded.':'Loading account chart…'}</div>}
     <div className="pm-periods" aria-label="Account chart period">{PORTFOLIO_RANGES.map(p=><button key={p} className={range===p?'selected':''} aria-pressed={range===p} onClick={()=>setRange(p)}>{p}</button>)}</div>
     {r?.valuationTrackingFrom&&<p className="pm-history-state">{r.reconstructedFrom?`Estimated daily history from ${displayDay(r.reconstructedFrom)} through ${displayDay(r.reconstructedTo)}; recorded balances from ${displayDay(r.recordedFrom)}`:`Recorded chart from ${displayDay(r.valuationTrackingFrom)}`} · {snap?.fetchedAt?`updated ${clockStamp(snap.fetchedAt)} ${zoneLabel}`:'saved observations'}</p>}
     <div className="pm-cash-row"><span>CASH</span><strong>{money(snap?.cash,snap?.currency)}</strong></div>
