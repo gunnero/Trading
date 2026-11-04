@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {portfolioHistoryListing} from '../src/data/portfolio-listings.mjs';
+import {portfolioHistoryListing,portfolioCatalogListing} from '../src/data/portfolio-listings.mjs';
 import {portfolioLedger,rebuildPortfolioValues,verifyPortfolioSplits} from '../src/data/portfolio-rebuild.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {fundingHistoryPath} from './portfolio-funding.mjs';
@@ -12,7 +12,7 @@ export function dividendHistoryPath(path){
   return orderHistoryPath(transformed).replace('/history/orders?','/history/dividends?');
 }
 const validatePath=(kind,path)=>kind==='orders'?orderHistoryPath(path):kind==='transactions'?fundingHistoryPath(path):dividendHistoryPath(path);
-export function createPortfolioRebuild(db,{now,request,credential,decode,account,isClosed,prices}){
+export function createPortfolioRebuild(db,{now,request,credential,decode,account,isClosed,prices,readListings}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_rebuild_state(account_id TEXT PRIMARY KEY,state TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_rebuild_items(account_id TEXT NOT NULL,scan TEXT NOT NULL,kind TEXT NOT NULL,item_id TEXT NOT NULL,detail TEXT NOT NULL,PRIMARY KEY(account_id,scan,kind,item_id));`);
   const pending=new Set(),state=id=>{const row=db.prepare('SELECT state FROM portfolio_rebuild_state WHERE account_id=?').get(id);return row?JSON.parse(row.state):{};};
@@ -22,7 +22,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
   function read(id){
     const a=account(id),s=state(id);if(!belongs(s,a))return {status:'idle',points:[],message:null};
     const records=s.scan?db.prepare("SELECT COUNT(*) AS count FROM portfolio_rebuild_items WHERE account_id=? AND scan=? AND kind!='prices'").get(id,s.scan).count:0;
-    return {status:s.status||'idle',points:s.points||[],from:s.points?.[0]?.at||null,to:s.points?.at(-1)?.at||null,anchorAt:s.anchor?.fetchedAt||null,pages:s.pages||0,records,priced:s.priced||0,instruments:s.instruments?.length||0,historyComplete:s.kind>=kinds.length,stage:s.stage||(s.kind<kinds.length?'history':'validation'),canResume:resumable(s,a,credential(id)),retryAt:s.retryAt||null,message:s.message||null,completedAt:s.completedAt||null};
+    return {status:s.status||'idle',points:s.points||[],from:s.points?.[0]?.at||null,to:s.points?.at(-1)?.at||null,anchorAt:s.anchor?.fetchedAt||null,pages:s.pages||0,records,priced:s.priced||0,instruments:s.instruments?.length||0,listingChecks:s.listingChecks||[],listingMessage:s.listingMessage||null,historyComplete:s.kind>=kinds.length,stage:s.stage||(s.kind<kinds.length?'history':'validation'),canResume:resumable(s,a,credential(id)),retryAt:s.retryAt||null,message:s.message||null,completedAt:s.completedAt||null};
   }
   function values(id){return read(id).points;}
   function start(id,input){
@@ -35,7 +35,7 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
     // Retain the original balance anchor and every committed page/price. A newer
     // snapshot cannot be reconciled against an older, partially imported scan.
     if(resumable(s,a,record)){
-      save(id,{...s,listings:listings??s.listings,status:'loading',message:null,retryAt:null});return read(id);
+      save(id,{...s,listings:listings??s.listings,catalogChecked:false,priceIssues:{},status:'loading',message:null,retryAt:null});return read(id);
     }
     if(now()-Date.parse(a.snapshot.fetchedAt)>120000)throw fail(409,'Refresh the account balance before rebuilding history.');
     db.exec('BEGIN IMMEDIATE');try{
@@ -69,20 +69,52 @@ export function createPortfolioRebuild(db,{now,request,credential,decode,account
       if(!readingPages&&s.kind===kinds.length){
         s.stage='validation';const ledger=portfolioLedger({orders:items(id,s,'orders'),transactions:items(id,s,'transactions'),dividends:items(id,s,'dividends'),snapshot:s.anchor});
         if(ledger.instruments.length>100)throw Error('Automatic reconstruction currently supports up to 100 historical instruments.');
-        s.instruments=ledger.instruments;s.stage='prices';
-        for(let count=0;count<2&&s.priced<ledger.instruments.length;count++){
-          const instrument=ledger.instruments[s.priced],listing=portfolioHistoryListing(instrument,s.listings);
-          if(!listing)throw Error('No verified historical price listing for '+instrument.name+' ('+instrument.ticker+'). Add its exact listing to the watchlist, then retry using saved history.');
-          retryable=true;const history=await prices(listing.id,ledger.from,ledger.to);retryable=false;if(!current())return safeRead();
-          verifyPortfolioSplits(ledger.splits.filter(split=>split.ticker===instrument.ticker),history);
-          db.prepare('INSERT OR REPLACE INTO portfolio_rebuild_items VALUES(?,?,?,?,?)').run(id,s.scan,'prices',instrument.ticker,JSON.stringify(history));s.priced++;s.failures=0;save(id,s);
+        s.instruments=ledger.instruments;s.stage='prices';s.priceIssues||={};s.catalogListings||={};
+        // Saved rows, not an array offset, identify completed instruments. This
+        // also resumes old scans whose first missing listing stopped the loop.
+        const savedPrices=new Set(db.prepare("SELECT item_id FROM portfolio_rebuild_items WHERE account_id=? AND scan=? AND kind='prices'").all(id,s.scan).map(r=>r.item_id));
+        const listingFor=i=>portfolioHistoryListing(i,s.listings)||s.catalogListings[i.ticker];
+        const updateChecks=()=>{
+          s.priced=ledger.instruments.filter(i=>savedPrices.has(i.ticker)).length;
+          s.listingChecks=ledger.instruments.map(i=>({ticker:i.ticker,name:i.name,currency:i.instrumentCurrency,listing:listingFor(i)?.id||null,status:savedPrices.has(i.ticker)?'saved':s.priceIssues[i.ticker]?'unavailable':listingFor(i)?'pending':'unmatched',message:s.priceIssues[i.ticker]||null}));
+        };
+        updateChecks();
+        if(readListings&&!s.catalogChecked&&s.listingChecks.some(i=>i.status==='unmatched')){
+          // Metadata has its own pass so two broker reads cannot compete with
+          // daily-price requests for the browser's confirmation deadline.
+          s.stage='listings';
+          try{
+            const catalog=await readListings(id);if(!current())return safeRead();
+            for(const i of ledger.instruments){const match=portfolioCatalogListing(i,catalog);if(match)s.catalogListings[i.ticker]=match;}
+            s.listingMessage=null;
+          }catch{if(!current())return safeRead();s.listingMessage='Automatic listing lookup is unavailable. Check Metadata read permission, then retry; saved history and prices will be reused.';}
+          s.catalogChecked=true;updateChecks();s.retryAt=now()+60000;save(id,s);return safeRead();
+        }
+        const queue=ledger.instruments.filter(i=>!savedPrices.has(i.ticker)&&listingFor(i)&&!s.priceIssues[i.ticker]);
+        for(const instrument of queue.slice(0,2)){
+          const listing=listingFor(instrument);
+          try{
+            retryable=true;const history=await prices(listing.id,ledger.from,ledger.to,listing.providerCheck);retryable=false;if(!current())return safeRead();
+            if(history?.currency!==instrument.instrumentCurrency||!Array.isArray(history.points)||!history.points.length)throw Error('Verified daily prices are unavailable in the instrument currency.');
+            verifyPortfolioSplits(ledger.splits.filter(split=>split.ticker===instrument.ticker),history);
+            db.prepare('INSERT OR REPLACE INTO portfolio_rebuild_items VALUES(?,?,?,?,?)').run(id,s.scan,'prices',instrument.ticker,JSON.stringify(history));savedPrices.add(instrument.ticker);s.failures=0;
+          }catch(e){
+            if(!current())return safeRead();
+            if(retryable&&![400,404,422].includes(e.status))throw e;
+            retryable=false;s.priceIssues[instrument.ticker]=e.message||'Historical prices could not be verified.';
+          }
+          updateChecks();save(id,s);
         }
         if(s.priced===ledger.instruments.length){
           s.stage='calculation';const histories=Object.fromEntries(db.prepare("SELECT item_id,detail FROM portfolio_rebuild_items WHERE account_id=? AND scan=? AND kind='prices'").all(id,s.scan).map(row=>[row.item_id,JSON.parse(row.detail)]));
           const points=rebuildPortfolioValues(ledger,histories,s.anchor.currency);s={...s,points,status:'ready',completedAt:now(),message:null};
+        }else if(!s.listingChecks.some(i=>i.status==='pending')){
+          s.status='blocked';
+          const unresolved=s.listingChecks.filter(i=>i.status!=='saved');
+          s.message=`Chart not ready: ${unresolved.length} instrument${unresolved.length===1?' needs':'s need'} a verified listing or daily prices. All imported records and completed prices are saved. ${unresolved.length===1&&unresolved[0].message?unresolved[0].message:'See the full list below.'}`;
         }
       }
-      if(current()){s.retryAt=s.status==='ready'?null:now()+60000;save(id,s);}
+      if(current()){s.retryAt=['ready','blocked'].includes(s.status)?null:now()+60000;save(id,s);}
     }catch(e){if(current()){
       const automatic=retryable&&!e.historyPermission&&![400,401,403,404].includes(e.status),failures=(s.failures||0)+1;
       save(id,{...s,status:automatic?'paused':'blocked',failures,message:e.historyPermission?'Enable History: Orders, History: Transactions and History: Dividends read permissions to rebuild older balances.':e.message||'Historical reconstruction is unavailable.',retryAt:automatic?now()+Math.max(60000,e.retryMs||Math.min(900000,60000*2**Math.min(failures-1,4))):null});

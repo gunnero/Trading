@@ -35,3 +35,5 @@
 .pm-trade-page .pm-order-holding dl{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))}
 .pm-trade-page .pm-trading-account{overflow-wrap:anywhere}
 @media(max-width:600px){.pm-trade-panel{padding:16px}.pm-trading input:not([type=checkbox]),.pm-trading select{font-size:16px}}
+
+.pm-listing-checks{margin-top:12px;overflow-wrap:anywhere}.pm-listing-checks ul{padding-left:18px;margin:8px 0}.pm-listing-checks li{padding:7px 0}.pm-listing-checks strong{color:var(--text,#e8edf0)}

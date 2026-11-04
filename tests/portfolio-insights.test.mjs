@@ -51,6 +51,13 @@ test('metadata is shared with trading, exact instrument schedules survive restar
  f.advance(601000);f.fail('/api/v0/equity/metadata/exchanges',403);assert.deepEqual((await f.service.metadata.hours(f.id)).items,[]);f.restart();assert.match((await f.service.metadata.hours(f.id)).error,/Metadata/);assert.equal(f.calls.filter(p=>p.endsWith('/metadata/exchanges')).length,2);
  f.service.disconnect(f.id,f.service.read().revision);assert.deepEqual((await f.service.metadata.hours(f.id)).items,[]);
 });
+test('history listing metadata joins the exact instrument to its exchange and retains identity through restart',async t=>{
+ const f=await fixture(t);f.setCatalog([{...catalog[0],shortName:'AMD'},{ticker:'EQACs_EQ',shortName:'EQAC',name:'Accumulating ETF',currencyCode:'USD',isin:'IE00BFZXGZ54',type:'ETF',workingScheduleId:5}]);
+ f.setExchanges([{...exchanges[0],name:'NASDAQ'},{name:'SIX Swiss Exchange',workingSchedules:[{id:5,timeEvents:events}]}]);
+ const rows=await f.service.metadata.historyListings(f.id);assert.equal(rows[0].exchange,'NASDAQ');assert.equal(rows[1].exchange,'SIX Swiss Exchange');assert.equal(rows[1].shortName,'EQAC');assert.equal(rows[1].isin,'IE00BFZXGZ54');
+ f.restart();assert.deepEqual(await f.service.metadata.historyListings(f.id),rows);assert.equal(f.calls.filter(p=>p.endsWith('/metadata/instruments')).length,1);assert.equal(f.calls.filter(p=>p.endsWith('/metadata/exchanges')).length,1);
+ f.advance(601000);f.fail('/api/v0/equity/metadata/exchanges',403);await assert.rejects(()=>f.service.metadata.historyListings(f.id));
+});
 test('exposure keeps share classes, instrument and account currencies separate, excludes demo and discloses missing values',()=>{
  const holding={ticker:'AMD_US_EQ',name:'AMD',instrumentCurrency:'USD',isin:'US0079031078',quantity:2,value:200};
  const account=(id,currency,holdings=[holding])=>({id,personId:id,platform:'Trading 212',environment:'live',label:'Invest',connected:true,snapshot:{currency,holdings,source:'api',fetchedAt:new Date(NOW).toISOString()}});

@@ -9,7 +9,7 @@ import {createPortfolioRebuild,dividendHistoryPath} from '../server/portfolio-re
 import {accountPerformance} from '../src/data/portfolio-history.mjs';
 import {createPortfolioFunding} from '../server/portfolio-funding.mjs';
 import {parsePortfolioPrices,resolveSymbol,resolvePortfolioPriceSymbol,supportsChart,createMarketService} from '../server/market-data.mjs';
-import {portfolioHistoryListing,portfolioListing} from '../src/data/portfolio-listings.mjs';
+import {portfolioHistoryListing,portfolioCatalogListing,portfolioListing} from '../src/data/portfolio-listings.mjs';
 import {yahooPayload} from './fixtures/market.mjs';
 const time=s=>Date.parse(s),day=86400000,NOW=time('2026-10-23T22:00Z');
 const instrument={ticker:'AMD_US_EQ',name:'Advanced Micro Devices',currency:'USD',isin:'US0079031078'};
@@ -70,6 +70,23 @@ test('daily price service uses fixed Yahoo daily history, a bounded shared cache
 });
 
 const vuaa={ticker:'VUAAl_EQ',isin:'IE00BFMXXD54',instrumentCurrency:'USD'};
+const eqac={ticker:'EQACs_EQ',isin:'IE00BFZXGZ54',instrumentCurrency:'USD'};
+test('Swiss accumulating EQAC is identified by broker ID, ISIN and USD without changing chart or trade mappings',()=>{
+ assert.equal(portfolioHistoryListing(eqac).id,'SIX:EQAC');
+ for(const change of [{isin:''},{isin:'IE0032077012'},{instrumentCurrency:'CHF'},{instrumentCurrency:'EUR'},{ticker:'EQACl_EQ'},{ticker:'EQAC_US_EQ'},{ticker:'EQACS_EQ'}])assert.equal(portfolioHistoryListing({...eqac,...change}),null);
+ assert.equal(portfolioListing(eqac),null);assert.equal(resolveSymbol('SIX:EQAC'),null);assert.equal(supportsChart('SIX:EQAC','D'),false);
+});
+test('broker catalog automatically resolves supported exact listings without using the watchlist',()=>{
+ const catalog=[{ticker:eqac.ticker,shortName:'EQAC',isin:eqac.isin,currencyCode:'USD',type:'ETF',exchange:'SIX Swiss Exchange'},
+  {ticker:'MSFT_US_EQ',shortName:'MSFT',isin:'US5949181045',currencyCode:'USD',type:'STOCK',exchange:'NASDAQ'}];
+ assert.equal(portfolioCatalogListing(eqac,catalog).id,'SIX:EQAC');
+ const h={ticker:'MSFT_US_EQ',isin:'US5949181045',instrumentCurrency:'USD'};
+ assert.deepEqual(portfolioCatalogListing(h,catalog).providerCheck,{exchange:'NASDAQ',currency:'USD',type:'EQUITY'});
+ for(const change of [{isin:'US5949181046'},{currencyCode:'CHF'},{type:'WARRANT'},{exchange:'Unknown'},{shortName:'QQQ'},{shortName:'EQAC.SW'}])assert.equal(portfolioCatalogListing(eqac,[{...catalog[0],...change}]),null);
+ assert.equal(portfolioCatalogListing(eqac,[catalog[0],catalog[0]]),null);
+ assert.equal(portfolioCatalogListing({...eqac,isin:''},catalog),null);
+ assert.equal(portfolioCatalogListing(eqac,[{...catalog[0],exchange:'London Stock Exchange'}]),null);
+});
 test('historical listings identify USD London VUAA and NYSE Visa without borrowing another share class',()=>{
  assert.equal(portfolioHistoryListing(vuaa).id,'LSE:VUAA');
  assert.equal(portfolioHistoryListing({ticker:'V_US_EQ',isin:'US92826C8394',instrumentCurrency:'USD'}).id,'NYSE:V');
@@ -86,6 +103,32 @@ function londonPayload(dates=['2026-10-20T07:00Z','2026-10-21T07:00Z']){
  r.timestamp=dates.map(d=>time(d)/1000);const closes=dates.map((_,i)=>100+i);
  r.indicators.quote[0]={open:closes,close:closes,low:closes,high:closes};return payload;
 }
+function swissPayload(dates){const p=londonPayload(dates);Object.assign(p.chart.result[0].meta,{symbol:'EQAC.SW',exchangeName:'EBS',exchangeTimezoneName:'Europe/Zurich'});return p;}
+test('Swiss daily history verifies exchange, currency and type and respects local dates and different US/European DST dates',()=>{
+ const asset=resolvePortfolioPriceSymbol('SIX:EQAC'),p=swissPayload(['2026-07-03T07:00Z','2026-10-26T08:00Z','2026-11-02T08:00Z']),cutoff=time('2026-11-02T21:00Z');
+ assert.deepEqual(parsePortfolioPrices(p,asset,cutoff).points.map(p=>new Date(p.at).toISOString()),['2026-07-03T20:00:00.000Z','2026-10-26T20:00:00.000Z','2026-11-02T21:00:00.000Z']);
+ assert.equal(parsePortfolioPrices(p,asset,cutoff-1).points.length,2);
+ for(const meta of [{symbol:'EQAC.MI'},{currency:'CHF'},{currency:'EUR'},{exchangeName:'LSE'},{instrumentType:'EQUITY'},{exchangeTimezoneName:'Europe/London'}]){const bad=swissPayload();Object.assign(bad.chart.result[0].meta,meta);assert.throws(()=>parsePortfolioPrices(bad,asset,NOW));}
+ p.chart.result[0].meta.currentTradingPeriod={regular:{end:cutoff/1000+3600}};assert.equal(parsePortfolioPrices(p,asset,cutoff+7200000).points.length,2);
+});
+test('catalog-derived history checks identity again even when the raw Yahoo response is cached',async()=>{
+ const calls=[],p=swissPayload(),check={exchange:'SIX',currency:'USD',type:'ETF'},service=createMarketService({now:()=>NOW,fetcher:async url=>{calls.push(url);return new Response(JSON.stringify(p));}});
+ p.chart.result[0].meta.symbol='TEST.SW';
+ assert.equal(resolvePortfolioPriceSymbol('SIX:TEST'),null);assert.equal(resolvePortfolioPriceSymbol('SIX:TEST',check).symbol,'TEST.SW');
+ assert.equal((await service.portfolioPrices('SIX:TEST',NOW-10*day,NOW,check)).points.length,2);
+ await service.portfolioPrices('SIX:TEST',NOW-10*day,NOW,check);assert.equal(calls.length,1);assert.equal(new URL(calls[0]).pathname,'/v8/finance/chart/TEST.SW');
+ for(const bad of [{...check,currency:'CHF'},{...check,exchange:'LSE'},{...check,type:'EQUITY'}])await assert.rejects(()=>service.portfolioPrices('SIX:TEST',NOW-10*day,NOW,bad));
+ const us=pricesPayload();Object.assign(us.chart.result[0].meta,{symbol:'MSFT',exchangeName:'NMS',exchangeTimezoneName:'America/New_York',instrumentType:'EQUITY'});
+ const svc=createMarketService({now:()=>NOW,fetcher:async()=>new Response(JSON.stringify(us))});
+ await svc.portfolioPrices('NASDAQ:MSFT',NOW-10*day,NOW,{exchange:'NASDAQ',currency:'USD',type:'EQUITY'});
+ await assert.rejects(()=>svc.portfolioPrices('NYSE:MSFT',NOW-10*day,NOW,{exchange:'NYSE',currency:'USD',type:'EQUITY'}),/identity/);
+});
+test('missing provider listings are distinguishable from temporary outages',async()=>{
+ const missing=createMarketService({now:()=>NOW,fetcher:async()=>new Response('',{status:404})});
+ await assert.rejects(()=>missing.portfolioPrices('SIX:EQAC',NOW-10*day,NOW),e=>e.status===404);
+ const wrong=swissPayload();wrong.chart.result[0].meta.currency='CHF';const mismatch=createMarketService({now:()=>NOW,fetcher:async()=>new Response(JSON.stringify(wrong))});
+ await assert.rejects(()=>mismatch.portfolioPrices('SIX:EQAC',NOW-10*day,NOW),e=>e.status===422);
+});
 test('London daily history uses the account valuation time across DST without US holiday filtering or future values',()=>{
  const asset=resolvePortfolioPriceSymbol('LSE:VUAA');
  const dates=['2026-07-03T07:00Z','2026-10-23T07:00Z','2026-10-26T08:00Z','2026-11-02T08:00Z']; // July 3 is a US holiday, not a London holiday.
@@ -132,6 +175,46 @@ test('a saved price-listing blocker resumes with retained imports, anchor and ea
  const rows=f.db.prepare('SELECT * FROM portfolio_rebuild_items ORDER BY kind,item_id').all();for(const row of oldRows)assert.deepEqual(rows.find(r=>r.kind===row.kind&&r.item_id===row.item_id),row);
  assert.deepEqual(f.service.values('a').map(p=>p.value),[1000,1070,1142,1123]);
  f.restart(true);assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.values('a').at(-1).value,1123);
+});
+
+function addHolding(f,ticker,isin='',name=ticker){
+ const id=f.input.orders.length+10;
+ f.input.orders.push({...trade(id,'BUY',1,100,'2026-10-20T14:00Z'),order:{id,side:'BUY',status:'FILLED',instrument:{ticker,isin,name,currency:'USD'}}});
+ f.input.snapshot.cash-=100;f.input.snapshot.holdings.push({ticker,quantity:1});
+}
+test('all missing listings are reported together while supported instruments after them still get saved',async t=>{
+ const f=fixture(t,{disk:true});addHolding(f,'UNKNOWN_US_EQ');addHolding(f,eqac.ticker,eqac.isin);addHolding(f,'SECOND_US_EQ');addHolding(f,'TSLA_US_EQ','US88160R1014');
+ const prices=[];f.options.prices=async key=>{prices.push(key);return priceHistory();};f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
+ let r=f.service.read('a');assert.equal(r.status,'loading');assert.equal(r.priced,2);assert.deepEqual(r.listingChecks.filter(i=>i.status==='unmatched').map(i=>i.ticker),['UNKNOWN_US_EQ','SECOND_US_EQ']);
+ f.restart(true);f.advance();await f.service.sync('a');r=f.service.read('a');assert.equal(r.status,'blocked');assert.equal(r.priced,3);assert.equal(r.instruments,5);assert.deepEqual(prices,['NASDAQ:AMD','SIX:EQAC','NASDAQ:TSLA']);assert.equal(f.calls.length,3);assert.equal(r.points.length,0);
+ const rows=f.db.prepare('SELECT * FROM portfolio_rebuild_items ORDER BY kind,item_id').all(),anchor=r.anchorAt;
+ f.service.start('a',{listings:['UNKNOWN','SECOND'].map(symbol=>({id:'NASDAQ:'+symbol,symbol,ticker:symbol,exchange:'NASDAQ',group:'STOCKS'}))});await f.service.sync('a');
+ assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').anchorAt,anchor);assert.equal(f.calls.length,3);assert.deepEqual(prices.slice(3),['NASDAQ:UNKNOWN','NASDAQ:SECOND']);
+ for(const row of rows)assert.deepEqual(f.db.prepare('SELECT * FROM portfolio_rebuild_items WHERE account_id=? AND scan=? AND kind=? AND item_id=?').get(row.account_id,row.scan,row.kind,row.item_id),row);
+});
+test('automatic catalog matching runs once in a separate pass and persists across restart without rereading trades',async t=>{
+ const f=fixture(t,{disk:true});addHolding(f,'MSFT_US_EQ','US5949181045');let catalogs=0;const prices=[];
+ f.options.readListings=async()=>{catalogs++;return [{ticker:'MSFT_US_EQ',shortName:'MSFT',isin:'US5949181045',currencyCode:'USD',type:'STOCK',exchange:'NASDAQ'}];};
+ f.options.prices=async(key,from,to,expected)=>{prices.push(key);if(key==='NASDAQ:MSFT')assert.deepEqual(expected,{exchange:'NASDAQ',currency:'USD',type:'EQUITY'});return priceHistory();};
+ f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(catalogs,1);assert.equal(prices.length,0);assert.equal(f.service.read('a').stage,'listings');
+ f.restart(true);f.advance();await f.service.sync('a');assert.equal(catalogs,1);assert.equal(f.calls.length,3);assert.equal(f.service.read('a').status,'ready');assert.deepEqual(prices,['NASDAQ:AMD','NASDAQ:MSFT']);
+});
+test('metadata denial still saves supported prices and retry can resolve the remaining listing',async t=>{
+ const f=fixture(t);addHolding(f,'MSFT_US_EQ','US5949181045');let denied=true;
+ f.options.readListings=async()=>{if(denied)throw Object.assign(Error('denied'),{status:403});return [{ticker:'MSFT_US_EQ',shortName:'MSFT',isin:'US5949181045',currencyCode:'USD',type:'STOCK',exchange:'NASDAQ'}];};f.options.prices=async()=>priceHistory();
+ f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');f.advance();await f.service.sync('a');
+ assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.read('a').priced,1);assert.match(f.service.read('a').listingMessage,/Metadata/);
+ denied=false;f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.equal(f.service.read('a').listingMessage,null);assert.equal(f.calls.length,3);
+});
+test('a per-instrument source failure cannot prevent later instruments from being priced',async t=>{
+ const f=fixture(t,{disk:true});addHolding(f,eqac.ticker,eqac.isin);addHolding(f,'TSLA_US_EQ','US88160R1014');let missing=true;const keys=[];
+ f.options.prices=async key=>{keys.push(key);if(missing&&key==='SIX:EQAC')throw Object.assign(Error('Source has no history for SIX:EQAC'),{status:404});return priceHistory();};f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
+ assert.equal(f.service.read('a').listingChecks.find(i=>i.ticker===eqac.ticker).status,'unavailable');assert.equal(f.service.read('a').status,'loading');f.restart(true);f.advance();await f.service.sync('a');assert.equal(f.service.read('a').priced,2);assert.equal(f.service.read('a').status,'blocked');assert.equal(f.service.values('a').length,0);
+ missing=false;f.service.start('a',{});await f.service.sync('a');assert.equal(f.service.read('a').status,'ready');assert.deepEqual(keys,['NASDAQ:AMD','SIX:EQAC','NASDAQ:TSLA','SIX:EQAC']);assert.equal(f.calls.length,3);
+});
+test('a changed connection during catalog lookup cannot commit old identities or issue price requests',async t=>{
+ const f=fixture(t);addHolding(f,'MSFT_US_EQ','US5949181045');f.options.readListings=async()=>{f.connect();return [];};f.restart();f.service.start('a',{});await f.service.sync('a');f.advance();await f.service.sync('a');
+ const state=JSON.parse(f.db.prepare('SELECT state FROM portfolio_rebuild_state').get().state);assert.equal(state.catalogChecked,undefined);assert.equal(state.priced,0);
 });
 
 test('unfilled order identifiers cannot overwrite an execution with the same numeric identifier',async t=>{

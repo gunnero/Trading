@@ -161,42 +161,47 @@ export function parsePriceHistory(payload,asset,range,now=Date.now()){
   const change=baseline>0?quote.price-baseline:null;
   return {quote,points,change,changePercent:change===null?null:change/baseline*100,from:points[0].at,to:cutoff,basis:range==='1D'?'Previous regular-session close':'First available price in this range',range,interval:PRICE_RANGES[range][0]};
 }
-export function resolvePortfolioPriceSymbol(key){
-  if(key==='LSE:VUAA')return {key,symbol:'VUAA.L',kind:'equity',portfolioDailyZone:'Europe/London'};
+const historyVenues={NASDAQ:{sources:['NMS','NGM','NCM'],zone:'America/New_York'},NYSE:{sources:['NYQ'],zone:'America/New_York'},NYSEARCA:{sources:['PCX'],zone:'America/New_York'},AMEX:{sources:['ASE'],zone:'America/New_York'},LSE:{sources:['LSE'],zone:'Europe/London',suffix:'.L',label:'London'},SIX:{sources:['EBS'],zone:'Europe/Zurich',suffix:'.SW',label:'Swiss'}};
+export function resolvePortfolioPriceSymbol(key,expected){
+  if(key==='LSE:VUAA'||key==='SIX:EQAC')expected={exchange:key.split(':')[0],currency:'USD',type:'ETF'};
+  if(expected){
+    const [exchange,symbol,...extra]=String(key).split(':'),venue=historyVenues[exchange];
+    if(!venue||extra.length||expected.exchange!==exchange||expected.currency!=='USD'||!['ETF','EQUITY'].includes(expected.type)||!/^([A-Z][A-Z0-9.]{0,9})$/.test(symbol||'')||(venue.suffix&&expected.type!=='ETF'))return null;
+    return {key,symbol:venue.suffix?symbol+venue.suffix:symbol.replaceAll('.','-'),kind:'equity',portfolioExpected:expected,portfolioVenue:venue,...(venue.suffix?{portfolioDailyZone:venue.zone}:{})};
+  }
   return resolveSymbol(key);
 }
-const londonDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'});
-function londonPortfolioCandles(result,asset,cutoff){
+function overseasPortfolioCandles(result,asset,cutoff){
   const m=result.meta,q=result.indicators?.quote?.[0],seen=new Set();
-  if(asset.key!=='LSE:VUAA'||asset.symbol!=='VUAA.L'||m.currency!=='USD'||m.exchangeName!=='LSE'||m.instrumentType!=='ETF'||m.exchangeTimezoneName!=='Europe/London')
-    throw Error('The USD London fund listing could not be verified.');
+  const localDay=new Intl.DateTimeFormat('en-CA',{timeZone:asset.portfolioDailyZone,year:'numeric',month:'2-digit',day:'2-digit'});
   return (result.timestamp||[]).flatMap((t,i)=>{
     const o=q?.open?.[i],c=q?.close?.[i],l=q?.low?.[i],h=q?.high?.[i];
     if(!validNumber(t)||![o,c,l,h].every(n=>validNumber(n)&&n>0)||l>Math.min(o,c)||h<Math.max(o,c)||h<l)return [];
-    const sessionDate=londonDay.format(t*1000),at=Date.parse(exchangeInstant(sessionDate,16));
-    // Account valuations are sampled at 16:00 New York, after London's close.
-    // Use London's bar date, not the US holiday calendar. Never synthesize a
-    // missing session or expose a developing London bar at its opening time.
+    const sessionDate=localDay.format(t*1000),at=Date.parse(exchangeInstant(sessionDate,16));
+    // These venues close before the account's 16:00 New York daily mark.
+    // Use the listing's local bar date, without applying US holidays.
     const end=m.currentTradingPeriod?.regular?.end;
-    const suppliedEnd=validNumber(end)&&londonDay.format((end-1)*1000)===sessionDate?end*1000:0;
+    const suppliedEnd=validNumber(end)&&localDay.format((end-1)*1000)===sessionDate?end*1000:0;
     if(t*1000>at||suppliedEnd>at||at>cutoff)return [];
-    if(seen.has(sessionDate))throw Error('Duplicate London daily price.');seen.add(sessionDate);
+    if(seen.has(sessionDate))throw Error('Duplicate listing daily price.');seen.add(sessionDate);
     return [{timestamp:t,sessionDate,ohlc:[o,c,l,h]}];
   }).sort((a,b)=>a.timestamp-b.timestamp);
 }
 export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
   const result=resultOf(payload,asset);
   if(asset.kind!=='equity'||result.meta.dataGranularity!=='1d'||!result.meta.currency)throw Error('Daily listing prices could not be verified.');
+  const expected=asset.portfolioExpected,venue=asset.portfolioVenue,m=result.meta;
+  if(expected&&(m.currency!==expected.currency||m.instrumentType!==expected.type||!venue.sources.includes(m.exchangeName)||m.exchangeTimezoneName!==venue.zone))throw Error('Historical price identity does not match the broker listing.');
   const splits=Object.values(result.events?.splits||{}).map(s=>{
     if(!validNumber(s.date)||!validNumber(s.numerator)||!validNumber(s.denominator)||s.numerator<=0||s.denominator<=0)throw Error('Invalid split adjustment.');
     return {at:s.date*1000,ratio:s.numerator/s.denominator};
   });
   // Yahoo closes are split-adjusted. Reconstruct prices in the share units
   // held at each date; dividend-adjusted closes are intentionally not used.
-  const rows=asset.portfolioDailyZone?londonPortfolioCandles(result,asset,cutoff):parseCandles(payload,asset,'D',cutoff,{full:true});
+  const rows=asset.portfolioDailyZone?overseasPortfolioCandles(result,asset,cutoff):parseCandles(payload,asset,'D',cutoff,{full:true});
   const points=rows.map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
   if(!points.length)throw Error('No completed daily listing prices.');
-  return {currency:result.meta.currency,points,provider:'Yahoo Finance',shareBasis:'historical',splitAdjustments:splits,basis:asset.portfolioDailyZone?'London daily close sampled at 16:00 New York; split adjustments reversed to historical share units':'Daily close; split adjustments reversed to historical share units'};
+  return {currency:result.meta.currency,points,provider:'Yahoo Finance',shareBasis:'historical',splitAdjustments:splits,basis:asset.portfolioDailyZone?`${venue.label} daily close sampled at 16:00 New York; split adjustments reversed to historical share units`:'Daily close; split adjustments reversed to historical share units'};
 }
 export function parseBenchmarkPrices(payload,asset,cutoff=Date.now()){
   const r=resultOf(payload,asset),adjusted=r.indicators?.adjclose?.[0]?.adjclose;
@@ -216,7 +221,7 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
   async function request(url,isYahoo=true){
     if(isYahoo&&now()<blockedUntil)throw new Error('Yahoo is temporarily rate-limited. Automatic retry is scheduled.');
     const response=await fetcher(url,{headers:{'User-Agent':'OpeningBell/1.0 (personal market dashboard)','Accept':isYahoo?'application/json':'application/xml'},redirect:'error',signal:AbortSignal.timeout(8000)});
-    if(!response.ok){if(isYahoo&&[403,429].includes(response.status)){const retry=response.headers.get('retry-after'),seconds=Number(retry),until=retry&&Number.isFinite(seconds)?now()+seconds*1000:Date.parse(retry);blockedUntil=Math.max(now()+300000,Math.min(now()+86400000,until||0));}throw new Error(response.status===404?'Symbol unavailable from Yahoo.':`Source unavailable (HTTP ${response.status}).`);}
+    if(!response.ok){if(isYahoo&&[403,429].includes(response.status)){const retry=response.headers.get('retry-after'),seconds=Number(retry),until=retry&&Number.isFinite(seconds)?now()+seconds*1000:Date.parse(retry);blockedUntil=Math.max(now()+300000,Math.min(now()+86400000,until||0));}throw Object.assign(new Error(response.status===404?'Symbol unavailable from Yahoo.':`Source unavailable (HTTP ${response.status}).`),{status:response.status});}
     const reader=response.body.getReader();const parts=[];let size=0;
     while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>6_000_000){await reader.cancel();throw new Error('Source response too large.');}parts.push(value);}
     return Buffer.concat(parts).toString('utf8');
@@ -261,16 +266,18 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
     try{return markAge({...parsePriceHistory(raw.payload,asset,range,Math.min(now(),Date.parse(raw.fetchedAt))),status:raw.status,message:raw.message,fetchedAt:raw.fetchedAt,symbol});}
     catch{return {...unavailable('Stock price history is unavailable for this period.'),symbol,range,points:[]};}
   }
-  async function portfolioPrices(symbol,from,to){
-    const asset=resolvePortfolioPriceSymbol(symbol);
+  async function portfolioPrices(symbol,from,to,expected){
+    const asset=resolvePortfolioPriceSymbol(symbol,expected);
     if(!asset||asset.kind!=='equity'||!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error('Historical listing is unsupported.');
     const first=Math.floor((from-7*86400000)/86400000),last=Math.floor(to/86400000);
     const raw=await get(`portfolio-prices:${asset.symbol}:${first}:${last}`,3600000,async()=>{
-      const payload=JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=1d&period1=${first*86400}&period2=${Math.floor(to/1000)}&events=splits&includePrePost=false`));
-      parsePortfolioPrices(payload,asset,to);return {payload};
+      try{return {payload:JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.symbol)}?interval=1d&period1=${first*86400}&period2=${Math.floor(to/1000)}&events=splits&includePrePost=false`))};}
+      catch(e){if(e.status===404)return {priceMissing:true};throw e;}
     });
+    if(raw.priceMissing)throw Object.assign(Error('Yahoo Finance has no daily history for '+symbol+'.'),{status:404});
     if(!raw.payload||raw.status!=='ok')throw Error('Verified daily history is unavailable for '+symbol+'.');
-    return parsePortfolioPrices(raw.payload,asset,Math.min(to,Date.parse(raw.fetchedAt)));
+    try{return parsePortfolioPrices(raw.payload,asset,Math.min(to,Date.parse(raw.fetchedAt)));}
+    catch(e){throw Object.assign(e,{status:422});}
   }
   async function benchmarkPrices(symbol,from,to){
     if(!['SPY','QQQ'].includes(symbol)||!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error('Unsupported benchmark range.');

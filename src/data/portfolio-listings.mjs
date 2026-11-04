@@ -41,7 +41,27 @@ export function portfolioHoldingLabel(holding,watchlist=[]){
 export function portfolioHistoryListing(holding,watchlist=[]) {
   if(holding?.ticker==='VUAAl_EQ'&&holding.isin==='IE00BFMXXD54'&&holding.instrumentCurrency==='USD')
     return {id:'LSE:VUAA',symbol:'VUAA',ticker:'VUAA',exchange:'LSE',group:'FUND'};
+  // Trading 212 and Invesco identify this accumulating USD share class on SIX:
+  // https://www.trading212.com/trading-instruments/invest/EQAC.CH
+  // https://www.invesco.com/ch/en/financial-products/etfs/invesco-eqqq-nasdaq-100-ucits-etf-acc.html
+  if(holding?.ticker==='EQACs_EQ'&&holding.isin==='IE00BFZXGZ54'&&holding.instrumentCurrency==='USD')
+    return {id:'SIX:EQAC',symbol:'EQAC',ticker:'EQAC',exchange:'SIX',group:'FUND'};
   return portfolioListing(holding,watchlist);
+}
+// Only the authenticated broker catalog supplies these identities. A similar
+// fund name, an ISIN on another venue, or the first watchlist row is not a match.
+const historyExchanges={NASDAQ:'NASDAQ','New York Stock Exchange':'NYSE',NYSE:'NYSE','NYSE Arca':'NYSEARCA',NYSEARCA:'NYSEARCA','NYSE American':'AMEX',AMEX:'AMEX','London Stock Exchange':'LSE',LSE:'LSE','SIX Swiss Exchange':'SIX',SIX:'SIX'};
+export function portfolioCatalogListing(holding,catalog=[]) {
+  if(holding?.instrumentCurrency!=='USD'||!/^([A-Z]{2}[A-Z0-9]{9}[0-9])$/.test(holding.isin||''))return null;
+  const matches=catalog.filter(i=>i.ticker===holding.ticker);
+  if(matches.length!==1)return null;
+  const i=matches[0],exchange=historyExchanges[i.exchange],symbol=i.shortName;
+  if(!exchange||i.isin!==holding.isin||i.currencyCode!==holding.instrumentCurrency||!['STOCK','ETF'].includes(i.type)||!/^([A-Z][A-Z0-9.]{0,9})$/.test(symbol||''))return null;
+  // Do not silently follow a ticker rename or borrow an alternate share class.
+  // Explicitly verified historical aliases remain in portfolioHistoryListing.
+  const suffix=exchange==='LSE'?'l_EQ':exchange==='SIX'?'s_EQ':'_US_EQ';
+  if(holding.ticker!==symbol+suffix||(['LSE','SIX'].includes(exchange)&&i.type!=='ETF'))return null;
+  return {id:`${exchange}:${symbol}`,symbol,ticker:symbol,exchange,group:i.type==='ETF'?'FUND':'STOCKS',providerCheck:{exchange,currency:i.currencyCode,type:i.type==='ETF'?'ETF':'EQUITY'}};
 }
 export function portfolioListingChoices(watchlist) {
   return [...new Map(watchlist.filter(chartableEntry).map(entry=>[entry.id,entry])).values()];

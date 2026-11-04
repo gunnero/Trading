@@ -237,7 +237,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     change(data=>Object.assign(data.accounts.find(a=>a.id===id),{snapshot,lastSuccess:snapshot.fetchedAt,lastAttempt:snapshot.fetchedAt,error:null}));
     history.record(id,snapshot);backoff(id,now()+TTL);
   }});
-  const rebuild=createPortfolioRebuild(db,{...historyOptions,prices});
+  const rebuild=createPortfolioRebuild(db,{...historyOptions,prices,readListings:metadata.historyListings});
   const funding=createPortfolioFunding(db,{...historyOptions,historicalValues:rebuild.values}),history=createPortfolioHistory(db,{...historyOptions,funding});
   const reports=createPortfolioReports(db,{...historyOptions,accounts:()=>read().data,activity,funding});
   const alerts=createPortfolioAlerts(db,{...historyOptions,accounts:()=>read().data,workspace,quote,activity});

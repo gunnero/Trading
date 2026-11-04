@@ -20,7 +20,7 @@ export function createPortfolioMetadata(db,{now,credential,decode,account,isClos
         if(kind==='exchanges')items=normalizeExchanges(raw);
         else {
           if(!Array.isArray(raw)||raw.length>40000)throw Error('Invalid instrument catalog.');
-          items=raw.filter(r=>r&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),currencyCode:r.currencyCode,type:r.type,isin:typeof r.isin==='string'?r.isin.slice(0,20):'',maxOpenQuantity:Number.isFinite(r.maxOpenQuantity)?r.maxOpenQuantity:null,extendedHours:r.extendedHours===true,workingScheduleId:Number.isSafeInteger(r.workingScheduleId)?r.workingScheduleId:null}));
+          items=raw.filter(r=>r&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),shortName:typeof r.shortName==='string'?r.shortName.slice(0,80):'',currencyCode:r.currencyCode,type:r.type,isin:typeof r.isin==='string'?r.isin.slice(0,20):'',maxOpenQuantity:Number.isFinite(r.maxOpenQuantity)?r.maxOpenQuantity:null,extendedHours:r.extendedHours===true,workingScheduleId:Number.isSafeInteger(r.workingScheduleId)?r.workingScheduleId:null}));
         }
         const next={items,at:now(),retryAt:now()+600000};save(id,kind,g,next);return next;
       }catch(e){
@@ -30,6 +30,11 @@ export function createPortfolioMetadata(db,{now,credential,decode,account,isClos
     })();pending.set(key,task);try{return await task;}finally{pending.delete(key);}
   }
   async function instruments(id){return (await load(id,'instruments')).items;}
+  async function historyListings(id){
+    const g=credential(id)?.generation,catalog=await load(id,'instruments'),schedules=await load(id,'exchanges');
+    if(isClosed()||credential(id)?.generation!==g)throw fail(409,'The account connection changed.');
+    return catalog.items.map(i=>({...i,exchange:schedules.items[i.workingScheduleId]?.exchange}));
+  }
   async function hours(id,ticker){
     if(ticker&&!/^[A-Za-z0-9._-]{1,80}$/.test(ticker))throw fail(400,'Choose a valid instrument.');
     const a=account(id),g=credential(id)?.generation;
@@ -41,5 +46,5 @@ export function createPortfolioMetadata(db,{now,credential,decode,account,isClos
     }catch(e){return {fetchedAt:null,items:[],error:e.status===400?e.message:'Trading hours could not be refreshed. Check Metadata read permission on the broker key. Broker limits may delay updates.'};}
   }
   function remove(id){db.prepare('DELETE FROM portfolio_metadata WHERE account_id=?').run(id);}
-  return {instruments,hours,remove};
+  return {instruments,historyListings,hours,remove};
 }
