@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFeedService, parseCalendar, parseSentiment, parseNews, normalizeSymbols, feedMiddleware, SOURCES } from '../server/feeds.mjs';
-import { parsePlanningCalendar } from '../server/feeds.mjs';
 import { marketDay, weekRange, periodRange, validateRange, eventDay, briefingTime, eventDisplayDate, nextHighImpact } from '../src/data/calendar.mjs';
 
 test('Skopje uses 24-hour time across the European and US DST changes, including midnight dates',()=>{
@@ -34,51 +33,12 @@ test('Calendar civil dates support Sunday weeks, year rollover, leap dates and N
  assert.deepEqual(periodRange('month','2028-02-20'),{from:'2028-02-01',to:'2028-02-29'});
  for(const range of [{from:'2026-02-30',to:'2026-03-01'},{from:'2026-11-07',to:'2026-11-01'},{from:'2026-01-01',to:'2027-01-01'},{from:'https://example.com',to:'2026-11-07'},{from:'2026-11-01'}])assert.throws(()=>validateRange(range));
 });
-const futureRange={from:'2026-11-01',to:'2026-11-07'};
-const planningEvent=(id,date='2026-11-06',extra={})=>({id,name:'Jobs report',country:'US',category:'economic-indicators',date,release_at_utc:`${date}T13:30:00Z`,time_precision:'minute',impact:'high',status:'confirmed',...extra});
-const planningPage=(range,events,total=events.length)=>({...range,events,total});
-test('Future events preserve exact times, date-only schedules, zero values, estimates and source credit',()=>{
- const raw=planningPage(futureRange,[planningEvent('jobs','2026-11-06',{actual:0,prior:1,unit:'%',source_url:'https://www.bls.gov/',source_name:'BLS'}),planningEvent('tentative','2026-11-03',{release_at_utc:null,time_precision:'date',status:'estimated',source_url:'javascript:alert(1)'}),planningEvent('holiday','2026-11-01',{release_at_utc:null,time_precision:'date',all_day:true,category:'market-holidays'}),planningEvent('foreign','2026-11-02',{country:'GB'})]);
- const {events}=parsePlanningCalendar(raw,futureRange);
- assert.equal(events.length,3);assert.equal(events[0].impact,'Holiday');assert.equal(events[0].date,null);assert.equal(eventDay(events[0]),'2026-11-01');assert.equal(events[0].timeLabel,'All day');
- assert.equal(events[1].timeLabel,'Tentative');assert.equal(events[1].date,null);assert.equal(events[1].status,'estimated');assert.equal(events[1].sourceUrl,null);
- assert.equal(events[2].date,'2026-11-06T13:30:00.000Z');assert.equal(events[2].actual,'0');assert.equal(events[2].forecast,null);assert.equal(events[2].unit,'%');assert.equal(events[2].sourceName,'BLS');
- assert.throws(()=>parsePlanningCalendar({...raw,total:10},futureRange));
- assert.throws(()=>parsePlanningCalendar(planningPage(futureRange,[planningEvent('bad','2026-10-28')]),futureRange));
- assert.throws(()=>parsePlanningCalendar(planningPage(futureRange,[planningEvent('same'),planningEvent('same')]),futureRange));
-});
-test('Date-range service loads future weeks automatically, caches separately and completes pagination',async()=>{
- const calls=[];
- const service=createFeedService({now:()=>Date.parse('2026-10-24T20:00:00Z'),fetcher:async input=>{
-  const url=new URL(input);calls.push(url);
-  assert.equal(url.origin,'https://www.financecalendar.com');assert.equal(url.searchParams.get('country'),'US');
-  const range={from:url.searchParams.get('from'),to:url.searchParams.get('to')};
-  const offset=Number(url.searchParams.get('offset'));
-  return Response.json(planningPage(range,[planningEvent(String(offset),range.from)],2));
- }});
- const [first,concurrent]=await Promise.all([service.get('calendar',futureRange),service.get('calendar',futureRange)]);
- assert.equal(first.status,'ok');assert.equal(first.data.events.length,2);assert.deepEqual(first,concurrent);assert.equal(calls.length,2);
- assert.equal(calls[1].searchParams.get('offset'),'1');await service.get('calendar',futureRange);assert.equal(calls.length,2);
- await service.get('calendar',{from:'2026-10-25',to:'2026-10-31'});assert.equal(calls.length,4);
- await assert.rejects(service.get('calendar',{from:'2026-11-01',to:'bad'}));assert.equal(calls.length,4);
-});
-test('Current week reuses Forex Factory; wrong-week exports do not masquerade as current coverage',async()=>{
+test('Current week reuses Forex Factory without requesting the future provider',async()=>{
  let calls=0;
- const service=createFeedService({now:()=>Date.parse('2026-10-24T20:00:00Z'),fetcher:async()=>{calls++;return Response.json([{title:'Release',country:'USD',date:'2026-10-20T08:30:00-04:00',impact:'Low'}]);}});
+ const service=createFeedService({now:()=>Date.parse('2026-10-24T20:00:00Z'),fetcher:async url=>{calls++;assert.equal(url,SOURCES.calendar.feed);return Response.json([{title:'Release',country:'USD',date:'2026-10-20T08:30:00-04:00',impact:'Low'}]);}});
  const result=await service.get('calendar',{from:'2026-10-18',to:'2026-10-24'});
  assert.equal(result.source.name,'Forex Factory');assert.equal(result.data.events.length,1);
  const today=await service.get('calendar',{from:'2026-10-24',to:'2026-10-24'});assert.equal(today.data.events.length,0);assert.equal(calls,1);
- const fallback=createFeedService({now:()=>Date.parse('2026-10-24T20:00:00Z'),fetcher:async url=>url===SOURCES.calendar.feed?Response.json([{title:'Old',country:'USD',date:'2026-10-10T08:30:00-04:00'}]):Response.json(planningPage({from:'2026-10-18',to:'2026-10-24'},[]))});
- assert.equal((await fallback.get('calendar',{from:'2026-10-18',to:'2026-10-24'})).source.name,'Finance Calendar');
-});
-test('Future calendar rejects partial responses and never reuses a different week during an outage',async()=>{
- let time=Date.parse('2026-10-24T20:00:00Z'),fail=false;
- const service=createFeedService({now:()=>time,fetcher:async()=>fail?new Response('',{status:429,headers:{'Retry-After':'1200'}}):Response.json(planningPage(futureRange,[planningEvent('jobs')]))});
- const first=await service.get('calendar',futureRange);fail=true;time+=11*60000;
- const stale=await service.get('calendar',futureRange);assert.equal(stale.status,'stale');assert.equal(stale.fetchedAt,first.fetchedAt);
- const other=await service.get('calendar',{from:'2026-11-08',to:'2026-11-14'});assert.equal(other.status,'unavailable');assert.equal(other.data,null);
- const partial=createFeedService({fetcher:async()=>Response.json(planningPage(futureRange,[],3))});
- assert.equal((await partial.get('calendar',futureRange)).status,'unavailable');
 });
 const rawCalendar=[{title:'CPI m/m',country:'USD',date:'2026-10-23T08:30:00-04:00',impact:'High',forecast:'0.3%',previous:'0.2%'},{title:'EU CPI',country:'EUR',date:'2026-10-23T08:00:00+02:00',impact:'High'},{title:'Fed speech',country:'USD',date:'2026-11-02T09:00:00-05:00',impact:'Low'}];
 const rss=`<?xml version="1.0"?><rss><channel><item><title>Fed &amp; rates</title><link>https://finance.yahoo.com/news/fed.html?.tsrc=rss</link><pubDate>Fri, 23 Oct 2026 17:00:00 GMT</pubDate></item><item><title>Duplicate</title><link>https://finance.yahoo.com/news/fed.html</link><pubDate>Fri, 23 Oct 2026 17:00:00 GMT</pubDate></item><item><title>Unsafe</title><link>javascript:alert(1)</link><pubDate>Fri, 23 Oct 2026 17:00:00 GMT</pubDate></item><item><title>Missing date</title><link>https://example.com</link></item></channel></rss>`;

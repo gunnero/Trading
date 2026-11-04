@@ -1,18 +1,129 @@
-@layer base {
-.economic-page{--eco-bg:var(--panel);--eco-line:var(--border);--eco-muted:var(--muted);min-width:0;color:var(--text);padding:4px 0 20px}
-.eco-page-heading{margin-bottom:22px}.eco-page-heading h1{font-size:36px;letter-spacing:-1.3px;font-weight:800;line-height:1.15;margin:0 0 12px}.eco-page-heading p{color:var(--eco-muted);font-size:14px;margin:0;line-height:1.6}
-.eco-session-strip{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid var(--eco-line);border-radius:14px;background:var(--eco-bg);padding:15px 17px;font:12px/1.5 Inter, sans-serif;color:var(--eco-muted);margin-bottom:26px}.eco-session-strip strong{display:flex;align-items:center;gap:8px;color:var(--text)}.eco-session-strip svg{color:var(--green)}.eco-session-strip>span{border-left:1px solid var(--eco-line);padding-left:16px}
-.eco-next{background:var(--eco-bg);border:1px solid var(--eco-line);border-left:3px solid var(--border);border-radius:18px;padding:23px 25px 15px;margin-bottom:39px}.eco-next-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:26px}.eco-eyebrow{font:700 12px/1.4 Inter, sans-serif;letter-spacing:1.7px;text-transform:uppercase;color:var(--eco-muted)}.eco-next h2{font-size:28px;line-height:1.2;letter-spacing:-.7px;margin:12px 0}.eco-next-heading p{font:12px/1.7 Inter, sans-serif;color:var(--eco-muted);margin:0}.eco-countdown{text-align:right;flex-shrink:0}.eco-countdown strong{display:block;font-size:38px;line-height:1.15;font-weight:800;letter-spacing:-1px}.eco-countdown span{display:block;margin-top:10px;color:var(--eco-muted);font:12px/1.5 Inter, sans-serif}.eco-next-metrics{margin-top:18px;font-size:12px}.eco-next-metrics>[role=row]{display:grid;grid-template-columns:minmax(0,1fr) 100px 100px;gap:16px;padding:10px 0;border-top:1px solid #6f648388}.eco-next-metrics>[role=row]>:not(:first-child){text-align:right;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.eco-next-metrics>.eco-next-labels{font:12px/1.4 Inter, sans-serif;letter-spacing:1px;text-transform:uppercase;color:var(--eco-muted);border:0;padding:0 0 7px}.eco-next-source{display:flex;gap:8px;flex-wrap:wrap;color:var(--eco-muted);font-size:12px;line-height:1.5;margin-top:7px}.eco-muted{color:var(--eco-muted);font-size:12px;line-height:1.7}
-.eco-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}.eco-section-heading h2{font-size:25px;letter-spacing:-.6px;line-height:1.25;margin:0 0 8px;font-weight:750}.eco-section-heading h2:focus-visible{outline:2px solid var(--primary);outline-offset:5px}.eco-section-heading p{font:12px/1.6 Inter, sans-serif;color:var(--eco-muted);margin:0;letter-spacing:.2px}.economic-page .segmented{border-color:var(--eco-line);border-radius:12px;background:var(--eco-bg);padding:3px;gap:2px}.economic-page .segmented button{padding:8px 12px;font-size:12px;border-radius:9px;white-space:nowrap;color:var(--eco-muted)}.economic-page .segmented button.selected{background:var(--panel-hover);color:var(--primary)}.eco-quick-filter{flex-shrink:0}
-.eco-filter-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.economic-page .impact-legend{display:flex;flex-wrap:wrap;gap:4px 10px;margin:0;padding:0;color:var(--eco-muted);font-size:12px}.economic-page .impact-filter{padding:4px;border-radius:5px;border:1px solid transparent;background:transparent}.economic-page .impact-filter[aria-pressed=true]{border-color:currentColor;background:#6f648308}.economic-page .impact-filter .eco-impact{background:transparent;padding:0}.eco-filter-row select{font-size:12px;max-width:100%;background:var(--eco-bg);border-color:var(--eco-line);padding:5px 8px}
-.economic-page .eco-impact{display:inline-flex;align-items:center;gap:4px;font:650 12px/1.4 Inter, sans-serif;text-transform:uppercase;letter-spacing:.4px;padding:3px 6px;border-radius:5px;white-space:nowrap}.eco-impact.high{color:var(--red);background:#bb304a13}.eco-impact.medium{color:var(--amber);background:#8f590014}.eco-impact.low{color:var(--amber);background:#8f590011}.eco-impact.holiday,.eco-impact.other{color:var(--muted);background:#6f648315}
-.eco-table-panel{border:1px solid var(--eco-line);border-radius:18px;padding:12px 18px;background:var(--eco-bg);overflow:hidden}.eco-table-scroll{overflow:auto;max-height:650px}.economic-page .eco-table{min-width:640px;width:100%;border-collapse:collapse;table-layout:auto}.economic-page .eco-table th{background:transparent;color:var(--eco-muted);font:12px/1.5 Inter, sans-serif;letter-spacing:.8px;text-transform:uppercase;padding:10px 9px;white-space:nowrap;text-align:left}.economic-page .eco-table td{border-bottom:1px solid #6f648399;padding:13px 9px;font-size:12px;vertical-align:top;line-height:1.5;color:var(--eco-muted);white-space:normal;max-width:none}.economic-page .eco-table tbody tr:last-child td{border-bottom:0}.economic-page .eco-table th:nth-child(n+4),.economic-page .eco-table td:nth-child(n+4){text-align:right;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:nowrap}.economic-page .eco-table .eco-time{white-space:nowrap;font:12px/1.7 Inter, sans-serif}.economic-page .eco-table .eco-event{width:53%;color:var(--text)}.eco-event strong{font-weight:600}.economic-page .eco-table .eco-actual{font-weight:650;color:var(--text)}.eco-caution{display:block;color:var(--amber);font-size:12px;line-height:1.5;margin-top:4px}.eco-event-notes{font-size:12px;color:var(--eco-muted);margin-top:5px;max-width:540px}.eco-event-notes summary{cursor:pointer;display:list-item;width:fit-content}.eco-event-notes summary:hover{color:var(--green)}.eco-event-notes p{font-size:12px;line-height:1.7;margin:5px 0}.eco-event-notes a{white-space:normal;overflow-wrap:anywhere}.eco-table-foot{font:12px/1.6 Inter, sans-serif;color:var(--eco-muted);margin:7px 9px}.eco-table-foot button{color:var(--primary);text-decoration:underline;text-underline-offset:3px;padding:2px}.eco-show-more{margin:10px auto;display:flex}.economic-page .cancelled-event .eco-event>strong,.economic-page .cancelled-event>strong{text-decoration:line-through}
-.eco-week{margin-top:38px}.eco-key{color:var(--eco-muted);font:12px/1.6 Inter, sans-serif;white-space:nowrap}.eco-range-toolbar{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:0 0 16px}.eco-range-toolbar>.segmented{display:flex;flex-wrap:wrap}.eco-range-actions{display:flex;align-items:center;gap:7px}.eco-range-actions .button{font-size:12px;min-height:34px;padding:8px 12px;border-color:var(--eco-line);background:var(--eco-bg);border-radius:9px}.eco-range-actions .icon-button{border:1px solid var(--eco-line);border-radius:8px;width:32px;height:34px}.economic-page .calendar-range-form{margin:0 0 16px;padding:16px;background:var(--eco-bg);border:1px solid var(--eco-line);border-radius:12px;flex-wrap:wrap}.economic-page .calendar-range-form label{min-width:0}.economic-page .calendar-range-form input{max-width:100%}
-.eco-week-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}.eco-day{background:var(--eco-bg);border:1px solid var(--eco-line);border-radius:17px;padding:15px 13px;min-width:0}.eco-day.is-today{border-color:var(--green)}.eco-day.is-selected{box-shadow:0 0 0 2px #087a4b19}.eco-day>header{display:flex;align-items:center;justify-content:space-between;gap:5px}.eco-day>header button{text-align:left;font-size:13px;line-height:1.4;font-weight:700;letter-spacing:-.3px}.eco-day>header button:hover{color:var(--primary)}.eco-day>header>span{font:700 12px/1.5 Inter, sans-serif;letter-spacing:.6px;color:var(--green);background:var(--panel-hover);border-radius:4px;padding:3px 5px;text-transform:uppercase}.eco-day>p{font:12px/1.6 Inter, sans-serif;color:var(--eco-muted);margin:8px 0}.eco-day-event{border-top:1px solid #6f648399;padding:11px 0}.eco-day-event>div{display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:6px}.eco-day-event time{font:12px/1.5 Inter, sans-serif;color:var(--eco-muted)}.eco-day-event>strong{display:block;font-size:12px;line-height:1.6;font-weight:600;overflow-wrap:anywhere}.eco-day-event>p{display:flex;flex-wrap:wrap;gap:3px 8px;font:12px/1.7 Inter, sans-serif;color:var(--eco-muted);margin:4px 0 0}.eco-day-event b{color:var(--text)}.eco-day-empty{border-top:1px solid #6f648399;padding:10px 0}.eco-day-more{display:flex;align-items:center;gap:4px;font:12px/1.6 Inter, sans-serif;color:var(--green);text-align:left;margin-top:5px}.eco-day-more svg{flex-shrink:0}.eco-source-note{margin-top:30px;color:var(--eco-muted);font-size:12px;line-height:1.8}.eco-source-note>p{margin:10px 0 18px;max-width:1000px}.eco-source-note .feed-status{padding:14px 0;border-color:var(--eco-line)}
-@media(min-width:951px) and (max-width:1350px){.eco-week-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:950px){.eco-page-heading h1{font-size:30px}.eco-week-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.eco-next{padding:21px}.eco-next h2{font-size:25px}.eco-countdown strong{font-size:30px}.eco-section-heading{flex-wrap:wrap}.eco-range-toolbar .segmented{width:100%}.eco-session-strip{gap:8px 12px}.eco-session-strip>span{padding-left:12px}}
-@media(max-width:650px){.economic-page{padding-top:0}.eco-page-heading h1{font-size:28px}.eco-page-heading p{font-size:12px}.eco-session-strip{font-size:12px;gap:7px 12px;padding:13px}.eco-session-strip>span{border:0;padding-left:0}.eco-next{padding:19px 16px 14px;border-radius:14px;margin-bottom:28px}.eco-next-heading{display:block}.eco-next h2{font-size:24px}.eco-next-heading p{font-size:12px}.eco-countdown{display:flex;text-align:left;align-items:center;gap:10px;margin-top:15px}.eco-countdown strong{font-size:27px}.eco-countdown span{font-size:12px;margin:0}.eco-next-metrics>[role=row]{grid-template-columns:minmax(0,1fr) 62px 62px;gap:7px;font-size:12px}.eco-section-heading h2{font-size:23px}.eco-quick-filter{width:100%}.eco-quick-filter button{flex:1}.eco-filter-row{gap:8px}.eco-filter-row select{font-size:12px}.economic-page .impact-legend{gap:4px}.eco-table-panel{padding:4px 13px}.eco-table-scroll{max-height:650px}.economic-page .eco-table{display:block;min-width:0}.eco-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.eco-table tbody{display:block}.economic-page .eco-table tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:13px 0;gap:7px 6px;border-bottom:1px solid var(--eco-line)}.economic-page .eco-table tr:last-child{border:0}.economic-page .eco-table td{padding:0;border:0;min-width:0}.economic-page .eco-table .eco-time{grid-column:1/3;font-size:12px}.economic-page .eco-table .eco-impact-cell{grid-column:3;grid-row:1;text-align:right}.economic-page .eco-table .eco-event{grid-column:1/-1;grid-row:2;width:auto;font-size:12px}.economic-page .eco-table td:nth-child(n+4){text-align:left;white-space:normal;overflow-wrap:anywhere;font-size:12px}.eco-table td[data-label]::before{content:attr(data-label);display:block;font-size:12px;color:var(--eco-muted);font-weight:400;margin:3px 0 4px}.eco-table-foot{margin:8px 0}.eco-week{margin-top:28px}.eco-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eco-range-toolbar .segmented button{padding:8px 9px}.eco-range-actions{flex-wrap:wrap}.eco-key{font-size:12px}.eco-day>header{align-items:flex-start;flex-wrap:wrap}.eco-day{padding:13px 11px}.eco-day-event>div{flex-wrap:wrap}.economic-page .calendar-range-form{gap:12px}.economic-page .calendar-range-form label{width:100%}}
-@media(max-width:400px){.eco-week-grid{grid-template-columns:1fr}.eco-day>header{flex-wrap:nowrap}.eco-day-event>div{flex-wrap:nowrap}.eco-range-toolbar .segmented button{font-size:12px;padding:8px}.eco-filter-row select{width:100%}}
-@media(min-width:651px){.economic-page .eco-table th:first-child{width:105px}.economic-page .eco-table .eco-event{width:auto}.economic-page .eco-table th:nth-child(3){width:96px}.economic-page .eco-table th:nth-child(n+4){width:90px}}
-
+/* Calendar follows the approved compact lavender layout. Scoped rules also
+   remain authoritative when this route's stylesheet loads after the theme. */
+.economic-page{min-width:0;color:var(--text);padding-bottom:20px}
+.app-shell .economic-page header.page-header{min-height:74px;border:0;margin:0;padding:6px 0 4px;gap:24px}
+.economic-page .page-header-copy{flex:1;min-width:0}
+.economic-page .page-header-actions{max-width:none;width:auto;flex:none}
+.app-shell .economic-page .page-header-description{font-size:12px;margin-top:5px}
+.app-shell .economic-page .section-tabs{margin:0 0 14px;padding:0;min-height:34px}
+.app-shell .economic-page .section-tabs button{min-height:34px;padding:6px 10px;font-size:12px}
+.economic-page .eco-mini-calendar{width:224px;font-size:12px}
+.economic-page .eco-mini-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.economic-page .eco-mini-heading strong{font-size:15px}
+.economic-page .eco-mini-heading button{display:grid;place-items:center;min-width:24px;min-height:24px;border-radius:5px}
+.economic-page .eco-mini-days{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:3px}
+.economic-page .eco-mini-days span{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}
+.economic-page .eco-mini-days button{width:26px;height:24px;border-radius:5px;font-size:12px}
+.economic-page .eco-mini-days button[aria-current=date],.economic-page .eco-mini-days button[aria-pressed=true]{background:var(--selection);color:var(--primary);font-weight:700}
+.economic-page .eco-mini-days button[aria-pressed=true]{box-shadow:inset 0 0 0 1px var(--primary)}
+.economic-page .eco-mini-calendar button:hover:not(:disabled){background:var(--panel-hover)}
+.economic-page .eco-next{margin:0 0 16px;background:var(--selection);border-radius:6px}
+.economic-page .eco-next-heading{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;list-style:none;font-size:12px;line-height:1.5}
+.economic-page .eco-next-heading::-webkit-details-marker{display:none}
+.economic-page .eco-next-heading>svg:first-child{color:var(--red);flex:none}
+.economic-page .eco-next-summary{flex:1;min-width:0}
+.economic-page .eco-next-summary h2{display:inline;font-size:inherit;font-weight:600;line-height:inherit;letter-spacing:0;margin:0}
+.economic-page .eco-next-chevron{flex:none;color:var(--muted)}
+.economic-page .eco-next details[open] .eco-next-chevron{transform:rotate(180deg)}
+.economic-page .eco-next-details{padding:0 14px 12px;font-size:12px}
+.economic-page .eco-countdown{color:var(--muted);margin:0 0 8px}
+.economic-page .eco-countdown strong{color:var(--text)}
+.economic-page .eco-next-metrics>[role=row]{display:grid;grid-template-columns:minmax(0,1fr) 80px 80px;gap:12px;padding:7px 0;border-top:1px solid #d1c4e7}
+.economic-page .eco-next-metrics>[role=row]>:not(:first-child){text-align:right}
+.economic-page .eco-next-metrics>[role=row]:first-child{color:var(--muted)}
+.economic-page .eco-next-source{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;color:var(--muted);line-height:1.6}
+.economic-page .eco-next-warning{font-size:12px;color:var(--amber);margin:0;padding:0 12px 9px;line-height:1.6}
+.economic-page .eco-coverage-label{font-weight:600;color:var(--amber)}
+.economic-page .eco-range-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.economic-page .eco-periods{display:flex;gap:5px;flex-wrap:wrap}
+.economic-page .eco-periods button{padding:4px 8px;border:1px solid var(--border);border-radius:5px;font-size:11px;line-height:1.4;background:transparent;white-space:nowrap}
+.economic-page .eco-periods button:hover{background:var(--panel-hover)}
+.economic-page .eco-periods button.selected{background:var(--selection);border-color:var(--selection);color:var(--primary)}
+.economic-page .eco-periods .eco-choose-dates{display:inline-flex;align-items:center;gap:7px;margin-left:4px}
+.economic-page .eco-range-label{color:var(--muted);font-size:11px;line-height:1.5}
+.economic-page .eco-filter-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.economic-page .impact-legend{padding:0;margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
+.economic-page .impact-legend>span{font-weight:600;color:var(--text);margin-right:5px}
+.economic-page .impact-filter{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:16px;padding:3px 10px;color:var(--text);min-height:26px;background:transparent}
+.economic-page .impact-filter[aria-pressed=true]{color:var(--primary);border-color:var(--primary);background:var(--selection)}
+.economic-page .impact-filter:hover{background:var(--panel-hover)}
+.economic-page .eco-impact{display:inline-flex;align-items:center;gap:6px;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:500;line-height:1.4;white-space:nowrap;text-transform:none;letter-spacing:0}
+.economic-page .impact-filter .eco-impact{padding:0;background:transparent;color:inherit}
+.economic-page .eco-filter-row select{background:transparent;border-color:var(--border);font-size:12px;max-width:100%;padding:3px 8px;min-height:26px}
+.economic-page .eco-table-panel{border:0;border-radius:0;background:transparent;padding:0;min-width:0}
+.economic-page .eco-table-scroll{overflow:auto;max-height:none}
+.economic-page .eco-table{border-collapse:collapse;width:100%;table-layout:auto;font-variant-numeric:tabular-nums;font-size:12px;min-width:620px}
+.economic-page .eco-table th,.economic-page .eco-table td{text-align:left;padding:3px 4px;line-height:1.4}
+.economic-page .eco-table thead th{font-size:12px;font-weight:400;color:var(--muted);border-bottom:1px solid var(--border);padding-top:0;padding-bottom:9px;white-space:nowrap}
+.economic-page .eco-table thead th:first-child{width:104px}
+.economic-page .eco-table thead th:nth-child(3){width:104px}
+.economic-page .eco-table thead th:nth-child(n+4){width:86px;text-align:right}
+.economic-page .eco-table .eco-date-heading th{font-size:14px;font-weight:700;padding-top:8px;padding-bottom:4px;border-top:1px solid var(--border)}
+.economic-page .eco-date-heading span{display:inline-block;margin-left:14px;padding:1px 7px;border-radius:5px;background:var(--selection);font-size:11px;color:var(--primary);font-weight:600}
+.economic-page .eco-event-row td{vertical-align:middle;border-bottom:1px solid var(--border)}
+.economic-page .eco-event-row td:nth-child(n+4){text-align:right;white-space:nowrap}
+.economic-page .eco-event-row:hover,.economic-page .eco-event-row:focus-within{background:var(--selection)}
+.economic-page .eco-event-row .eco-time{white-space:nowrap}
+.economic-page .eco-event strong{font-size:12px;font-weight:600}
+.economic-page .eco-actual{font-weight:650}
+.economic-page .eco-event-meta{font-size:10px;color:var(--muted);line-height:1.4;margin-top:1px}
+.economic-page .eco-event-meta .source-link{font-size:10px;white-space:normal;display:inline;color:inherit}
+.economic-page .eco-event-meta .source-link svg{display:none}
+.economic-page .eco-event-notes{font-size:12px;color:var(--muted);margin-top:3px}
+.economic-page .eco-event-notes summary{cursor:pointer;width:fit-content}
+.economic-page .eco-event-notes p{margin:4px 0;line-height:1.6;overflow-wrap:anywhere}
+.economic-page .eco-caution{display:block;color:var(--amber);font-size:11px;margin-top:3px}
+.economic-page .cancelled-event .eco-event>strong{text-decoration:line-through}
+.economic-page .eco-table-foot{font-size:12px;color:var(--muted);margin:10px 8px}
+.economic-page .eco-table-foot button{color:var(--primary);text-decoration:underline}
+.economic-page .eco-show-more{margin:12px auto;display:flex}
+.economic-page .eco-day-selection{display:flex;align-items:center;gap:16px;margin-bottom:12px;font-size:12px}
+.economic-page .calendar-warning{padding:8px 0;margin:0;font-size:12px;line-height:1.6}
+.economic-page .calendar-range-form{margin:0 0 14px;padding:12px;background:var(--panel);border:1px solid var(--border);border-radius:6px}
+.economic-page .calendar-range-form input{max-width:100%}
+.economic-page .eco-source-note{border-top:1px solid var(--border);margin-top:12px;padding-top:10px;font-size:11px;color:var(--muted)}
+.economic-page .eco-source-line{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap}
+.economic-page .eco-source-line>.source-link{font-size:11px;white-space:normal;color:var(--primary)}
+.economic-page .eco-source-line>.feed-status{padding:0;border:0;margin-left:auto;font-size:11px;gap:6px}
+.economic-page .eco-source-note>details{margin-top:7px}
+.economic-page .eco-source-note summary{cursor:pointer;width:fit-content}
+.economic-page .eco-source-note p{line-height:1.7;margin:8px 0;max-width:980px}
+.economic-page .eco-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:950px){
+ .economic-page .eco-range-label{flex-basis:100%}
+ .economic-page .eco-periods button{min-height:36px}
 }
+@media(max-width:760px){
+ .app-shell .economic-page header.page-header{gap:14px;padding-top:18px;flex-wrap:wrap}
+ .economic-page .page-header-copy{flex-basis:100%}
+ .economic-page .page-header-actions{width:100%;max-width:100%;justify-content:flex-start}
+ .economic-page .eco-mini-calendar{width:100%;max-width:350px}
+ .economic-page .eco-mini-heading button,.economic-page .eco-mini-days button{min-width:40px;min-height:40px}
+ .economic-page .eco-periods button,.economic-page .impact-filter,.economic-page .eco-filter-row select{min-height:40px}
+ .economic-page .eco-next-heading{padding:10px;font-size:12px;align-items:flex-start}
+ .economic-page .eco-next-heading>svg{margin-top:2px}
+ .economic-page .eco-source-line>.feed-status{margin-left:0;width:100%}
+}
+@media(max-width:600px){
+ .economic-page .eco-table{min-width:0;display:block}
+ .economic-page .eco-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+ .economic-page .eco-table tbody{display:block}
+ .economic-page .eco-table .eco-date-heading{display:block;margin-top:10px;border-top:1px solid var(--border)}
+ .economic-page .eco-table .eco-date-heading th{display:block;border:0;padding:10px 2px 6px}
+ .economic-page .eco-event-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 12px;padding:10px 4px;border-bottom:1px solid var(--border)}
+ .economic-page .eco-table .eco-event-row td{padding:0;border:0;min-width:0;white-space:normal;text-align:left}
+ .economic-page .eco-table .eco-time{grid-column:1/3;grid-row:1}
+ .economic-page .eco-table .eco-impact-cell{grid-column:3;grid-row:1;justify-self:end}
+ .economic-page .eco-table .eco-event{grid-column:1/-1;grid-row:2}
+ .economic-page .eco-table td[data-label]{overflow-wrap:anywhere;margin-top:3px}
+ .economic-page .eco-table td[data-label]::before{content:attr(data-label);display:block;font-size:11px;color:var(--muted);font-weight:400;margin-bottom:3px}
+ .economic-page .eco-next-metrics>[role=row]{grid-template-columns:minmax(0,1fr) 58px 58px;gap:8px}
+ .economic-page .calendar-range-form label{width:100%}
+}
+
+.app-shell .economic-page .page-header h1{font-size:28px}
+.economic-page .eco-table thead{background:transparent}
+.economic-page .eco-table thead th{background:transparent;text-transform:none;letter-spacing:0}
+.economic-page .eco-table .eco-date-heading th{color:var(--text);background:transparent;text-transform:none;letter-spacing:0}
+
+@media(max-width:600px){.app-shell .economic-page .page-header h1{font-size:27px}}

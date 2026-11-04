@@ -32,10 +32,10 @@ try{
  const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloading,backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(backup.displayTime).toEqual(displayTime);
  await page.screenshot({path:dir+'/desktop.png',fullPage:true});mark('New York/12h changes both clocks immediately, survives refresh and is included in backup; other workspace data is unchanged');
  await setZone('Asia/Tokyo');await expect(page.locator('.session-display-preview')).toContainText('Fri, 30 Oct 2026');
- await page.goto(runtime.url+'/#briefing');await expect(page.locator('.calendar-table')).toBeVisible();
- await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Timed U.S. fixture'})).toContainText('Oct 30');await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Timed U.S. fixture'})).toContainText('05:00 AM');
- await expect(page.locator('.calendar-table tbody tr').filter({hasText:'Date-only fixture'})).toContainText('Oct 29');await expect(page.locator('.calendar-table')).toContainText('Date / Tokyo');
- await expect(page.locator('.calendar-navigation')).toContainText('Oct 25 – Oct 31, 2026');
+ await page.goto(runtime.url+'/#briefing');await expect(page.locator('.eco-table')).toBeVisible();
+ await expect(page.locator('.eco-table .eco-event-row').filter({hasText:'Timed U.S. fixture'})).toContainText('Oct 30');await expect(page.locator('.eco-table .eco-event-row').filter({hasText:'Timed U.S. fixture'})).toContainText('05:00 AM');
+ await expect(page.locator('.eco-table .eco-event-row').filter({hasText:'Date-only fixture'}).locator('time')).toHaveAttribute('datetime','2026-10-29');await expect(page.locator('.eco-date-heading')).toContainText('Thu, 29 Oct 2026');await expect(page.locator('.eco-table')).toContainText('Time (Tokyo)');
+ await expect(page.locator('.eco-range-label')).toContainText('Sun 25 – Sat, 31 Oct 2026');
  await page.goto(runtime.url+'/#news');await expect(page.locator('.news-panel')).toContainText('09:00 PM');await expect(page.locator('.news-panel')).toContainText('Tokyo');
  mark('Timed calendar events and news convert across midnight; untimed events, range labels and U.S. date filters retain published dates');
  await page.goto(runtime.url+'/#journal');await page.getByRole('button',{name:'AMD 530 Call',exact:true}).click();const dialog=page.getByRole('dialog');

@@ -142,7 +142,6 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .settings-content { width: 100%; min-width: 0; }
 .app-shell .settings-card, .app-shell .chart-settings-form { font-size: 14px; }
 .app-shell .settings-card p, .app-shell .chart-settings-form label { font-size: 13px; }
-.economic-page .eco-next, .economic-page .eco-empty, .economic-page .eco-session-strip, .economic-page .eco-day { border-radius: 8px; }
 .app-shell .transfers-page .page-header { margin: 0 0 20px; padding: 0 0 20px; min-height: 0; }
 .transfers-page .page-header h2 { font-size: 24px; letter-spacing: -.5px; }
 .overview-support h2, .overview-briefing>h2 { font-size: 23px; letter-spacing: -.6px; margin-bottom: 16px; }
@@ -207,28 +206,6 @@ th { font-weight: 500; color: var(--muted); }
 .pm-order-holding dl dd { margin: 0; text-align: right; font-size: 18px; overflow-wrap: anywhere; }
 .pm-order-holding .pm-holding-profit { grid-column: auto; }
 .pm-ticket-entry .pm-order-session .pm-history-state { margin-top: 7px; }
-/* Keep the release summary compact and put range selection before the event table. */
-.economic-page { display: flex; flex-direction: column; }
-.eco-session-strip { order: 1; margin-bottom: 14px; border: 0; background: transparent; padding: 0; }
-.eco-next { order: 2; padding: 16px 20px; margin-bottom: 22px; border: 1px solid var(--border); background: var(--selection); }
-.eco-next-heading { gap: 16px; }
-.eco-next-heading h2 { font-size: 19px; line-height: 1.4; }
-.eco-next-heading p { margin-top: 4px; }
-.eco-countdown strong { font-size: 24px; }
-.eco-next-metrics { margin-top: 12px; }
-.eco-next-details summary { color: var(--primary); font-size: 12px; cursor: pointer; margin-top: 10px; }
-.eco-next-metrics>div { padding: 6px 0; }
-.eco-next-source { margin-top: 8px; }
-.eco-week { display: contents; }
-.eco-week>.eco-range-toolbar, .eco-week>.calendar-range-form { order: 3; margin-bottom: 20px; }
-.eco-releases { order: 4; }
-.eco-week>.eco-section-heading { order: 5; margin-top: 28px; }
-.eco-week>.eco-week-grid, .eco-week>.feed-unavailable { order: 6; }
-.eco-source-note { order: 7; }
-.eco-table-panel { padding: 0; border-radius: 8px; }
-.eco-table th, .eco-table td { padding: 14px 16px; font-size: 13px; }
-.eco-day.is-today { border-color: var(--primary); }
-.eco-day header>span { background: var(--selection); color: var(--primary); }
 @media (max-width: 1200px) {
   .pm-account-card { grid-template-columns: minmax(180px,1.7fr) 1fr 1fr; gap: 12px 18px; }
   .pm-account-time { grid-column: 2; }.pm-account-card>.pm-status { grid-column: 3; }
@@ -299,6 +276,5 @@ th { font-weight: 500; color: var(--muted); }
   .pm-account-identity { grid-column: 1/-1; }
   .pm-account-time { grid-column: 1; }.pm-account-card>.pm-status { grid-column: 2; }
   .pm-card-value { font-size: 20px; }.pm-overview { padding-top: 0; }
-  .eco-next { padding: 16px; }.eco-countdown strong { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { .app-shell .sidebar { transition: none; } }

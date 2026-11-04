@@ -1,7 +1,7 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import { marketDay, validDay, weekRange, validateRange, eventDay } from '../src/data/calendar.mjs';
 import { rssImage, createNewsImages } from './news-images.mjs';
 import {createSentimentService} from './sentiment.mjs';
+import {createCalendarService} from './calendar.mjs';
 
 export const SOURCES = {
   // Daily fallback. The sentiment resolver also checks an hourly public mirror
@@ -10,7 +10,6 @@ export const SOURCES = {
   calendar: { name: 'Forex Factory', url: 'https://www.forexfactory.com/calendar', feed: 'https://nfs.faireconomy.media/ff_calendar_thisweek.json' },
   news: { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/' },
 };
-const PLANNING_SOURCE = { name:'Finance Calendar', url:'https://www.financecalendar.com', feed:'https://www.financecalendar.com/wp-json/fc/v1/calendar' };
 const text = value => typeof value === 'string' || typeof value === 'number' ? String(value).trim().slice(0,600) : '';
 const iso = value => value != null && value !== '' && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : null;
 const score = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
@@ -35,29 +34,6 @@ export function parseCalendar(raw) {
   events.sort((a,b) => a.date.localeCompare(b.date));
   const dates = raw.map(x => iso(x.date)).sort();
   return { events, coverageStart: dates[0] || null, coverageEnd: dates.at(-1) || null };
-}
-const safeLink = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : null; } catch { return null; } };
-export function parsePlanningCalendar(raw, range) {
-  if (!Array.isArray(raw?.events) || !Number.isInteger(raw.total) || raw.total !== raw.events.length || raw.from !== range.from || raw.to !== range.to) throw new Error('The future calendar returned an incomplete date range.');
-  const seen = new Set();
-  const events = raw.events.filter(row => row.country === 'US' && row.category !== 'crypto').map(row => {
-    if (!text(row.id) || seen.has(row.id) || !text(row.name || row.title) || !validDay(row.date) || row.date < range.from || row.date > range.to || (row.release_at_utc && !iso(row.release_at_utc))) throw new Error('The future calendar contains an unreadable event.');
-    seen.add(row.id);
-    const date = row.all_day || !['minute','second'].includes(row.time_precision) ? null : iso(row.release_at_utc);
-    const impact = row.category === 'market-holidays' ? 'Holiday' : ({high:'High',medium:'Medium',low:'Low'}[row.impact] || 'Other');
-    return {
-      id:text(row.id), title:text(row.name || row.title), country:'US', currency:'USD', date,
-      calendarDate:date ? marketDay(date) : row.date,
-      timeLabel:row.all_day ? 'All day' : row.status === 'estimated' ? 'Tentative' : 'Time TBA',
-      impact, forecast:text(row.consensus) || null, previous:text(row.prior) || null, actual:text(row.actual) || null,
-      unit:text(row.unit), period:text(row.period), status:text(row.status), dataStale:row.data_stale === true,
-      sourceName:text(row.source_name), sourceUrl:safeLink(row.source_url || row.url),
-      lastVerifiedAt:iso(row.last_verified_at), note:text(row.note), timeRole:text(row.time_role),
-      // Preserve provider credit/rights notices when present. Render as text, never HTML.
-      credits:[row.source_license,row.source_rights].filter(Boolean).map(value => JSON.stringify(value)),
-    };
-  }).sort((a,b) => a.calendarDate.localeCompare(b.calendarDate) || (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id));
-  return { events, requestedStart:range.from, requestedEnd:range.to, coverageStart:range.from, coverageEnd:range.to, planning:true };
 }
 export function normalizeSymbols(input = '') {
   const symbols = [...new Set(input.split(',').filter(Boolean))].sort();
@@ -92,22 +68,12 @@ export function createFeedService({ fetcher = fetch, now = () => Date.now(), tim
   }
   const withImages = createNewsImages({fetcher,now,cache,store,timeoutMs});
   const sentiment=createSentimentService({fetcher,now,timeoutMs,cache,onCache,parseSnapshot:parseSentiment,archive:()=>getSource('sentiment'),api:sentimentApi});
-  const get=(kind,input)=>kind==='sentiment'?sentiment.get():getSource(kind,input);
+  const calendar=createCalendarService({getWeekly:()=>getSource('calendar'),fetcher,now,timeoutMs,cache,onCache});
+  const get=(kind,input)=>kind==='sentiment'?sentiment.get():kind==='calendar'&&input&&typeof input==='object'?calendar.get(input):getSource(kind,input);
   async function getSource(kind, input) {
     if (!SOURCES[kind]) throw new Error('Unknown feed.');
-    const range = kind === 'calendar' && input && typeof input === 'object' ? validateRange(input) : null;
-    if (range) {
-      const current = weekRange(marketDay(now()));
-      if (range.from >= current.from && range.to <= current.to) {
-        const weekly = await get('calendar');
-        // Reuse the published export only when its dates actually belong to this week.
-        if (weekly.data?.coverageStart && marketDay(weekly.data.coverageStart) >= current.from && marketDay(weekly.data.coverageEnd) <= current.to) {
-          return {...weekly,data:{...weekly.data,requestedStart:range.from,requestedEnd:range.to,events:weekly.data.events.filter(event => eventDay(event) >= range.from && eventDay(event) <= range.to)}};
-        }
-      }
-    }
     const symbols = kind === 'news' ? normalizeSymbols(input) : [];
-    const key = range ? `calendar:planning-v1:${range.from}:${range.to}` : kind === 'sentiment' ? 'sentiment:cnn-daily-archive-v1' : `${kind}:${symbols.join(',')}`, source = range ? PLANNING_SOURCE : SOURCES[kind], previous = cache.get(key);
+    const key = kind === 'sentiment' ? 'sentiment:cnn-daily-archive-v1' : `${kind}:${symbols.join(',')}`, source = SOURCES[kind], previous = cache.get(key);
     const {feed:upstream, ...attribution} = source;
     if (pending.has(key)) return pending.get(key);
     if (previous && previous.retryAt > now()) {
@@ -138,23 +104,9 @@ export function createFeedService({ fetcher = fetch, now = () => Date.now(), tim
           if (body.length > 2_000_000) throw new Error('The source response is too large.');
           return body;
         }
-        let data;
-        if (range) {
-          const records = [];
-          let total;
-          do {
-            const query = new URLSearchParams({...range,country:'US',include:'holidays',limit:'500',offset:String(records.length)});
-            const page = JSON.parse(await read(`${upstream}?${query}`));
-            if (!Array.isArray(page.events) || !Number.isInteger(page.total) || page.total < 0 || page.total > 5000 || page.from !== range.from || page.to !== range.to || (total !== undefined && page.total !== total) || (!page.events.length && records.length < page.total)) throw new Error('The future calendar returned an incomplete date range.');
-            total = page.total;
-            records.push(...page.events);
-          } while (records.length < total);
-          data = parsePlanningCalendar({...range,events:records,total},range);
-        } else {
-          const url = kind === 'news' ? `https://feeds.finance.yahoo.com/rss/2.0/headline?${new URLSearchParams({ s: symbols.join(','), region: 'US', lang: 'en-US' })}` : upstream;
-          const body = await read(url);
-          data = kind === 'news' ? { articles: await withImages(parseNews(body)), symbols } : kind === 'sentiment' ? parseSentiment(JSON.parse(body)) : parseCalendar(JSON.parse(body));
-        }
+        const url = kind === 'news' ? `https://feeds.finance.yahoo.com/rss/2.0/headline?${new URLSearchParams({ s: symbols.join(','), region: 'US', lang: 'en-US' })}` : upstream;
+        const body = await read(url);
+        const data = kind === 'news' ? { articles: await withImages(parseNews(body)), symbols } : kind === 'sentiment' ? parseSentiment(JSON.parse(body)) : parseCalendar(JSON.parse(body));
         if(kind==='sentiment'&&previous?.result.data&&now()-Date.parse(previous.result.fetchedAt)<86400000&&Date.parse(data.observedAt)<Date.parse(previous.result.data.observedAt))throw new Error('The archive returned an older snapshot; keeping the newer cached reading.');
         result = { status: 'ok', source: attribution, fetchedAt: checkedAt, checkedAt, data };
         ttl = kind === 'sentiment' ? 60 * 60_000 : 10 * 60_000;
