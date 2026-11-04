@@ -16,7 +16,7 @@ export function orderView(order){
   return {id:order.id,ticker,name:typeof label==='string'?label.slice(0,160):ticker,strategy:order.strategy||'QUANTITY',side:order.side,type:order.type,status:order.status,extendedHours:typeof order.extendedHours==='boolean'?order.extendedHours:null,quantity:numeric(order.quantity)?Math.abs(order.quantity):null,value:numeric(order.value)?Math.abs(order.value):null,filledQuantity:numeric(order.filledQuantity)?Math.abs(order.filledQuantity):null,limitPrice:numeric(order.limitPrice)?order.limitPrice:null,currency:code(order.currency)||code(order.instrument?.currency),priceCurrency:code(order.instrument?.currency)||code(order.priceCurrency)||code(order.currency),createdAt:typeof order.createdAt==='string'&&Number.isFinite(Date.parse(order.createdAt))?order.createdAt:null};
 }
 
-export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected,readCatalog}){
+export function createPortfolioTrading(db,{now,credential,decode,account,isClosed,fetcher=fetch,timeoutMs=10000,onBalances,onObserve,onRejected,readCatalog,orderLimit=()=>null,getOrderLimit=()=>null}){
   db.exec(`CREATE TABLE IF NOT EXISTS portfolio_trading_settings(account_id TEXT PRIMARY KEY,generation TEXT NOT NULL,enabled INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS portfolio_order_attempts(token TEXT PRIMARY KEY,account_id TEXT NOT NULL,generation TEXT NOT NULL,created_at INTEGER NOT NULL,state TEXT NOT NULL,detail TEXT NOT NULL);`);
   // A process may have died after sending an order and before saving its reply.
@@ -32,7 +32,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   const unresolved=id=>db.prepare("SELECT token FROM portfolio_order_attempts WHERE account_id=? AND state IN ('UNKNOWN','SENDING') LIMIT 1").get(id);
   const update=(token,state,detail)=>db.prepare('UPDATE portfolio_order_attempts SET state=?,detail=? WHERE token=?').run(state,JSON.stringify(detail),token);
   const publicAttempt=row=>({token:row.token,state:row.state,createdAt:row.created_at,...row.detail});
-  function read(id){const a=account(id);return {enabled:enabled(id),environment:a.environment,brokerId:a.snapshot?.brokerId||null,blocked:!!unresolved(id),attempts:db.prepare("SELECT * FROM portfolio_order_attempts WHERE account_id=? AND state<>'PREPARED' ORDER BY created_at DESC LIMIT 30").all(id).map(row=>publicAttempt({...row,detail:JSON.parse(row.detail)}))};}
+  function read(id){const a=account(id);return {enabled:enabled(id),maxOrderValue:getOrderLimit(id),environment:a.environment,brokerId:a.snapshot?.brokerId||null,blocked:!!unresolved(id),attempts:db.prepare("SELECT * FROM portfolio_order_attempts WHERE account_id=? AND state<>'PREPARED' ORDER BY created_at DESC LIMIT 30").all(id).map(row=>publicAttempt({...row,detail:JSON.parse(row.detail)}))};}
   function context(id,requireEnabled=true){
     const a=account(id),record=credential(id);
     if(!record||a.platform!=='Trading 212'||a.snapshot?.source!=='api')throw fail(400,'Connect this Trading 212 account first.');
@@ -149,10 +149,11 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(input.side==='SELL'&&(!numeric(available)||qty>available+1e-9))throw fail(400,'The quantity exceeds shares available to trade. Shares reserved for orders or pies may be unavailable.');
     if(input.side==='BUY'&&instrument.maxOpenQuantity!==null&&qty+(position?.quantity||0)>instrument.maxOpenQuantity)throw fail(400,'This exceeds the broker’s maximum position size.');
     const estimate=reference===null?null:qty*reference;
+    const maxOrderValue=orderLimit(id,estimate,summary.currency);
     if(input.side==='BUY'&&(summary.cash.availableToTrade<=0||estimate!==null&&estimate>summary.cash.availableToTrade+1e-8))throw fail(400,'Not enough available cash for this order estimate.');
     const saleCost=input.side==='SELL'&&holding.cost!==null&&holding.shares>0?holding.cost*qty/holding.shares:null;
     const estimatedProfit=estimate!==null&&saleCost!==null?estimate-saleCost:null;
-    return {action:'ORDER',side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,estimate,
+    return {action:'ORDER',maxOrderValue,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,estimate,
       currentShares:holding.shares,remainingShares:holding.shares===null?null:holding.shares+(input.side==='BUY'?qty:-qty),remainingCash:estimate===null?null:summary.cash.availableToTrade+(input.side==='SELL'?estimate:-estimate),estimatedProfit,estimatedProfitPercent:saleCost>0&&estimatedProfit!==null?estimatedProfit/saleCost*100:null,
       environment:ctx.a.environment,brokerId:ctx.a.snapshot.brokerId};
   }
@@ -172,6 +173,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(input.confirmed!==true)throw fail(400,'Review and confirm this exact order.');
     if(row.detail.expiresAt<=now())throw fail(409,'The review expired. Review the order again.');
     if(unresolved(id))throw fail(409,'Resolve the uncertain order before submitting another one.');
+    if(getOrderLimit(id)!==null)balances.delete(id); // Reprice a capped order immediately before submission.
     await validate(id,row.detail,ctx);current(id,ctx);
     if(row.detail.expiresAt<=now())throw fail(409,'The review expired. Review the order again.');
     const d=row.detail;balances.delete(id);update(row.token,'SENDING',d);

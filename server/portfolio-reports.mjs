@@ -1,3 +1,4 @@
+import {activityDateBounds} from '../src/data/portfolio-activity.mjs';
 import {randomUUID} from 'node:crypto';
 import {dividendHistoryPath} from './portfolio-rebuild.mjs';
 import {monthBounds,monthlyReturn} from '../src/data/portfolio-insights.mjs';
@@ -40,18 +41,18 @@ export function createPortfolioReports(db,{now,credential,decode,account,account
   }
   function chosen(filters){return accounts().accounts.filter(a=>(!filters.person||a.personId===filters.person)&&(!filters.account||a.id===filters.account));}
   function read(filters={}){
-    let bounds;try{bounds=monthBounds(filters.month,filters.timeZone);}catch(e){throw fail(400,e.message);}
-    if(bounds.from>now())throw fail(400,'Choose the current month or an earlier month.');
+    let bounds;try{if(filters.year!==undefined){if(!/^(19|20|21)\d{2}$/.test(String(filters.year))||filters.month)throw Error('Choose a valid year.');bounds=activityDateBounds(filters.year+'-01-01',filters.year+'-12-31',filters.timeZone);}else bounds=monthBounds(filters.month,filters.timeZone);}catch(e){throw fail(400,e.message);}
+    if(bounds.from>now())throw fail(400,'Choose the current period or an earlier period.');
     const root=accounts(),through=Math.min(bounds.to-1,now());
     let reportBytes=0;
-    return {month:filters.month,timeZone:filters.timeZone||'Europe/Skopje',generatedAt:now(),bounds,people:root.people,accounts:chosen(filters).map(a=>{
+    return {month:filters.month,year:filters.year,timeZone:filters.timeZone||'Europe/Skopje',generatedAt:now(),bounds,people:root.people,accounts:chosen(filters).map(a=>{
       const ledger=funding.ledger(a.id),executions=activity.ledger(a.id,bounds),s=state(a.id),currency=a.snapshot?.currency||null;
       const inMonth=r=>r.at>=bounds.from&&r.at<bounds.to&&r.at<=now();
       const income=s.completedScan?db.prepare('SELECT detail FROM portfolio_income WHERE account_id=? AND scan=?').all(a.id,s.completedScan).map(r=>JSON.parse(r.detail)).filter(inMonth).sort((a,b)=>a.at-b.at):[];
       const fundingComplete=ledger.complete&&ledger.coveredThrough>=through,tradesComplete=executions.complete&&executions.coveredThrough>=through,incomeComplete=!!s.completedScan&&s.coveredThrough>=through;
       // Current-month data can be minutes behind the clock; retain the precise
       // checked-through dates rather than declaring today's history complete.
-      const warnings=[!fundingComplete&&'Cash movements cover the latest completed import; the selected month may be incomplete.',!tradesComplete&&'Executions cover imported history; the selected month may be incomplete.',!incomeComplete&&'Distributions cover the latest completed import; the selected month may be incomplete.',ledger.error,executions.error,s.error,!credential(a.id)&&'Account disconnected: saved data only.'].filter(Boolean);
+      const warnings=[!fundingComplete&&'Cash movements cover the latest completed import; the selected period may be incomplete.',!tradesComplete&&'Executions cover imported history; the selected period may be incomplete.',!incomeComplete&&'Distributions cover the latest completed import; the selected period may be incomplete.',ledger.error,executions.error,s.error,!credential(a.id)&&'Account disconnected: saved data only.'].filter(Boolean);
       const result={id:a.id,personId:a.personId,person:root.people.find(p=>p.id===a.personId)?.name||'Unknown person',label:a.label,environment:a.environment,currency,performance:monthlyReturn(ledger,currency,bounds,now()),funding:ledger.flows.filter(inMonth),trades:executions.items.filter(inMonth),income,fundingComplete,tradesComplete,incomeComplete,coverage:{funding:ledger.coveredThrough,trades:executions.coveredThrough,income:s.coveredThrough||null},warnings};
       reportBytes+=Buffer.byteLength(JSON.stringify(result));if(reportBytes>8000000)throw fail(413,'This report is too large. Select one person or account.');return result;
     })};

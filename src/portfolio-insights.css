@@ -5,3 +5,18 @@
 .pi-panel .pa-filters{padding:0 0 20px}.pi-report-filters input{color-scheme:dark}.pi-hours-dialog .pm-form label{display:grid;gap:8px}.pi-hours-dialog .pm-form textarea{background:#0c181e;color:#e8edf0;border:1px solid var(--border);border-radius:4px;padding:12px}
 
 .pi-exposure-row summary>span:first-child::before{content:"▸";float:left;margin-right:10px;color:var(--muted)}.pi-exposure-row[open] summary>span:first-child::before{content:"▾"}
+
+.pi-target-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:24px 0;}
+.pi-target-grid label {display:grid;gap:8px;font-size:13px;}
+.pi-target-grid input {width:100%;min-width:0;}
+.pi-planning-form {grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
+.pi-comparison svg {display:block;width:100%;height:auto;min-height:180px;}
+.pi-comparison input {width:100%;}
+.pi-comparison {margin:20px 0;}
+.pi-report-table small {display:block;color:var(--muted);}
+.pi-tabs {flex-wrap:wrap;}
+.pi-panel h3 {margin-top:24px;}
+
+.pi-planning-form .pi-check {display:flex;align-items:center;justify-content:flex-start;gap:10px;align-self:center;}
+.pi-planning-form .pi-check input {width:18px;height:18px;min-height:18px;flex:0 0 18px;accent-color:#28c6ad;}
+.pi-comparison input[type=range] {accent-color:#28c6ad;}

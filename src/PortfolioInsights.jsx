@@ -7,9 +7,10 @@ import {activityRequest} from './PortfolioNotifications';
 import {portfolioExposure,reportCsv} from './data/portfolio-insights.mjs';
 import {portfolioPercent as percent,portfolioTone as tone,usePortfolioResource,downloadPortfolioCsv} from './PortfolioTools';
 import './portfolio-insights.css';
+import PortfolioPlanning,{AnnualReport} from './PortfolioPlanning';
 
 export default function PortfolioInsights({watchlist,tab='exposure',onTab,onPortfolios,onJournal}){
-  return <div className="pi-page"><PageHeader title="Portfolio insights" description="Shared holdings, price alerts and monthly account reports." actions={<><button className="button outline" onClick={onJournal}>Broker trade journal</button><button className="button outline" onClick={onPortfolios}>Portfolios</button></>}/><PortfolioPrivacyControls/><nav className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['alerts','Price alerts'],['reports','Monthly reports']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>{tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<Exposure watchlist={watchlist}/>}</div>;
+  return <div className="pi-page"><PageHeader title="Portfolio insights" description="Account monitoring, allocation plans, performance and reports." actions={<><button className="button outline" onClick={onJournal}>Broker trade journal</button><button className="button outline" onClick={onPortfolios}>Portfolios</button></>}/><PortfolioPrivacyControls/><nav className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>{['monitor','allocation','performance','calendar'].includes(tab)?<PortfolioPlanning tab={tab}/>:tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<Exposure watchlist={watchlist}/>}</div>;
 }
 function Exposure({watchlist}){
   const privacy=usePortfolioPrivacy(),{money,number}=privacy;

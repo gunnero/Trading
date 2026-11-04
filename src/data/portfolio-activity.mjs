@@ -16,3 +16,5 @@ export function activityDateBounds(from,to,timeZone='Europe/Skopje'){
   const following=to?new Date(Date.parse(to+'T00:00:00Z')+86400000).toISOString().slice(0,10):null;
   return {from:from?start(from):null,to:following?start(following):null};
 }
+
+export const portfolioEventLabel=event=>event.kind==='health'?'Connection alert':event.kind==='concentration'?'Concentration alert':event.kind==='price'?'Price alert':orderStatusLabel(event.status);

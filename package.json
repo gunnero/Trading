@@ -43,7 +43,7 @@
     "test:session-review": "node --test tests/session-review.test.mjs && node scripts/session-review-qa.mjs",
     "test:transfers": "node --test tests/transfers.test.mjs && node scripts/transfers-qa.mjs",
     "test:chart-grid": "node --test tests/chart-grid.test.mjs && node scripts/chart-grid-qa.mjs",
-    "test:portfolio": "node --test tests/portfolio.test.mjs tests/portfolio-history.test.mjs tests/portfolio-funding.test.mjs tests/portfolio-simple.test.mjs tests/portfolio-trading.test.mjs tests/portfolio-rebuild.test.mjs tests/portfolio-activity.test.mjs tests/portfolio-insights.test.mjs && node scripts/portfolio-qa.mjs && node scripts/portfolio-details-qa.mjs && node scripts/portfolio-history-qa.mjs && node scripts/portfolio-trading-qa.mjs && node scripts/portfolio-activity-qa.mjs && node scripts/portfolio-insights-qa.mjs"
+    "test:portfolio": "node --test tests/portfolio.test.mjs tests/portfolio-history.test.mjs tests/portfolio-funding.test.mjs tests/portfolio-simple.test.mjs tests/portfolio-trading.test.mjs tests/portfolio-rebuild.test.mjs tests/portfolio-activity.test.mjs tests/portfolio-insights.test.mjs tests/portfolio-planning.test.mjs && node scripts/portfolio-qa.mjs && node scripts/portfolio-details-qa.mjs && node scripts/portfolio-history-qa.mjs && node scripts/portfolio-trading-qa.mjs && node scripts/portfolio-activity-qa.mjs && node scripts/portfolio-insights-qa.mjs && node scripts/portfolio-planning-qa.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

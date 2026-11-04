@@ -173,6 +173,16 @@ export function parsePortfolioPrices(payload,asset,cutoff=Date.now()){
   const points=parseCandles(payload,asset,'D',cutoff,{full:true}).map(row=>({at:Date.parse(exchangeInstant(row.sessionDate,16)),value:row.ohlc[1]*splits.filter(s=>s.at>row.timestamp*1000).reduce((n,s)=>n*s.ratio,1)})).filter(p=>p.at<=cutoff);
   return {currency:result.meta.currency,points,provider:'Yahoo Finance',basis:'Daily close; split adjustments reversed to historical share units'};
 }
+export function parseBenchmarkPrices(payload,asset,cutoff=Date.now()){
+  const r=resultOf(payload,asset),adjusted=r.indicators?.adjclose?.[0]?.adjclose;
+  if(!['SPY','QQQ'].includes(asset.symbol)||r.meta.currency!=='USD'||r.meta.instrumentType!=='ETF'||r.meta.dataGranularity!=='1d'||!Array.isArray(adjusted))throw Error('Verified benchmark adjusted closes are unavailable.');
+  const points=(r.timestamp||[]).flatMap((t,i)=>{
+    if(!validNumber(t))return [];const date=marketDay(t*1000),session=tradingDay(date),at=Date.parse(session.close||exchangeInstant(date,16)),value=adjusted[i];
+    return at<=cutoff&&validNumber(value)&&value>0?[{at,value}]:[];
+  }).sort((a,b)=>a.at-b.at);
+  if(!points.length)throw Error('No completed benchmark closes.');
+  return {currency:'USD',points,provider:'Yahoo Finance',basis:'Dividend- and split-adjusted daily close'};
+}
 export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=null}={}){
   const cache=new Map(),failures=new Map(),pending=new Map();let blockedUntil=0,active=0,saveTimer;const queue=[];
   if(cachePath)try{const data=JSON.parse(readFileSync(cachePath,'utf8'));if(data.version===1){for(const [k,v] of data.entries.slice(-192))if(now()-v.fetchedAt<86400000)cache.set(k,v);for(const [k,v] of (data.failures||[]).slice(-192))if(v>now())failures.set(k,v);blockedUntil=Math.min(now()+86400000,Number(data.blockedUntil)||0);}}catch{}
@@ -236,6 +246,16 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
     });
     if(!raw.payload||raw.status!=='ok')throw Error('Verified daily history is unavailable for '+symbol+'.');
     return parsePortfolioPrices(raw.payload,asset,Math.min(to,Date.parse(raw.fetchedAt)));
+  }
+  async function benchmarkPrices(symbol,from,to){
+    if(!['SPY','QQQ'].includes(symbol)||!Number.isFinite(from)||!Number.isFinite(to)||from>=to)throw Error('Unsupported benchmark range.');
+    const asset=resolveSymbol(symbol),first=Math.floor((from-7*86400000)/86400000),last=Math.floor(to/86400000);
+    const raw=await get(`benchmark:${symbol}:${first}:${last}`,3600000,async()=>{
+      const payload=JSON.parse(await request(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${first*86400}&period2=${Math.floor(to/1000)}&events=div%2Csplits&includePrePost=false`));
+      parseBenchmarkPrices(payload,asset,to);return {payload};
+    });
+    if(!raw.payload||raw.status!=='ok')throw Error('Benchmark history is unavailable.');
+    return parseBenchmarkPrices(raw.payload,asset,Math.min(to,Date.parse(raw.fetchedAt)));
   }
   async function chart(symbol,frame){
     if(!supportsChart(symbol,frame))return unavailable('Unsupported chart.');
@@ -330,7 +350,7 @@ export function createMarketService({fetcher=fetch,now=()=>Date.now(),cachePath=
       return {status:raw.status,message:raw.message,provider:'Yahoo Finance',symbol,timeframe:frame,from,to,currency:'USD',fetchedAt:raw.fetchedAt,observedThrough:cutoff/1000,candles,indicators};
     }catch{return {...unavailable('No valid historical candles cover these trade dates.'),symbol,timeframe:frame,from,to};}
   }
-  return {quote,chart,priceHistory,portfolioPrices,levelHistory,setupHistory,tradeHistory};
+  return {quote,chart,priceHistory,portfolioPrices,benchmarkPrices,levelHistory,setupHistory,tradeHistory};
 }
 let sharedMarket;
 export const defaultMarketService=()=>sharedMarket??=createMarketService({cachePath:new URL('../.cache/market-data.json',import.meta.url).pathname});

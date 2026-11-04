@@ -31,7 +31,7 @@ export function monthlyReturn(ledger,currency,bounds,now=Date.now()){
   const end=Math.min(bounds.to-1,now,ledger.coveredThrough||0),rows=ledger.values.filter(v=>v.currency===currency&&v.at<=end).sort((a,b)=>a.at-b.at);
   const boundary=rows.filter(v=>v.at<=bounds.from).at(-1),tolerance=v=>v?.estimated?36*3600000:30*60000;
   const first=boundary&&bounds.from-boundary.at<=tolerance(boundary)?boundary:rows.find(v=>v.at>=bounds.from),last=rows.at(-1);
-  if(!first||!last||last.at<=first.at||last.at<bounds.from)return {...empty,reason:'Earlier account values are unavailable for this month.'};
+  if(!first||!last||last.at<=first.at||last.at<bounds.from)return {...empty,reason:'Earlier account values are unavailable for this period.'};
   const movements=ledger.flows.filter(t=>t.at>first.at&&t.at<=last.at);
   if(movements.some(t=>!['DEPOSIT','WITHDRAW','FEE','INTEREST_ON_FREE_CASH','LENDING_INTEREST'].includes(t.type)))return {...empty,reason:'Transfers or unsupported cash movements prevent a verified return.'};
   const funding=movements.filter(t=>['DEPOSIT','WITHDRAW'].includes(t.type));
@@ -48,15 +48,16 @@ export function safeCsv(rows){
   }).join(',')).join('\r\n')+'\r\n';
 }
 export function reportCsv(report){
-  const rows=[['Monthly portfolio report',report.month,report.timeZone,'Generated',new Date(report.generatedAt).toISOString()],['Person','Account','Environment','Section','Date (UTC)','Instrument / type','Currency','Amount / value','Shares','Price','Price currency','Coverage / notes']];
+  const rows=[[report.year?'Annual accountant export':'Monthly portfolio report',report.year||report.month,report.timeZone,'Generated',new Date(report.generatedAt).toISOString()],['Person','Account','Account ID','Environment','Section','Date (UTC)','Instrument / type','Currency','Amount / value','Shares','Price','Price currency','Coverage / notes']];
   for(const a of report.accounts){
-    const add=(section,at,name,currency,amount,shares=null,price=null,priceCurrency='',note='')=>rows.push([a.person,a.label,a.environment,section,at?new Date(at).toISOString():'',name,currency,amount,shares,price,priceCurrency,note]);
+    const add=(section,at,name,currency,amount,shares=null,price=null,priceCurrency='',note='')=>rows.push([a.person,a.label,a.id,a.environment,section,at?new Date(at).toISOString():'',name,currency,amount,shares,price,priceCurrency,note]);
     add('Return',a.performance.end?.at,'Account return',a.currency,a.performance.amount,null,null,'',a.performance.reason||a.performance.coverage);
     add('Return rate',a.performance.end?.at,'Calculated MWRR (%)',a.currency,a.performance.ratePercent,null,null,'',a.performance.coverage);
     for(const edge of ['start','end'])if(a.performance[edge])add('Valuation',a.performance[edge].at,edge,a.currency,a.performance[edge].value,null,null,'',a.performance[edge].estimated?'Reconstructed estimate':'Recorded');
     for(const f of a.funding)add('Cash movement',f.at,f.type,f.currency,f.amount,null,null,'',a.fundingComplete?'Complete import':'Partial import');
     for(const f of a.trades){add('Execution',f.at,f.name,f.currency,f.netValue,f.quantity,f.price,f.priceCurrency,`${f.side} · execution ${f.id} · ${a.tradesComplete?'History imported':'Partial history'}`);if(f.realized!==null)add('Realized P/L',f.at,f.name,f.currency,f.realized);for(const c of f.charges||[])add('Execution charge',f.at,c.name,c.currency,c.amount);}
     for(const d of a.income)add('Distribution',d.at,d.type,d.currency,d.amount,null,null,'',`${d.name} · ${a.incomeComplete?'Complete import':'Partial import'}`);
+    for(const kind of ['funding','trades','income'])add('Coverage checkpoint',a.coverage?.[kind],kind,null,null,null,null,'',a[kind+'Complete']?'Complete through selected period':'Partial or not current');
     for(const warning of a.warnings)add('Coverage',null,'',null,null,null,null,'',warning);
   }
   return safeCsv(rows);

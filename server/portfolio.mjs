@@ -11,6 +11,8 @@ import {createPortfolioRebuild,dividendHistoryPath} from './portfolio-rebuild.mj
 import {createPortfolioMetadata} from './portfolio-metadata.mjs';
 import {createPortfolioReports} from './portfolio-reports.mjs';
 import {createPortfolioAlerts} from './portfolio-alerts.mjs';
+import {createPortfolioPlanning} from './portfolio-planning.mjs';
+import {defaultCompanyService} from './company-data.mjs';
 import {defaultMarketService} from './market-data.mjs';
 
 const fail=(status,message,retryMs=0)=>Object.assign(new Error(message),{status,retryMs});
@@ -41,7 +43,7 @@ export function normalizeTrading212(summary,positions,checkedAt) {
     note:'Account summary and positions are separate broker reads. Values can move between them. Prices use instrument currency; holding values and returns use the primary account currency. The API does not supply a quote observation timestamp.'};
 }
 
-export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.now,timeoutMs=6000,background=false,workspace=()=>({}),quote=(key)=>defaultMarketService().quote(key),prices=(...args)=>defaultMarketService().portfolioPrices(...args)}={}) {
+export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.now,timeoutMs=6000,background=false,workspace=()=>({}),quote=(key)=>defaultMarketService().quote(key),prices=(...args)=>defaultMarketService().portfolioPrices(...args),benchmarkPrices=(...args)=>defaultMarketService().benchmarkPrices(...args),company=key=>defaultCompanyService().get(key)}={}) {
   mkdirSync(directory,{recursive:true,mode:0o700});
   const filename=join(directory,'portfolio.sqlite'),db=new DatabaseSync(filename);chmodSync(filename,0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
@@ -83,7 +85,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     },revision);
   }
   function removePerson(id,revision){return change(data=>{if(data.accounts.some(a=>a.personId===id))throw fail(400,'Remove this person’s accounts first.');if(!data.people.some(p=>p.id===id))throw fail(404,'Person not found.');data.people=data.people.filter(p=>p.id!==id);},revision);}
-  function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);activity.remove(id);rebuild.remove(id);metadata.remove(id);reports.remove(id);alerts.remove(id);return result;}
+  function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);activity.remove(id);rebuild.remove(id);metadata.remove(id);reports.remove(id);alerts.remove(id);planning.remove(id);return result;}
   function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
   async function request(path,secret){
     const validator=path.startsWith('/equity/history/orders?')?orderHistoryPath:path.startsWith('/equity/history/transactions?')?fundingHistoryPath:path.startsWith('/equity/history/dividends?')?dividendHistoryPath:null,historical=!!validator;
@@ -164,6 +166,9 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(req.method==='GET'&&path==='/api/portfolio'){res.end(JSON.stringify(read()));return;}
       if(req.method==='GET'&&path==='/api/portfolio/activity'){res.end(JSON.stringify(activity.read(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/notifications'){res.end(JSON.stringify(activity.notifications()));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/insights/planning'){res.end(JSON.stringify(planning.read()));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/insights/performance'){res.end(JSON.stringify(await planning.performance(Object.fromEntries(url.searchParams))));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/insights/calendar'){res.end(JSON.stringify(await planning.calendar(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/insights/alerts'){res.end(JSON.stringify(alerts.read()));return;}
       if(req.method==='GET'&&path==='/api/portfolio/insights/reports'){res.end(JSON.stringify(reports.read(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/journal'){res.end(JSON.stringify(reports.journal(Object.fromEntries(url.searchParams))));return;}
@@ -182,6 +187,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>2000000)throw fail(413,'Snapshot is too large (maximum 2 MB).');chunks.push(chunk);}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw fail(400,'Invalid JSON request.');}
       if(req.method==='POST'&&path==='/api/portfolio/notifications/read'){res.end(JSON.stringify(activity.markRead(input)));return;}
+      if(req.method==='POST'&&path==='/api/portfolio/insights/planning'){res.end(JSON.stringify(planning.save(input)));return;}
       if(req.method==='POST'&&path==='/api/portfolio/insights/alerts'){res.end(JSON.stringify(input.action?alerts.update(input):alerts.create(input)));return;}
       if(req.method==='POST'&&path==='/api/portfolio/insights/reports/refresh'){res.end(JSON.stringify(await reports.refresh(input)));return;}
       if(req.method==='POST'&&path==='/api/portfolio/journal/notes'){res.end(JSON.stringify(reports.saveNote(input)));return;}
@@ -222,7 +228,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
   const metadata=createPortfolioMetadata(db,historyOptions);
   const activity=createPortfolioActivity(db,{...historyOptions,orderView,accounts:()=>read().data,tracking:id=>trading.tracking(id)});
-  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,readCatalog:metadata.instruments,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
+  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,readCatalog:metadata.instruments,orderLimit:(...args)=>planning.orderLimit(...args),getOrderLimit:id=>planning.settings(id).maxOrderValue,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
     if(closed||credential(id)?.generation!==generation)throw fail(409,'The account connection changed.');
     if(pending.has(id))throw fail(409,'An account refresh is already running.');
     const snapshot=normalizeTrading212(fresh.summary,fresh.positions,new Date(fresh.at).toISOString());
@@ -234,13 +240,14 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   const funding=createPortfolioFunding(db,{...historyOptions,historicalValues:rebuild.values}),history=createPortfolioHistory(db,{...historyOptions,funding});
   const reports=createPortfolioReports(db,{...historyOptions,accounts:()=>read().data,activity,funding});
   const alerts=createPortfolioAlerts(db,{...historyOptions,accounts:()=>read().data,workspace,quote,activity});
+  const planning=createPortfolioPlanning(db,{...historyOptions,accounts:()=>read().data,activity,funding,workspace,benchmarkPrices,company,assertIdle:trading.assertIdle});
   const readHistory=(id,range)=>({...history.read(id,range),rebuild:rebuild.read(id)});
   for(const a of read().data.accounts)history.record(a.id,a.snapshot);
   // Visible pages refresh each minute; a bounded 15-minute sampler maintains
   // history when the page is closed. It uses the same account locks/backoff.
   const sampler=background?setInterval(async()=>{
     if(closed)return;const queue=read().data.accounts.filter(a=>a.connected);
-    const worker=async()=>{while(queue.length&&!closed){const a=queue.shift();try{await sync(a.id);}catch{ /* A removed/disconnected account needs no background retry. */ }}};
+    const worker=async()=>{while(queue.length&&!closed){const a=queue.shift();try{await sync(a.id);if(!closed)await funding.sync(a.id);}catch{ /* A removed/disconnected account needs no background retry. */ }}};
     await Promise.all([worker(),worker()]);
   },900000):null;sampler?.unref();
   let monitoring=false;
@@ -253,9 +260,9 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
         if(!closed)try{await activity.sync(id);}catch{/* Removed/reconnected account. */}
       }};
       await Promise.all([worker(),worker()]);
-      if(!closed)await alerts.check();
+      if(!closed){planning.check();await alerts.check();}
     }finally{monitoring=false;}
   }
   const orderSampler=background?setInterval(monitor,15000):null;orderSampler?.unref();
-  return {monitor,activity,metadata,reports,alerts,read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,funding,trading,rebuild,middleware,close(){closed=true;clearInterval(sampler);clearInterval(orderSampler);db.close();}};
+  return {monitor,activity,metadata,reports,alerts,planning,read,person,account,removePerson,removeAccount,importSnapshot,connect,disconnect,sync,history,funding,trading,rebuild,middleware,close(){closed=true;clearInterval(sampler);clearInterval(orderSampler);db.close();}};
 }

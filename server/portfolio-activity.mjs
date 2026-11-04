@@ -142,5 +142,6 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
     if(bounds){s.where+=' AND at>=? AND at<?';s.params.push(bounds.from,bounds.to);}
     return {items:db.prepare(`SELECT * FROM portfolio_activity_fills WHERE ${s.where} ORDER BY at,item_id`).all(...s.params).map(s.decorate),complete:!!saved?.complete,coveredThrough:saved?.coveredThrough||saved?.startedAt||null,checkedAt:saved?.checkedAt||null,error:saved?.error||null};}
   function priceAlert(id,g,eventKey,detail){notify(id,scope(id,g),eventKey,{...detail,kind:'price',status:'PRICE_ALERT'});}
-  return {sync,observe,rejected,read,notifications,markRead,remove,ledger,priceAlert};
+  function monitorAlert(id,g,eventKey,detail){notify(id,scope(id,g),eventKey,{...detail,status:'MONITOR_ALERT'});}
+  return {monitorAlert,sync,observe,rejected,read,notifications,markRead,remove,ledger,priceAlert};
 }

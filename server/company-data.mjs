@@ -83,7 +83,9 @@ export function createCompanyService({fetcher=fetch,now=()=>Date.now(),cachePath
  }
  return {get};
 }
-export function companyMiddleware(service=createCompanyService({cachePath:new URL('../.cache/company-data.json',import.meta.url).pathname,onError:(error,symbol)=>console.warn(`Company snapshot ${symbol}: ${error.message}`)})){
+let sharedCompany;
+export function defaultCompanyService(){return sharedCompany??=createCompanyService({cachePath:new URL('../.cache/company-data.json',import.meta.url).pathname,onError:(error,symbol)=>console.warn(`Company snapshot ${symbol}: ${error.message}`)});}
+export function companyMiddleware(service=defaultCompanyService()){
  return async(req,res,next)=>{const url=new URL(req.url,'http://localhost');if(url.pathname!=='/api/company')return next();
   res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
   if(req.method!=='GET'){res.statusCode=405;res.setHeader('Allow','GET');res.end(JSON.stringify({message:'Use GET.'}));return;}

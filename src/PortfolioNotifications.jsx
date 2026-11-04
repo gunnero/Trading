@@ -2,7 +2,7 @@ import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Bell,X} from '@phosphor-icons/react';
 import {apiFetch} from './auth-client';
-import {orderStatusLabel} from './data/portfolio-activity.mjs';
+import {portfolioEventLabel} from './data/portfolio-activity.mjs';
 import './portfolio-activity.css';
 
 export async function activityRequest(path,body,signal){
@@ -33,5 +33,5 @@ export function usePortfolioNotifications(){
 export function PortfolioNotice({event,onOpen,onDismiss}){
   const privacy=usePortfolioPrivacy();
   if(!event)return null;
-  return <div className="pa-notice" role="status"><Bell size={20}/><div><strong>{event.name||event.ticker} · {event.kind==='price'?'Price alert':orderStatusLabel(event.status)}</strong><span>{event.kind==='price'&&!privacy.privateMode?event.message+' · ':''}{privacy.person(event.person)} · {privacy.label(event.accountLabel,event.accountId)}{event.environment==='demo'?' · DEMO':''}</span></div><button className="text-button" onClick={onOpen}>View activity</button><button className="icon-button" onClick={onDismiss} aria-label={event.kind==='price'?'Dismiss price notification':'Dismiss order notification'}><X size={18}/></button></div>;
+  return <div className="pa-notice" role="status"><Bell size={20}/><div><strong>{event.name||event.ticker} · {portfolioEventLabel(event)}</strong><span>{event.kind&&!privacy.privateMode?event.message+' · ':''}{privacy.person(event.person)} · {privacy.label(event.accountLabel,event.accountId)}{event.environment==='demo'?' · DEMO':''}</span></div><button className="text-button" onClick={onOpen}>View activity</button><button className="icon-button" onClick={onDismiss} aria-label={event.kind==='price'?'Dismiss price notification':'Dismiss order notification'}><X size={18}/></button></div>;
 }

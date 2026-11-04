@@ -85,14 +85,14 @@ test('snapshot history keeps genuine timestamps and balances across refresh/rest
  const f=fixture(t,async()=>json({items:[],nextPagePath:null}));await f.connect();f.advance(16*60000);summary.investments.unrealizedProfitLoss=125;
  try{await f.service.sync(f.id);assert.equal(f.service.history.read(f.id).sampled.amount,null);f.restart();assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.service.history.read(f.id,'MAX').sampled.amount,175);}finally{summary.investments.unrealizedProfitLoss=100;}
 });
-test('background sampling records combined P/L without a browser and stops after disconnect',async t=>{
+test('background sampling records P/L and refreshes funding without a browser, then stops after disconnect',async t=>{
  t.mock.timers.enable({apis:['setInterval']});
  const f=fixture(t,async()=>json({items:[],nextPagePath:null}),{background:true});await f.connect();
  f.advance(900001);summary.investments.unrealizedProfitLoss=120;
  try{
    t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
-   assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.calls.filter(call=>!call.url.includes('/history/orders')).length,4);
-   f.service.disconnect(f.id,f.service.read().revision);f.advance(900001);t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));assert.equal(f.calls.filter(call=>!call.url.includes('/history/orders')).length,4);
+   assert.equal(f.service.history.read(f.id).sampled.amount,null);assert.equal(f.calls.filter(call=>!call.url.includes('/history/')).length,4);assert.equal(f.calls.filter(call=>call.url.includes('/history/transactions')).length,1);assert.equal(f.service.funding.ledger(f.id).complete,true);
+   f.service.disconnect(f.id,f.service.read().revision);f.advance(900001);t.mock.timers.tick(900000);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));assert.equal(f.calls.filter(call=>!call.url.includes('/history/')).length,4);assert.equal(f.calls.filter(call=>call.url.includes('/history/transactions')).length,1);
  }finally{summary.investments.unrealizedProfitLoss=100;}
 });
 test('reconnecting a different broker after a manual import cannot inherit the prior account history',async t=>{
