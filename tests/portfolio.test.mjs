@@ -71,6 +71,23 @@ function fixture(t,fetcher=async url=>json(url.endsWith('/summary')?summary:posi
   service.account({personId,platform:'Trading 212',label:'Invest'},1);const id=service.read().data.accounts[0].id;
   return {get service(){return service;},auth,directory,id,personId,advance:(ms=61000)=>time+=ms,revision:()=>service.read().revision,restart(){service.close();service=createPortfolioService(auth,directory,{fetcher,now:()=>time});}};
 }
+test('failed holding reads retain JSON errors and correlate safe diagnostics without exposing account data',async t=>{
+ let broken=false;
+ const f=fixture(t,async url=>{
+   if(url.endsWith('/instruments'))return json([{ticker:'TEST_US_EQ',name:'Fixture company',type:'STOCK',currencyCode:'USD'}]);
+   if(broken&&url.endsWith('/summary'))return new Response('private upstream body',{status:429,headers:{'retry-after':'90'}});
+   return json(url.endsWith('/summary')?summary:positions);
+ });
+ await f.service.connect(f.id,credentials,f.revision());f.service.trading.configure(f.id,{enabled:true,authorized:true});broken=true;
+ const logs=[];t.mock.method(console,'warn',value=>logs.push(JSON.parse(value)));
+ const req={method:'GET',url:`/api/portfolio/accounts/${f.id}/trading/position?ticker=TEST_US_EQ`,headers:{'cf-ray':'abc123-TEST'}},headers={};let body;
+ const res={setHeader:(key,value)=>headers[key]=value,end:value=>body=JSON.parse(value)};
+ await f.service.middleware(req,res,()=>assert.fail('Unexpected fallthrough'));
+ assert.equal(res.statusCode,502);assert.match(headers['Content-Type'],/application\/json/);assert.match(headers['X-Opening-Bell-Request-Id'],/^[a-f0-9-]{36}$/);
+ assert.match(body.message,/rate limiting/);assert.equal(body.retryAfterMs,90000);
+ assert.deepEqual(logs,[{event:'holding_refresh_failed',requestId:headers['X-Opening-Bell-Request-Id'],status:502,upstreamStatus:429,stage:'balances',ray:'abc123-TEST'}]);
+ for(const secret of [credentials.apiKey,credentials.apiSecret,f.id,'TEST_US_EQ','private upstream body'])assert.ok(!JSON.stringify({body,logs}).includes(secret));
+});
 test('snapshots preserve fractional shares, negative returns, missing values and zero without inventing dates',()=>{
  const result=normalizePortfolioSnapshot(snapshot);assert.equal(result.observedAt,null);assert.equal(result.realized,null);assert.equal(result.holdings[0].price,null);assert.equal(result.holdings[0].quantity,2.5);
  assert.equal(normalizePortfolioSnapshot({...snapshot,cash:0}).cash,0);

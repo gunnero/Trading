@@ -163,6 +163,8 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     const url=new URL(req.url,'http://localhost'),path=url.pathname;
     if(path!=='/api/portfolio'&&!path.startsWith('/api/portfolio/'))return next();
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
+    const holdingRead=req.method==='GET'&&/^\/api\/portfolio\/accounts\/[a-f0-9-]{36}\/trading\/position$/.test(path),requestId=holdingRead?randomUUID():null;
+    if(requestId)res.setHeader('X-Opening-Bell-Request-Id',requestId);
     try{
       if(req.method==='GET'&&path==='/api/portfolio'){res.end(JSON.stringify(read()));return;}
       if(req.method==='GET'&&path==='/api/portfolio/activity'){res.end(JSON.stringify(activity.read(Object.fromEntries(url.searchParams))));return;}
@@ -224,7 +226,16 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
         else if(req.method==='POST'&&action==='sync')result=await sync(id);
       }
       if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));
-    }catch(error){res.statusCode=error.status||500;res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.'}));}
+    }catch(error){
+      res.statusCode=error.status||500;
+      if(holdingRead&&res.statusCode>=500){
+        const ray=req.headers['cf-ray'];
+        // Correlate a failed read without logging accounts, holdings, credentials,
+        // response bodies or query strings. A gateway-only failure has no app ID.
+        console.warn(JSON.stringify({event:'holding_refresh_failed',requestId,status:res.statusCode,upstreamStatus:Number.isInteger(error.upstreamStatus)?error.upstreamStatus:null,stage:['instruments','balances','price'].includes(error.readStage)?error.readStage:null,ray:typeof ray==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(ray)?ray:null}));
+      }
+      res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.',...(holdingRead&&Number.isFinite(error.retryMs)?{retryAfterMs:error.retryMs}:{})}));
+    }
   }
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
   const metadata=createPortfolioMetadata(db,historyOptions);

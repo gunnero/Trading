@@ -22,12 +22,17 @@ function savedConfirmation(id){try{const token=localStorage.getItem(recoveryKey(
 async function request(id,path='',body,signal){
   const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000);
   let res;
-  try{res=await apiFetch(`/api/portfolio/accounts/${id}/trading${path}`,{method:body===undefined?'GET':'POST',signal:requestSignal,...(body===undefined?{}:{headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify(body)})});}
-  catch(error){if(signal?.aborted||error.auth)throw error;throw Error(requestSignal.aborted?'The trading request timed out. Refresh to check its status.':'The trading service could not be reached. Check your connection and refresh.');}
+  try{res=await apiFetch(`/api/portfolio/accounts/${id}/trading${path}`,{method:body===undefined?'GET':'POST',signal:requestSignal,headers:{Accept:'application/json',...(body===undefined?{}:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'})},...(body===undefined?{}:{body:JSON.stringify(body)})});}
+  catch(error){if(signal?.aborted||error.auth)throw error;throw Object.assign(Error(requestSignal.aborted?'The trading request timed out. Refresh to check its status.':'The trading service could not be reached. Check your connection and refresh.'),{transientRead:true});}
+  const retryHeader=res.headers.get('retry-after'),retryDelay=retryHeader?(Number.isFinite(Number(retryHeader))?Number(retryHeader)*1000:Date.parse(retryHeader)-Date.now()):0;
+  const retryAfterMs=Number.isFinite(retryDelay)?Math.min(86400000,Math.max(0,retryDelay)):0;
+  const reference=name=>{const value=res.headers.get(name);return value&&/^[a-zA-Z0-9-]{1,80}$/.test(value)?value:null;};
+  const details={status:res.status,requestId:reference('x-opening-bell-request-id'),ray:reference('cf-ray')};
+  const gateway=()=>Object.assign(Error(`The holding service connection was interrupted (HTTP ${res.status}).`),{...details,transientRead:[502,503,504,520,521,522,523,524].includes(res.status),retryAfterMs});
   let data;
   try{data=await res.json();if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Invalid response');}
-  catch{throw Object.assign(Error(`The trading service returned an unreadable response (HTTP ${res.status}). Refresh to try again.`),{status:res.status});}
-  if(!res.ok)throw Object.assign(Error(data.message||'The trading request could not be completed.'),{status:res.status});return data;
+  catch{if(path.startsWith('/position?')&&res.status>=500)throw gateway();throw Object.assign(Error(`The trading service returned an unreadable response (HTTP ${res.status}). Refresh to try again.`),details);}
+  if(!res.ok){if(path.startsWith('/position?')&&res.status>=500&&!data.message)throw gateway();throw Object.assign(Error(data.message||'The trading request could not be completed.'),{...details,retryAfterMs:Math.max(retryAfterMs||0,Number.isFinite(data.retryAfterMs)?data.retryAfterMs:0)});}return data;
 }
 export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY',sheet,watchlist,onPortfolioChange}){
   const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[authorized,setAuthorized]=useState(false),[query,setQuery]=useState(initialHolding?.ticker||''),[matches,setMatches]=useState([]),[instrument,setInstrument]=useState(null),[side,setSide]=useState(initialSide),[type,setType]=useState('MARKET'),[quantity,setQuantity]=useState(''),[limit,setLimit]=useState(''),[validity,setValidity]=useState('DAY'),[review,setReview]=useState(null),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState(null),[orders,setOrders]=useState(null),[checkedAttempt,setCheckedAttempt]=useState(null),[now,setNow]=useState(Date.now());
@@ -57,7 +62,12 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
       controller=new AbortController();const signal=controller.signal;
       setHoldingState({id,ticker,loading:true});setPreset(null);
       try{const data=await request(id,'/position?'+new URLSearchParams({ticker}),undefined,signal);if(active&&!signal.aborted){setHoldingState({id,ticker,data});schedule(Number.isFinite(data.priceQuote?.validUntil)?Math.max(5000,Math.min(60000,data.priceQuote.validUntil-Date.now()+100)):60000);}}
-      catch(e){if(active&&!signal.aborted){if(e.status===409&&attempt<3)retry=setTimeout(()=>load(attempt+1),2000);else {setHoldingState({id,ticker,error:e.message});schedule();}}}
+      catch(e){if(active&&!signal.aborted){
+        const retryDelay=e.status===409&&attempt<3?2000:e.transientRead&&attempt<2&&!(e.retryAfterMs>10000)?Math.max(attempt===0?2000:5000,e.retryAfterMs||0):null;
+        const failure={id,ticker,error:`Holding refresh failed. ${e.message}`,failedAt:Date.now(),status:e.status,requestId:e.requestId,ray:e.ray};
+        if(retryDelay!==null){setHoldingState({...failure,loading:true});retry=setTimeout(()=>{if(document.hidden){setHoldingState(failure);schedule();}else load(attempt+1);},retryDelay);}
+        else {setHoldingState(failure);schedule(Math.max(60000,e.retryAfterMs||0));}
+      }}
     }
     load();
     return()=>{active=false;controller?.abort();clearTimeout(retry);clearTimeout(timer);};
@@ -174,7 +184,7 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
 
         {instrument&&<section className="pm-order-holding" aria-label="Current holding">
           <div className="pm-section-heading"><h3>Current holding</h3><button type="button" className="text-button" disabled={busy||holding?.loading||position&&now-position.checkedAt<5000} onClick={()=>setHoldingRefresh(value=>value+1)}>Refresh holding</button></div>
-          {holding?.loading||!holding?<p role="status">Checking shares and value…</p>:holding.error?<p role="status">{holding.error}</p>:<>
+          {holding?.error?<><p role="status">{holding.error} {holding.loading?'Retrying the holding check…':'The holding check will retry automatically.'} This does not change any order’s status.</p><details><summary>Refresh details</summary><small>{clockStamp(holding.failedAt)} {zoneLabel}{holding.status?` · HTTP ${holding.status}`:''}{holding.requestId?` · App request ${holding.requestId}`:''}{holding.ray?` · Gateway ${holding.ray}`:''}</small></details></>:holding?.loading||!holding?<p role="status">Checking shares and value…</p>:<>
             <dl><div><dt>Current shares</dt><dd>{shares(position?.shares)}</dd></div><div><dt>Position value · {position?.currency}</dt><dd>{money(position?.value,position?.currency)}</dd></div><div><dt>{position?.priceQuote?.source==='Yahoo Finance'?'Latest market price':'Current price'} · {position?.instrumentCurrency}</dt><dd>{priceMoney(position?.price,position?.instrumentCurrency)}</dd></div><div><dt>Average purchase price</dt><dd>{priceMoney(position?.averagePrice,position?.instrumentCurrency)}</dd></div><div className="pm-holding-profit"><dt>Holding profit / loss · {position?.currency}</dt><dd className={tone(position?.unrealized)}>{money(position?.unrealized,position?.currency)} <small className={tone(position?.unrealized)}>{percent(position?.unrealizedPercent)}</small></dd></div><div><dt>Available to sell</dt><dd>{shares(position?.availableShares)} shares</dd></div><div><dt>Available cash · {position?.currency}</dt><dd>{money(position?.availableCash,position?.currency)}</dd></div></dl>
             {position?.priceQuote&&<p className="pm-history-state">{quoteNote(position.priceQuote)}</p>}{!priceFresh&&position?.price>0&&<p className="pm-history-state">Refresh the quote to update the market estimate.</p>}
             <small>{fresh?'Checked':'Last checked'} {clockStamp(position?.checkedAt)} {zoneLabel}{!fresh?' · Refresh to use shortcuts':''}</small>

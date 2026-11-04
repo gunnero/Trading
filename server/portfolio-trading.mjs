@@ -153,12 +153,17 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   async function position(id,ticker){return exclusive(id,async()=>{
     const ctx=context(id);
     if(typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker))throw fail(400,'Choose a valid broker instrument.');
-    const instrument=(await catalog(id,ctx)).find(item=>item.ticker===ticker);
-    if(!instrument)throw fail(400,'Choose an exact stock or ETF from the broker instrument list.');
-    const {summary,positions,at}=await freshBalances(id,ctx);current(id,ctx);
-    const holding=holdingDetails(positions.find(item=>item.instrument?.ticker===ticker),summary.currency,instrument.currency);
-    const pricing=await referencePrice(instrument,holding,at);current(id,ctx);
-    return {ticker,currency:summary.currency,instrumentCurrency:instrument.currency,...holding,...pricing,availableCash:summary.cash.availableToTrade,checkedAt:at};
+    let stage='instruments';
+    try{
+      const instrument=(await catalog(id,ctx)).find(item=>item.ticker===ticker);
+      if(!instrument)throw fail(400,'Choose an exact stock or ETF from the broker instrument list.');
+      stage='balances';
+      const {summary,positions,at}=await freshBalances(id,ctx);current(id,ctx);
+      const holding=holdingDetails(positions.find(item=>item.instrument?.ticker===ticker),summary.currency,instrument.currency);
+      stage='price';
+      const pricing=await referencePrice(instrument,holding,at);current(id,ctx);
+      return {ticker,currency:summary.currency,instrumentCurrency:instrument.currency,...holding,...pricing,availableCash:summary.cash.availableToTrade,checkedAt:at};
+    }catch(error){error.readStage=stage;throw error;}
   });}
   async function referencePrice(instrument,holding,at){
     if(holding.price>0)return {price:holding.price,priceQuote:{source:'Trading 212',observedAt:null,checkedAt:at,validUntil:at+65000,session:null,delayMinutes:null}};
