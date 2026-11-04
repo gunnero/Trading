@@ -13,6 +13,27 @@ const monday='LVLS 2026-10-26\nQQQ|1HR|S 720-719\nKO|Daily|D 65-64';
 const parse=merged=>parseLevels(merged.levelText,merged.levelSourceDates);
 const savedFields=merged=>({levelText:merged.levelText,levelSourceDates:merged.levelSourceDates});
 
+test('Weekly imports preserve their source timeframe and exact rows through carry-forward',()=>{
+  const raw='LVLS 2026-11-04\nGOOG|Weekly|D 275.74-271.54|D 256.31-252';
+  const merged=mergeLevelSheets(friday,raw),workspace=validateWorkspace({...initialWorkspace(),...savedFields(merged)});
+  const goog=parseLevels(workspace.levelText,workspace.levelSourceDates).instruments.GOOG;
+  assert.equal(goog.timeframe,'Weekly');assert.ok(workspace.levelText.startsWith(raw+'\n'));
+  const next=mergeLevelSheets(workspace.levelText,'LVLS 2026-11-05\nQQQ|Daily|S 700-699',workspace.levelSourceDates);
+  assert.deepEqual(parse(next).instruments.GOOG,{...goog,carriedForward:true});
+  assert.ok(next.levelText.includes(raw.split('\n')[1]));
+});
+
+test('1D daily alias preserves original text, gap zones and carried provenance',()=>{
+  const raw='LVLS 2026-11-03\nDELL|1D|S 514-509|D 364.62-357.07|G 357.07-327.73';
+  const merged=mergeLevelSheets(friday,raw),workspace=validateWorkspace({...initialWorkspace(),...savedFields(merged)});
+  const dell=parseLevels(workspace.levelText,workspace.levelSourceDates).instruments.DELL;
+  assert.equal(dell.timeframe,'Daily');assert.ok(workspace.levelText.startsWith(raw+'\n'));
+  assert.deepEqual(dell.zones.find(z=>z.type==='G'),{type:'G',high:357.07,low:327.73});
+  const next=mergeLevelSheets(workspace.levelText,'LVLS 2026-11-04\nQQQ|Daily|S 700-699',workspace.levelSourceDates);
+  assert.deepEqual(parse(next).instruments.DELL,{...dell,carriedForward:true});
+  assert.ok(next.levelText.includes(raw.split('\n')[1]));
+});
+
 test('15-minute source levels and 4HR aliases survive import, validation and carry-forward unchanged',()=>{
   const incoming='LVLS 2026-10-29\nNQ|15min|S 30370-30332.25|D 29589.5-29572|FUT\nXLV|4HR|D 176.6-175.96';
   const merged=mergeLevelSheets(friday,incoming),workspace=validateWorkspace({...initialWorkspace(),...savedFields(merged)}),sheet=parseLevels(workspace.levelText,workspace.levelSourceDates);
