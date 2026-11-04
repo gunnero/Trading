@@ -30,16 +30,19 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
   useEffect(()=>{setLimit('');setLevelChoice('');},[id,ticker]);
   useEffect(()=>{
     if(!state?.enabled||!ticker||busy||review)return;
-    let active=true,controller,retry;
+    let active=true,controller,retry,timer;
+    function schedule(delay=60000){
+      clearTimeout(timer);timer=setTimeout(()=>{if(document.hidden)schedule();else load();},delay);
+    }
     async function load(attempt=0){
       if(controller&&!controller.signal.aborted)controller.abort();
       controller=new AbortController();const signal=controller.signal;
       setHoldingState({id,ticker,loading:true});setPreset(null);
-      try{const data=await request(id,'/position?'+new URLSearchParams({ticker}),undefined,signal);if(active&&!signal.aborted)setHoldingState({id,ticker,data});}
-      catch(e){if(active&&!signal.aborted){if(e.status===409&&attempt<3)retry=setTimeout(()=>load(attempt+1),2000);else setHoldingState({id,ticker,error:e.message});}}
+      try{const data=await request(id,'/position?'+new URLSearchParams({ticker}),undefined,signal);if(active&&!signal.aborted){setHoldingState({id,ticker,data});schedule(Number.isFinite(data.priceQuote?.validUntil)?Math.max(5000,Math.min(60000,data.priceQuote.validUntil-Date.now()+100)):60000);}}
+      catch(e){if(active&&!signal.aborted){if(e.status===409&&attempt<3)retry=setTimeout(()=>load(attempt+1),2000);else {setHoldingState({id,ticker,error:e.message});schedule();}}}
     }
-    load();const timer=setInterval(()=>{if(!document.hidden)load();},60000);
-    return()=>{active=false;controller?.abort();clearTimeout(retry);clearInterval(timer);};
+    load();
+    return()=>{active=false;controller?.abort();clearTimeout(retry);clearTimeout(timer);};
   },[id,ticker,state?.enabled,busy,review,holdingRefresh]);
   const holding=holdingState?.id===id&&holdingState?.ticker===ticker?holdingState:null,position=holding?.data;
   const fresh=position&&now-position.checkedAt<65000&&now-position.checkedAt>=-5000;
