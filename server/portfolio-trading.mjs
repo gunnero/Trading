@@ -9,6 +9,29 @@ const activeStatuses=['LOCAL','UNCONFIRMED','CONFIRMED','NEW','PARTIALLY_FILLED'
 const terminalStatuses=['CANCELLED','FILLED','REJECTED','REPLACED'];
 const numeric=value=>typeof value==='number'&&Number.isFinite(value);
 function quantity(value){if(!numeric(value)||value<=0||value>1000000||Number(value.toFixed(8))!==value)throw fail(400,'Enter a positive share quantity with up to 8 decimal places.');return value;}
+async function rejectionReason(res,secret){
+  // Read only bounded problem details, never expose the raw upstream response.
+  // A missing/broken error body must not change a definite HTTP rejection into
+  // an uncertain order outcome.
+  try{
+    if(!/\bapplication\/(?:problem\+)?json\b/i.test(res.headers.get('content-type')||''))return null;
+    const reader=res.body.getReader(),chunks=[];let size=0;
+    while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>16384){await reader.cancel();return null;}chunks.push(value);}
+    const body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const problem=body?.error&&typeof body.error==='object'?body.error:body;
+    if(!problem||Array.isArray(problem)||typeof problem!=='object')return null;
+    const redact=value=>{
+      if(typeof value!=='string'||/[<>]/.test(value))return '';
+      for(const item of [Buffer.from(secret.apiKey+':'+secret.apiSecret).toString('base64'),secret.apiKey,secret.apiSecret])if(item)value=value.split(item).join('[redacted]');
+      return value.replace(/(?:authorization|api[_ -]?(?:key|secret)|access[_ -]?token)\s*[:=]\s*\S+/gi,'[redacted]').replace(/[\x00-\x1f\x7f]/g,' ').replace(/\s+/g,' ').trim().slice(0,500);
+    };
+    const rawCode=problem.code||(typeof problem.type==='string'&&problem.type.startsWith('/api-errors/')?problem.type.slice(12):'');
+    const code=typeof rawCode==='string'&&/^[a-zA-Z0-9._-]{1,100}$/.test(rawCode)?redact(rawCode):'';
+    const detail=redact(problem.detail)||redact(problem.message)||(typeof body.error==='string'?redact(body.error):'');
+    if(!code&&!detail)return null;
+    return {code:code||null,message:`Trading 212 rejected this order${detail?': '+detail:'.'}${code?' (code: '+code+')':''}`};
+  }catch{return null;}
+}
 export function orderView(order){
   const ticker=order?.instrument?.ticker||order?.ticker;
   if(!Number.isSafeInteger(order?.id)||order.id<0||typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker)||!['BUY','SELL'].includes(order.side)||!['MARKET','LIMIT','STOP','STOP_LIMIT'].includes(order.type)||![...activeStatuses,...terminalStatuses,'CANCELLING'].includes(order.status)||(!numeric(order.quantity)&&!(order.strategy==='VALUE'&&numeric(order.value))))throw fail(502,'The broker returned an incomplete order. Check Trading 212.');
@@ -45,7 +68,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(!allowed||!bases[secret.environment])throw fail(400,'Unsupported trading request.');
     try{
       const res=await fetcher(bases[secret.environment]+path,{method,redirect:'error',signal:AbortSignal.timeout(timeoutMs),headers:{Accept:'application/json',Authorization:'Basic '+Buffer.from(secret.apiKey+':'+secret.apiSecret).toString('base64'),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-      if(!res.ok){const error=fail(502,res.status===403?'Trading 212 denied access. Enable Metadata, Orders: Read and Orders: Execute permissions for this account.':res.status===400?'Trading 212 rejected the order parameters. Check quantity, cash, price and instrument restrictions.':res.status===429?'Trading 212 is rate limiting requests. Wait before trying again.':res.status===401?'Trading 212 rejected the API credentials. Reconnect this account.':'Trading 212 could not confirm this request.');error.definite=[400,401,403,404,429].includes(res.status);error.upstreamStatus=res.status;const seconds=Number(res.headers.get('retry-after')),reset=Number(res.headers.get('x-ratelimit-reset'));error.retryMs=Math.min(86400000,Math.max(60000,Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(res.headers.get('retry-after'))-now())||0,Number.isFinite(reset)?reset*1000-now():0));if(method==='GET'&&res.status===403)error.message=path.includes('/history/')?'Final status needs History: Orders permission on the API key.':'Trading 212 denied read access. Check this account’s API read permissions.';throw error;}
+      if(!res.ok){const error=fail(502,res.status===403?'Trading 212 denied access. Enable Metadata, Orders: Read and Orders: Execute permissions for this account.':res.status===400?'Trading 212 rejected the request without a readable reason. Check the order in Trading 212 before trying again.':res.status===429?'Trading 212 is rate limiting requests. Wait before trying again.':res.status===401?'Trading 212 rejected the API credentials. Reconnect this account.':'Trading 212 could not confirm this request.');error.definite=[400,401,403,404,429].includes(res.status);error.upstreamStatus=res.status;const seconds=Number(res.headers.get('retry-after')),reset=Number(res.headers.get('x-ratelimit-reset'));error.retryMs=Math.min(86400000,Math.max(60000,Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(res.headers.get('retry-after'))-now())||0,Number.isFinite(reset)?reset*1000-now():0));if(method==='POST'&&res.status===400){const reason=await rejectionReason(res,secret);if(reason){error.message=reason.message;error.brokerCode=reason.code;}}if(method==='GET'&&res.status===403)error.message=path.includes('/history/')?'Final status needs History: Orders permission on the API key.':'Trading 212 denied read access. Check this account’s API read permissions.';throw error;}
       if(method==='DELETE')return null;
       if(!res.headers.get('content-type')?.includes('application/json'))throw Error('Invalid response');
       const reader=res.body.getReader(),chunks=[];let size=0;
@@ -193,7 +216,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
         tracker.record(id,ctx,order);
         result={...d,order,message:order.status==='FILLED'?'Order filled.':order.status==='REJECTED'?'Order rejected by Trading 212.':'Order received by Trading 212. Its status will update automatically.'};}
       const state=result.order?.status==='REJECTED'?'REJECTED':'ACCEPTED';if(!isClosed())update(row.token,state,result);return {token:row.token,state,...result};
-    }catch(error){const state=error.definite?'REJECTED':'UNKNOWN',detail={...d,message:error.definite?error.message:'The result is uncertain. Do not repeat this order. Check orders and trade history in Trading 212, then mark this attempt reviewed.'};if(!isClosed()){update(row.token,state,detail);if(state==='REJECTED')onRejected?.(id,ctx.record.generation,{...detail,token:row.token});}return {token:row.token,state,...detail};}
+    }catch(error){const state=error.definite?'REJECTED':'UNKNOWN',detail={...d,...(error.definite?{brokerStatus:error.upstreamStatus,brokerCode:error.brokerCode||null}:{}),message:error.definite?error.message:'The result is uncertain. Do not repeat this order. Check orders and trade history in Trading 212, then mark this attempt reviewed.'};if(!isClosed()){update(row.token,state,detail);if(state==='REJECTED')onRejected?.(id,ctx.record.generation,{...detail,token:row.token});}return {token:row.token,state,...detail};}
   });}
   function acknowledge(id,input){context(id,false);const row=saved(input.token);if(!row||row.account_id!==id||row.state!=='UNKNOWN'||input.checkedBroker!==true)throw fail(400,'Confirm you checked this attempt in Trading 212.');update(row.token,'REVIEWED',{...row.detail,message:'Marked reviewed after checking Trading 212. This does not assert an execution outcome.'});return read(id);}
   function assertIdle(id){if(locks.has(id))throw fail(409,'Wait for the current order operation before changing this account.');}

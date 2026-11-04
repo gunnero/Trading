@@ -59,6 +59,29 @@ test('definite broker rejections and unmatched replies have distinct safe outcom
  for(const status of [400,401,403,429,500]){const f=fixture(t);f.enable();const review=await f.service.preview('a',input);f.source.write=()=>json({secret:'private upstream'},status);const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,status===500?'UNKNOWN':'REJECTED');assert.ok(!result.message.includes('private'));assert.equal(f.writes().length,1);}
  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);f.source.write=()=>json({id:75,ticker:'OTHER',side:'BUY',type:'LIMIT',quantity:2.5,status:'NEW'});assert.equal((await f.service.submit('a',{token:review.token,confirmed:true})).state,'UNKNOWN');
 });
+test('broker problem details survive rejection and restart without resending or changing quantity',async t=>{
+ for(const wrapped of [false,true]){
+  const f=fixture(t);f.enable();const review=await f.service.preview('a',{...input,type:'MARKET',quantity:1.23456789});
+  const problem={type:'/api-errors/quantity-precision-mismatch',title:'Error while placing the order',status:400,detail:'invalid quantity precision 4'};
+  f.source.write=()=>new Response(JSON.stringify(wrapped?{success:false,error:problem}:problem),{status:400,headers:{'content-type':'application/problem+json'}});
+  const result=await f.service.submit('a',{token:review.token,confirmed:true});
+  assert.equal(result.state,'REJECTED');assert.equal(result.brokerCode,'quantity-precision-mismatch');assert.equal(result.brokerStatus,400);assert.match(result.message,/invalid quantity precision 4/);
+  assert.equal(JSON.parse(f.writes()[0].body).quantity,1.23456789);f.restart();assert.equal(f.service.read('a').attempts[0].message,result.message);
+  assert.equal((await f.service.submit('a',{token:review.token,confirmed:true})).message,result.message);assert.equal(f.writes().length,1);assert.equal(f.service.read('a').blocked,false);
+ }
+});
+test('broker rejection exposes only bounded text fields and redacts credentials',async t=>{
+ const f=fixture(t);f.enable();const review=await f.service.preview('a',input);
+ f.source.write=()=>json({code:'InsufficientFunds',message:'Available cash too low. fake-key fake-secret '+Buffer.from('fake-key:fake-secret').toString('base64')+' authorization=hidden '+ 'a'.repeat(700),secret:'private upstream',stack:'private stack'},400);
+ const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.match(result.message,/Available cash too low/);assert.equal(result.brokerCode,'InsufficientFunds');
+ assert.doesNotMatch(JSON.stringify(result),/fake-key|fake-secret|ZmFrZS1rZXk6ZmFrZS1zZWNyZXQ=|hidden|private upstream|private stack/);assert.ok(result.message.length<650);assert.match(result.message,/redacted/);
+});
+test('invalid, oversized and interrupted error bodies preserve a definite rejection without leaking payloads',async t=>{
+ for(const response of [()=>new Response('<html>private upstream</html>',{status:400}),()=>json(null,400),()=>json(['private upstream'],400),()=>new Response('{bad private upstream',{status:400,headers:{'content-type':'application/json'}}),()=>json({detail:'private upstream '.repeat(2000)},400),()=>json({detail:'<html>private upstream</html>'},400),()=>new Response(new ReadableStream({start(controller){controller.error(Error('interrupted'));}}),{status:400,headers:{'content-type':'application/json'}})]){
+  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);f.source.write=response;
+  const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,'REJECTED');assert.equal(result.brokerStatus,400);assert.doesNotMatch(result.message,/private upstream|interrupted/);assert.equal(f.writes().length,1);
+ }
+});
 test('concurrent submissions, disconnect and disable are blocked while a write is pending',async t=>{
  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);let release;f.source.delay=new Promise(r=>release=r);
  const task=f.service.submit('a',{token:review.token,confirmed:true});await new Promise(r=>setImmediate(r));assert.equal(f.writes().length,1);
