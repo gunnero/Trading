@@ -24,3 +24,14 @@
 .pm-order-holding .green,.pm-order-review .green{color:var(--green)}.pm-order-holding .red,.pm-order-review .red{color:var(--red)}
 
 .pm-order-session{min-width:0}.pm-order-session select{min-width:0;width:100%}
+
+/* Trading uses the normal page scroll and available content width. */
+.pm-trade-panel{padding:24px;max-width:1120px;margin:0 auto}
+.pm-trade-page .page-header h1:focus{outline:none}
+.pm-trading,.pm-trading form,.pm-trading label,.pm-trade-fields>*{min-width:0}
+.pm-trading input:not([type=checkbox]),.pm-trading select{width:100%;min-width:0;min-height:42px;padding:9px 12px;background:#0c171c;border:1px solid var(--border);border-radius:4px;color:#e7eef0;font-size:14px}
+.pm-trade-fields{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))}
+.pm-trade-page .pm-order-review dl{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+.pm-trade-page .pm-order-holding dl{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))}
+.pm-trade-page .pm-trading-account{overflow-wrap:anywhere}
+@media(max-width:600px){.pm-trade-panel{padding:16px}.pm-trading input:not([type=checkbox]),.pm-trading select{font-size:16px}}

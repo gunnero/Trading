@@ -218,7 +218,7 @@ function SessionDesk({workspace}) {
           <WatchlistTable compact watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
-        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onActivity={()=>navigate('activity')} onInsights={()=>navigate('insights')}/></React.Suspense>}
+        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager route={route} onNavigate={navigate} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onActivity={()=>navigate('activity')} onInsights={()=>navigate('insights')}/></React.Suspense>}
         {section === 'insights' && <React.Suspense fallback={<p role="status">Loading insights…</p>}><PortfolioInsights watchlist={watchlist} tab={['alerts','reports','monitor','allocation','performance','calendar','annual'].includes(route.split('/')[1])?route.split('/')[1]:'exposure'} onTab={tab=>navigate(`insights/${tab}`)} onPortfolios={()=>navigate('portfolio')} onJournal={()=>navigate('journal/broker')}/></React.Suspense>}
         {section === 'activity' && <React.Suspense fallback={<p role="status">Loading activity…</p>}><PortfolioActivity notifications={notifications} onPortfolios={()=>navigate('portfolio')}/></React.Suspense>}
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections')}/></React.Suspense>}

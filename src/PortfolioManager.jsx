@@ -8,7 +8,7 @@ import {portfolioListing,portfolioListingChoices,portfolioHoldingLabel} from './
 import {CompanyDetail} from './CompanyDetail';
 import {PortfolioPosition} from './PortfolioPosition';
 import {PortfolioHistory} from './PortfolioHistory';
-import {PortfolioTrading} from './PortfolioTrading';
+import {PortfolioTradePage,portfolioTradeRoute} from './PortfolioTradePage';
 import {usePortfolioHours,HoursButton,StockHours} from './PortfolioHours';
 import {usePortfolioPrivacy,PortfolioPrivacyControls,PortfolioAccountPrivacy} from './PortfolioPrivacy';
 import './portfolio.css';
@@ -31,12 +31,13 @@ function Dialog({title,onClose,children,wide=false}){
   return <dialog ref={ref} className={`modal ${wide?'wide company-modal':'pm-dialog'}`} aria-labelledby="pm-dialog-title" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose();}}><div className="modal-inner"><header className="modal-header"><h2 id="pm-dialog-title">{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
 }
 
-export default function PortfolioManager({sheet,watchlist,setupInterval,onActivity,onInsights}){
+export default function PortfolioManager({route='portfolio',onNavigate,sheet,watchlist,setupInterval,onActivity,onInsights}){
   const privacy=usePortfolioPrivacy();
+  const isTradePage=route.split('/')[1]==='trade';
   const filter=privacy.filter,selected=privacy.account;
   const [state,setState]=useState(null),[error,setError]=useState(''),[dialog,setDialog]=useState(null),[refreshing,setRefreshing]=useState(false),[search,setSearch]=useState('');
-  const [holdingView,setHoldingView]=useState(null),[tradeView,setTradeView]=useState(null);
-  const current=useRef(null),active=useRef(false),syncing=useRef(false),dialogRef=useRef(null);dialogRef.current=dialog||tradeView;
+  const [holdingView,setHoldingView]=useState(null);
+  const current=useRef(null),active=useRef(false),syncing=useRef(false),dialogRef=useRef(null);dialogRef.current=dialog||isTradePage;
   const {clockStamp,zoneLabel}=useDisplayTime();
   const accept=useCallback(result=>{if(active.current&&(!current.current||result.revision>=current.current.revision)){current.current=result;setState(result);}},[]);
   const load=useCallback(async()=>{try{accept(await request());if(active.current)setError('');}catch(e){if(active.current)setError(e.message);}},[accept]);
@@ -51,22 +52,24 @@ export default function PortfolioManager({sheet,watchlist,setupInterval,onActivi
     }catch(e){if(active.current)setError(e.message);}
     finally{syncing.current=false;if(active.current)setRefreshing(false);}
   },[accept]);
-  useEffect(()=>{active.current=true;refresh();const timer=setInterval(refresh,60000),visible=()=>{if(!document.hidden)refresh();};document.addEventListener('visibilitychange',visible);return()=>{active.current=false;clearInterval(timer);document.removeEventListener('visibilitychange',visible);};},[refresh]);
+  useEffect(()=>{active.current=true;if(isTradePage)load();else refresh();const timer=setInterval(refresh,60000),visible=()=>{if(!document.hidden)refresh();};document.addEventListener('visibilitychange',visible);return()=>{active.current=false;clearInterval(timer);document.removeEventListener('visibilitychange',visible);};},[refresh,load,isTradePage]);
   async function mutate(path,body,method){const result=await request(path,{...body,revision:current.current.revision},method);accept(result);return result;}
   const people=state?.data.people||[],allAccounts=state?.data.accounts||[],accounts=allAccounts.filter(a=>filter==='all'||!people.some(p=>p.id===filter)||a.personId===filter),account=accounts.find(a=>a.id===selected)||accounts[0],personName=id=>(id===account?.personId?privacy.forAccount(account.id):privacy).person(people.find(p=>p.id===id)?.name||'Unknown person');
   const selectedPrivacy=privacy.forAccount(account?.id),{money}=accounts.length===1?selectedPrivacy:privacy;
   const totals=portfolioTotals(accounts),unknown=accounts.filter(a=>!a.snapshot||a.snapshot.accountValue===null).length;
   const returns=portfolioReturnTotals(accounts);
   const viewedAccount=allAccounts.find(a=>a.id===holdingView?.accountId),viewedHolding=viewedAccount?.snapshot?.holdings.find(h=>h.ticker===holdingView?.ticker);
-  const tradedAccount=allAccounts.find(a=>a.id===tradeView?.accountId);
   useEffect(()=>{
     if(!state)return;
     const validFilter=filter==='all'||people.some(p=>p.id===filter)?filter:'all';
     if(validFilter!==filter||selected!==(account?.id||null))privacy.update({filter:validFilter,account:account?.id||null});
   },[state,filter,selected,account?.id]);
-  useEffect(()=>{if(privacy.privateMode){setDialog(null);setTradeView(null);}},[privacy.privateMode]);
+  useEffect(()=>{if(privacy.privateMode)setDialog(null);},[privacy.privateMode]);
+  useEffect(()=>{setDialog(null);setHoldingView(null);},[route]);
   const stamp=a=>a.snapshot?.source==='api'?(a.lastSuccess?`Last sync ${clockStamp(a.lastSuccess)}`:'Never synced'):a.snapshot?.observedAt?`Observed ${clockStamp(a.snapshot.observedAt)}`:a.snapshot?'Source date unknown':'Connect or import a snapshot';
   function openAccount(a){privacy.update({account:a.id});setSearch('');}
+  function openTrade(a,holding,side){setHoldingView(null);onNavigate(portfolioTradeRoute(a.id,holding,side));}
+  if(isTradePage)return <PortfolioTradePage route={route} state={state} error={error} onReload={load} onBack={a=>{if(a)privacy.update({account:a.id,filter:filter==='all'?'all':a.personId});onNavigate('portfolio');}} sheet={sheet} watchlist={watchlist}/>;
   return <div className="pm-page">
     <PageHeader title="Portfolio Manager" description="Your friends’ portfolios, together in one place." actions={<>{onInsights&&<button className="button outline" onClick={onInsights}>Portfolio insights</button>}{onActivity&&<button className="button outline" onClick={onActivity}>Activity & alerts</button>}<button className="button outline" disabled={refreshing||!!dialog} onClick={refresh}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
     <PortfolioPrivacyControls/>
@@ -77,7 +80,7 @@ export default function PortfolioManager({sheet,watchlist,setupInterval,onActivi
       <p className="pm-caption">Totals use each account’s last available snapshot, which may have a different date. Missing accounts are excluded; demo accounts never enter totals.</p>
       <div className="pm-section-heading"><div><h2>{filter==='all'?'People & accounts':`${personName(filter)}’s accounts`}</h2><p>Select an account to see its holdings and connection.</p></div><button className="button outline" disabled={privacy.privateMode||!people.length} onClick={()=>setDialog({type:'account',personId:filter!=='all'?filter:people[0]?.id})}><Plus size={17}/>Add account</button></div>
       {!people.length?<div className="panel pm-empty"><Users size={36}/><h3>Start with a person</h3><p>Add a friend, then their Trading 212 or other platform account. Each account stays separate.</p><button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'person'})}>Add your first person</button></div>:!accounts.length?<div className="panel pm-empty"><Briefcase size={32}/><h3>No accounts yet</h3><p>Add a platform account to connect a broker or import a saved snapshot.</p></div>:<div className="pm-account-grid">{accounts.map(a=><PortfolioAccountPrivacy key={a.id} accountId={a.id}><button className={`pm-account-card panel ${account?.id===a.id?'selected':''}`} aria-pressed={account?.id===a.id} onClick={()=>openAccount(a)}><div className="pm-account-identity"><span className="pm-avatar">{privacy.forAccount(a.id).hideNames?<Users size={22}/>:initials(personName(a.personId))}</span><div><strong>{personName(a.personId)}</strong><small>{a.platform} · {privacy.forAccount(a.id).label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</small></div>{account?.id===a.id&&<CheckCircle size={18}/>}</div><strong className="pm-card-value">{privacy.forAccount(a.id).money(a.snapshot?.accountValue,a.snapshot?.currency)}</strong><AccountReturn snapshot={a.snapshot}/><span className={`pm-status ${a.connected&&!a.error&&a.snapshot?.source==='api'&&portfolioStatus(a).includes('Auto')?'green':'amber'}`}>{portfolioStatus(a)}</span><small className="pm-account-time">{stamp(a)}</small></button></PortfolioAccountPrivacy>)}</div>}
-      {account&&<PortfolioAccountPrivacy accountId={account.id}><section className="panel pm-detail" aria-label="Selected portfolio"><header className="pm-detail-header"><div><span className="pm-eyebrow">{personName(account.personId)}</span><h2>{account.platform} <span> / {selectedPrivacy.label(account.label,account.id)}</span></h2></div><div className="pm-actions">{account.connected&&<button className="button outline" disabled={privacy.privateMode} onClick={()=>setTradeView({accountId:account.id})}>Trade / orders</button>}<button className="button outline" disabled={privacy.privateMode} onClick={()=>setDialog({type:'account',account})}><PencilSimple size={16}/>Edit account</button>{account.platform==='Trading 212'&&<button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'connect',account})}><LinkSimple size={17}/>{account.connected?'Connection':'Connect account'}</button>}</div></header>
+      {account&&<PortfolioAccountPrivacy accountId={account.id}><section className="panel pm-detail" aria-label="Selected portfolio"><header className="pm-detail-header"><div><span className="pm-eyebrow">{personName(account.personId)}</span><h2>{account.platform} <span> / {selectedPrivacy.label(account.label,account.id)}</span></h2></div><div className="pm-actions">{account.connected&&<button className="button outline" disabled={privacy.privateMode} onClick={()=>openTrade(account)}>Trade / orders</button>}<button className="button outline" disabled={privacy.privateMode} onClick={()=>setDialog({type:'account',account})}><PencilSimple size={16}/>Edit account</button>{account.platform==='Trading 212'&&<button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'connect',account})}><LinkSimple size={17}/>{account.connected?'Connection':'Connect account'}</button>}</div></header>
         <div className="pm-source"><span className="pm-status amber">{portfolioStatus(account)}</span><span>{stamp(account)} · {zoneLabel}</span>{account.connected&&<span>60-second refresh · broker prices may be delayed</span>}</div>
         {account.error&&<p className="pm-alert" role="status">{account.error}{account.retryAt&&` Next attempt after ${clockStamp(account.retryAt)}.`}</p>}
         {account.snapshot?<><PortfolioHistory key={account.id} account={account} watchlist={watchlist}/>
@@ -88,8 +91,7 @@ export default function PortfolioManager({sheet,watchlist,setupInterval,onActivi
       </section></PortfolioAccountPrivacy>}
     </>}
     {dialog&&!privacy.privateMode&&<PortfolioDialog key={`${dialog.type}-${dialog.account?.id||dialog.person?.id||'new'}`} dialog={dialog} people={people} accounts={allAccounts} mutate={mutate} reload={load} onClose={()=>setDialog(null)} onSelect={id=>{privacy.update({filter:'all',account:id});}}/>}
-    {tradeView&&!privacy.privateMode&&tradedAccount&&<Dialog title="Trade / orders" onClose={()=>setTradeView(null)}><PortfolioTrading key={tradedAccount.id} account={tradedAccount} owner={personName(tradedAccount.personId)} initialHolding={tradeView.holding} initialSide={tradeView.side} sheet={sheet} watchlist={watchlist} onPortfolioChange={load}/></Dialog>}
-    {holdingView&&<PortfolioAccountPrivacy accountId={viewedAccount?.id}><Dialog wide title={`${viewedHolding?.name||holdingView.ticker} · holding details`} onClose={()=>setHoldingView(null)}>{viewedHolding?<HoldingDetail key={`${holdingView.accountId}:${holdingView.ticker}`} holding={viewedHolding} account={viewedAccount} owner={personName(viewedAccount.personId)} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onTrade={privacy.privateMode?null:side=>{setTradeView({accountId:viewedAccount.id,holding:viewedHolding,side});setHoldingView(null);}}/>:<p className="pm-no-results">This holding is no longer in the latest account snapshot.</p>}</Dialog></PortfolioAccountPrivacy>}
+    {holdingView&&<PortfolioAccountPrivacy accountId={viewedAccount?.id}><Dialog wide title={`${viewedHolding?.name||holdingView.ticker} · holding details`} onClose={()=>setHoldingView(null)}>{viewedHolding?<HoldingDetail key={`${holdingView.accountId}:${holdingView.ticker}`} holding={viewedHolding} account={viewedAccount} owner={personName(viewedAccount.personId)} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onTrade={privacy.privateMode?null:side=>openTrade(viewedAccount,viewedHolding,side)}/>:<p className="pm-no-results">This holding is no longer in the latest account snapshot.</p>}</Dialog></PortfolioAccountPrivacy>}
   </div>;
 }
 
