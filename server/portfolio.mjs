@@ -158,10 +158,10 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
     try{
       if(req.method==='GET'&&path==='/api/portfolio'){res.end(JSON.stringify(read()));return;}
-      const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|settings|preview|submit|acknowledge))?$/);
+      const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|position|settings|preview|submit|acknowledge))?$/);
       if(tradeMatch&&req.method==='GET'){
         const [,id,action]=tradeMatch;
-        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q')||''):action==='orders'?await trading.pending(id):null;
+        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q')||''):action==='orders'?await trading.pending(id):action==='position'?await trading.position(id,url.searchParams.get('ticker')):null;
         if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));return;
       }
       const historyMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/history(?:\/(sync|rebuild|rebuild\/sync))?$/);

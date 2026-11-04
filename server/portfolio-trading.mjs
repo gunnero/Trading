@@ -68,7 +68,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const ctx=context(id),key=id+':orders';if((readBackoff.get(key)||0)>now())throw fail(429,'Wait five seconds before refreshing orders.');readBackoff.set(key,now()+5000);
     const raw=await broker('/equity/orders',ctx.secret);current(id,ctx);if(!Array.isArray(raw)||raw.length>1000)throw fail(502,'The pending order list is unavailable.');return {orders:raw.map(orderView),checkedAt:now()};
   }
-  async function validate(id,input,ctx){
+  async function freshBalances(id,ctx){
     let fresh=balances.get(id);
     if(!fresh||fresh.generation!==ctx.record.generation||now()-fresh.at>5000){
       const at=now(),summary=await broker('/equity/account/summary',ctx.secret);current(id,ctx);
@@ -77,6 +77,23 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     }
     const {summary,positions}=fresh;
     if(String(summary?.id)!==ctx.a.snapshot.brokerId||summary.currency!==ctx.a.snapshot.currency||!numeric(summary.cash?.availableToTrade))throw fail(409,'The broker account identity or currency changed. Reconnect before trading.');
+    if(!Array.isArray(positions))throw fail(502,'Available shares could not be checked.');
+    return fresh;
+  }
+  async function position(id,ticker){return exclusive(id,async()=>{
+    const ctx=context(id);
+    if(typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker))throw fail(400,'Choose a valid broker instrument.');
+    const instrument=(await catalog(id,ctx)).find(item=>item.ticker===ticker);
+    if(!instrument)throw fail(400,'Choose an exact stock or ETF from the broker instrument list.');
+    const {summary,positions,at}=await freshBalances(id,ctx);current(id,ctx);
+    const holding=positions.find(item=>item.instrument?.ticker===ticker),nonnegative=value=>numeric(value)&&value>=0?value:null;
+    const shares=holding?nonnegative(holding.quantity):0,available=holding?nonnegative(holding.quantityAvailableForTrading):0;
+    return {ticker,currency:summary.currency,instrumentCurrency:instrument.currency,shares,availableShares:available!==null&&shares!==null&&available<=shares?available:null,
+      value:holding?(holding.walletImpact?.currency===summary.currency?nonnegative(holding.walletImpact.currentValue):null):0,
+      price:holding&&holding.instrument?.currency===instrument.currency?nonnegative(holding.currentPrice):null,availableCash:summary.cash.availableToTrade,checkedAt:at};
+  });}
+  async function validate(id,input,ctx){
+    const {summary,positions}=await freshBalances(id,ctx);
     if(input.action==='CANCEL'){
       if(!Number.isSafeInteger(input.orderId)||input.orderId<0)throw fail(400,'Choose a valid pending order.');
       const order=orderView(await broker('/equity/orders/'+input.orderId,ctx.secret));current(id,ctx);
@@ -129,5 +146,5 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   function acknowledge(id,input){context(id,false);const row=saved(input.token);if(!row||row.account_id!==id||row.state!=='UNKNOWN'||input.checkedBroker!==true)throw fail(400,'Confirm you checked this attempt in Trading 212.');update(row.token,'REVIEWED',{...row.detail,message:'Marked reviewed after checking Trading 212. This does not assert an execution outcome.'});return read(id);}
   function assertIdle(id){if(locks.has(id))throw fail(409,'Wait for the current order operation before changing this account.');}
   function remove(id){assertIdle(id);catalogs.delete(id);balances.delete(id);db.prepare('DELETE FROM portfolio_trading_settings WHERE account_id=?').run(id);db.prepare('DELETE FROM portfolio_order_attempts WHERE account_id=?').run(id);}
-  return {read,configure,search,pending,preview,submit,acknowledge,assertIdle,remove};
+  return {read,configure,search,pending,position,preview,submit,acknowledge,assertIdle,remove};
 }

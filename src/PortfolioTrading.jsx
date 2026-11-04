@@ -1,8 +1,10 @@
 import {useEffect,useState} from 'react';
 import {apiFetch} from './auth-client';
 import {useDisplayTime} from './DisplayTime';
+import {orderPercentage} from './data/portfolio-order-size.mjs';
 
 const money=(value,currency)=>Number.isFinite(value)&&currency?new Intl.NumberFormat('en-US',{style:'currency',currency}).format(value):'—';
+const shares=value=>Number.isFinite(value)?new Intl.NumberFormat('en-US',{maximumFractionDigits:8}).format(value):'—';
 async function request(id,path='',body,signal){
   const res=await apiFetch(`/api/portfolio/accounts/${id}/trading${path}`,{method:body===undefined?'GET':'POST',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000),...(body===undefined?{}:{headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify(body)})});
   const data=await res.json();if(!res.ok)throw Error(data.message||'The trading request could not be completed.');return data;
@@ -10,6 +12,28 @@ async function request(id,path='',body,signal){
 export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'}){
   const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[authorized,setAuthorized]=useState(false),[query,setQuery]=useState(initialHolding?.ticker||''),[matches,setMatches]=useState([]),[instrument,setInstrument]=useState(null),[side,setSide]=useState(initialSide),[type,setType]=useState('LIMIT'),[quantity,setQuantity]=useState(''),[limit,setLimit]=useState(''),[validity,setValidity]=useState('DAY'),[review,setReview]=useState(null),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState(null),[orders,setOrders]=useState(null),[checkedAttempt,setCheckedAttempt]=useState(null),[now,setNow]=useState(Date.now());
   const {clockStamp,zoneLabel}=useDisplayTime(),id=account.id;
+  const [holdingState,setHoldingState]=useState(null),[holdingRefresh,setHoldingRefresh]=useState(0),[preset,setPreset]=useState(null);
+  const ticker=instrument?.ticker;
+  useEffect(()=>{setQuantity('');setPreset(null);},[id,ticker,side]);
+  useEffect(()=>{
+    if(!state?.enabled||!ticker||busy||review)return;
+    let active=true,controller;
+    async function load(){
+      if(controller&&!controller.signal.aborted)controller.abort();
+      controller=new AbortController();const signal=controller.signal;
+      setHoldingState({id,ticker,loading:true});setPreset(null);
+      try{const data=await request(id,'/position?'+new URLSearchParams({ticker}),undefined,signal);if(active&&!signal.aborted)setHoldingState({id,ticker,data});}
+      catch(e){if(active&&!signal.aborted)setHoldingState({id,ticker,error:e.message});}
+    }
+    load();const timer=setInterval(()=>{if(!document.hidden)load();},60000);
+    return()=>{active=false;controller?.abort();clearInterval(timer);};
+  },[id,ticker,state?.enabled,busy,review,holdingRefresh]);
+  const holding=holdingState?.id===id&&holdingState?.ticker===ticker?holdingState:null,position=holding?.data;
+  const fresh=position&&now-position.checkedAt<65000&&now-position.checkedAt>=-5000;
+  const sameCurrency=instrument?.currency===position?.currency;
+  const sizingPrice=type==='LIMIT'?Number(limit):position?.price;
+  const percentageQuantity=percent=>fresh&&sameCurrency&&!busy?orderPercentage({side,percent,availableShares:position.availableShares,availableCash:position.availableCash,price:sizingPrice}):'';
+  const estimate=fresh&&sameCurrency&&Number(quantity)>0&&Number(sizingPrice)>0?Number(quantity)*sizingPrice:null;
   useEffect(()=>{let active=true;request(id).then(data=>{if(active)setState(data);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[id]);
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
   useEffect(()=>{
@@ -46,13 +70,26 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
         <label className="pm-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I confirm this {review.environment==='demo'?'demo':'real-money'} {review.action==='CANCEL'?'cancellation':review.side.toLowerCase()+' order'} for the account shown above.</label>
         <div className="pm-actions"><button className="button primary" disabled={!confirmed||busy||seconds===0||state.blocked} onClick={()=>run(submit)}>{review.action==='CANCEL'?'Confirm cancellation':`Confirm ${review.environment==='demo'?'demo':'live'} ${review.side.toLowerCase()}`}</button><button className="button outline" disabled={busy} onClick={()=>setReview(null)}>Back</button><small>{seconds?`Review expires in ${seconds}s`:'Review expired. Go back and review again.'}</small></div>
       </div>:<form onSubmit={e=>{e.preventDefault();run(()=>prepare({side,type,ticker:instrument?.ticker,quantity:Number(quantity),limitPrice:Number(limit),timeValidity:validity}));}}>
-        <div className="pm-trade-fields"><label>Side<select value={side} onChange={e=>setSide(e.target.value)}><option value="BUY">Buy</option><option value="SELL">Sell</option></select></label><label>Order type<select value={type} onChange={e=>setType(e.target.value)}><option value="LIMIT">Limit</option><option value="MARKET">Market</option></select></label></div>
+        <div className="pm-trade-fields"><label>Side<select value={side} onChange={e=>setSide(e.target.value)}><option value="BUY">Buy</option><option value="SELL">Sell</option></select></label><label>Order type<select value={type} onChange={e=>{setType(e.target.value);setPreset(null);}}><option value="LIMIT">Limit</option><option value="MARKET">Market</option></select></label></div>
         <label>Find a stock or ETF<input aria-label="Find a stock or ETF" value={query} onChange={e=>{setQuery(e.target.value);setInstrument(null);}} placeholder="Name, broker ticker or ISIN" autoComplete="off"/></label>
         {!instrument&&matches.length>0&&<div className="pm-instrument-results" aria-label="Broker instruments">{matches.map(item=><button type="button" key={item.ticker} onClick={()=>{setInstrument(item);setMatches([]);}}><strong>{item.name}</strong><span>{item.ticker} · {item.currency} · {item.type}</span></button>)}</div>}
         {instrument&&<p className="pm-selected-instrument">{instrument.name} · {instrument.ticker} · {instrument.currency} <button type="button" className="text-button" onClick={()=>setInstrument(null)}>Change</button></p>}
-        <div className="pm-trade-fields"><label>Shares<input aria-label="Order shares" required type="number" min="0.00000001" step="0.00000001" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label>{type==='LIMIT'&&<><label>Limit price · {account.snapshot?.currency}<input aria-label="Order limit price" required type="number" min="0.00000001" step="any" value={limit} onChange={e=>setLimit(e.target.value)}/></label><label>Duration<select value={validity} onChange={e=>setValidity(e.target.value)}><option value="DAY">Day</option><option value="GOOD_TILL_CANCEL">Good until cancelled</option></select></label></>}</div>
+        {instrument&&<section className="pm-order-holding" aria-label="Current holding">
+          <div className="pm-section-heading"><h3>Current holding</h3><button type="button" className="text-button" disabled={busy||holding?.loading||position&&now-position.checkedAt<5000} onClick={()=>setHoldingRefresh(value=>value+1)}>Refresh holding</button></div>
+          {holding?.loading||!holding?<p role="status">Checking shares and value…</p>:holding.error?<p role="status">{holding.error}</p>:<>
+            <dl><div><dt>Current shares</dt><dd>{shares(position?.shares)}</dd></div><div><dt>Position value · {position?.currency}</dt><dd>{money(position?.value,position?.currency)}</dd></div><div><dt>Available to sell</dt><dd>{shares(position?.availableShares)} shares</dd></div><div><dt>Available cash · {position?.currency}</dt><dd>{money(position?.availableCash,position?.currency)}</dd></div></dl>
+            <small>{fresh?'Checked':'Last checked'} {clockStamp(position?.checkedAt)} {zoneLabel}{!fresh?' · Refresh to use shortcuts':''}</small>
+          </>}
+        </section>}
+        <div className="pm-trade-fields"><label>Shares<input aria-label="Order shares" required type="number" min="0.00000001" step="0.00000001" value={quantity} onChange={e=>{setQuantity(e.target.value);setPreset(null);}}/></label>{type==='LIMIT'&&<><label>Limit price · {account.snapshot?.currency}<input aria-label="Order limit price" required type="number" min="0.00000001" step="any" value={limit} onChange={e=>{setLimit(e.target.value);setPreset(null);}}/></label><label>Duration<select value={validity} onChange={e=>setValidity(e.target.value)}><option value="DAY">Day</option><option value="GOOD_TILL_CANCEL">Good until cancelled</option></select></label></>}</div>
+        {instrument&&<div className="pm-order-sizing">
+          <span id="pm-size-label">{side==='SELL'?'% of available shares':'% of available cash'}</span>
+          <div className="pm-order-percentages" role="group" aria-labelledby="pm-size-label">{[25,50,75,100].map(percent=><button key={percent} type="button" disabled={!percentageQuantity(percent)||state.blocked} aria-pressed={preset===percent} onClick={()=>{setQuantity(percentageQuantity(percent));setPreset(percent);}}>{percent}%</button>)}</div>
+          {side==='SELL'?<small>Reserved shares and shares in pies may be excluded. 100% uses only shares available to sell.</small>:<small>{Number(sizingPrice)>0?'Cash sizing is an estimate before fees; market prices can move.':'Enter a limit price to size by cash when a current price is unavailable.'}</small>}
+          <p className="pm-order-estimate">Estimated order value <strong>{money(estimate,position?.currency)}</strong></p>
+        </div>}
         <p className="pm-history-state">Trades use share quantities. This version supports stocks and ETFs in the primary account currency. Sell quantities use shares available for trading; shares in pies or reserved orders may be excluded.</p>
-        <button className="button primary" disabled={busy||!instrument||state.blocked} type="submit">{busy?'Checking broker…':'Review order'}</button>
+        <button className="button primary" disabled={busy||!instrument||holding?.loading||state.blocked} type="submit">{busy?'Checking broker…':'Review order'}</button>
       </form>}
       {result&&<div className={`pm-order-result ${result.state==='UNKNOWN'?'pm-alert':''}`} role="status"><strong>{result.state==='UNKNOWN'?'Result uncertain':result.state==='REJECTED'?'Order rejected':result.action==='CANCEL'?'Cancellation requested':'Broker response'}</strong><p>{result.message}</p>{result.order&&<p>#{result.order.id} · {result.order.status} · {result.order.filledQuantity??'—'} shares filled</p>}</div>}
       <div className="pm-section-heading pm-orders-heading"><h3>Pending orders</h3><button className="button outline" disabled={busy} onClick={()=>run(pending)}>Refresh orders</button></div>
