@@ -22,15 +22,16 @@ export function marketBuyCashLimit(availableCash){
 }
 export function orderPercentage({side,type='LIMIT',percent,availableShares,availableCash,price,precision=DEFAULT_ORDER_PRECISION}){
   if(![25,50,75,100].includes(percent)||!['BUY','SELL'].includes(side))return '';
+  if(side==='SELL'&&percent===100)return exactOrderQuantity(availableShares);
   const quantity=sizedQuantity(side==='SELL'?availableShares:availableCash,side==='SELL'?1:price,percent,precision);
-  // A 100% sale must mean all available shares, never an almost-full sale.
-  if(side==='SELL'&&percent===100&&Number(quantity)!==availableShares)return '';
   if(side!=='BUY'||type!=='MARKET')return quantity;
   const maximum=cashOrderQuantity(marketBuyCashLimit(availableCash),price,precision);
   return quantity&&maximum?(Number(quantity)>Number(maximum)?maximum:quantity):'';
 }
 export function cashOrderQuantity(amount,price,precision=DEFAULT_ORDER_PRECISION){return sizedQuantity(amount,price,100,precision);}
 export function roundedOrderQuantity(value,precision=DEFAULT_ORDER_PRECISION){return sizedQuantity(value,1,100,precision);}
+// Preserve a full available sale exactly; this does not assert broker acceptance.
+export function exactOrderQuantity(value){return typeof value==='number'&&Number.isFinite(value)&&value>0&&value<=1000000?String(value):'';}
 export function sellRemainder(availableShares,quantity,precision=DEFAULT_ORDER_PRECISION){
   const available=decimal(availableShares),sale=decimal(quantity);
   if(!available||!sale||!Number.isInteger(precision)||precision<0||precision>8)return null;

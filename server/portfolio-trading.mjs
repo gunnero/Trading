@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,MARKET_BUY_BUFFER_PERCENT,sellRemainder} from '../src/data/portfolio-order-size.mjs';
+import {cashOrderQuantity,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,MARKET_BUY_BUFFER_PERCENT,exactOrderQuantity} from '../src/data/portfolio-order-size.mjs';
 import {orderHistoryPath} from './portfolio-history.mjs';
 import {createOrderTracker} from './portfolio-order-tracker.mjs';
 
@@ -201,13 +201,18 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(!(reference>0)&&(cashInput||input.type==='MARKET'&&(input.requestedCashAmount!=null||input.referencePrice!=null)))throw fail(400,'A current market reference price is unavailable. Refresh the quote and review again.');
     const quantityPrecision=orderQuantityPrecision(quantityRules(id),input);
     const requestedQuantity=cashInput?null:quantity(input.quantity);
-    const rounded=cashInput?cashOrderQuantity(input.cashAmount,reference,quantityPrecision):roundedOrderQuantity(requestedQuantity,quantityPrecision);
+    if(input.sellAll!==undefined&&typeof input.sellAll!=='boolean')throw fail(400,'Choose a valid sell-all quantity.');
+    if(input.sellAll===true&&(input.side!=='SELL'||cashInput))throw fail(400,'Sell all requires a sell order with an exact share quantity.');
+    if(input.sellAll===true&&requestedQuantity!==available)throw fail(409,'Available shares changed. Select 100% again and review the new quantity. No order was sent.');
+    // At preview, only equality with broker-supplied available shares permits
+    // exact sizing. Freeze that intent with the review; never promote a partial
+    // review or resize an existing full-sale review at confirmation.
+    const sellAll=input.side==='SELL'&&!cashInput&&requestedQuantity===available&&(normalize||input.sellAll===true);
+    const rounded=sellAll?exactOrderQuantity(requestedQuantity):cashInput?cashOrderQuantity(input.cashAmount,reference,quantityPrecision):roundedOrderQuantity(requestedQuantity,quantityPrecision);
     if(!rounded)throw fail(400,`Use the ${10**-quantityPrecision} share sizing step, with a maximum of 1,000,000 shares. Adjust the quantity or cash amount.`);
     const qty=Number(rounded);
     if(!normalize&&qty!==input.quantity)throw fail(409,'The share precision changed. Review the adjusted quantity before confirming again.');
     if(input.side==='SELL'&&(!numeric(available)||qty>available))throw fail(400,'The quantity exceeds shares available to trade. Shares reserved for orders or pies may be unavailable.');
-    const remainder=input.side==='SELL'?sellRemainder(available,qty,quantityPrecision):null;
-    if(remainder?.belowStep)throw fail(400,`This sale would leave ${remainder.shares} available shares, below the ${10**-quantityPrecision} share sizing step. Use Trading 212 to sell all available shares, or enter a smaller partial sale. No order was sent.`);
     if(input.side==='BUY'&&instrument.maxOpenQuantity!==null&&qty+(position?.quantity||0)>instrument.maxOpenQuantity)throw fail(400,'This exceeds the broker’s maximum position size.');
     const estimate=reference===null?null:qty*reference;
     const maxOrderValue=orderLimit(id,estimate,summary.currency);
@@ -216,7 +221,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     if(marketCashLimit!==null&&estimate!==null&&estimate>marketCashLimit+1e-8)throw fail(400,`This Market buy exceeds the ${summary.currency} ${marketCashLimit.toFixed(2)} cash budget. The app leaves ${MARKET_BUY_BUFFER_PERCENT}% of available cash for price changes and charges. Refresh the holding and reduce the amount or use 100% to size with this buffer, then review again.`);
     const saleCost=input.side==='SELL'&&holding.cost!==null&&holding.shares>0?holding.cost*qty/holding.shares:null;
     const estimatedProfit=estimate!==null&&saleCost!==null?estimate-saleCost:null;
-    return {action:'ORDER',maxOrderValue,marketCashLimit,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,quantityPrecision,requestedQuantity:requestedQuantity!==null&&requestedQuantity!==qty?requestedQuantity:null,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,priceQuote:pricing?.priceQuote||null,estimate,
+    return {action:'ORDER',maxOrderValue,marketCashLimit,side:input.side,type:input.type,...(input.type==='MARKET'?{extendedHours:input.extendedHours===true}:{}),ticker:instrument.ticker,name:instrument.name,quantity:qty,quantityPrecision,sellAll,requestedQuantity:requestedQuantity!==null&&requestedQuantity!==qty?requestedQuantity:null,requestedCashAmount:cashInput?input.cashAmount:null,limitPrice:input.type==='LIMIT'?input.limitPrice:null,timeValidity:input.timeValidity==='GOOD_TILL_CANCEL'?'GOOD_TILL_CANCEL':'DAY',currency:summary.currency,availableCash:summary.cash.availableToTrade,availableShares:numeric(available)?available:null,referencePrice:reference,priceQuote:pricing?.priceQuote||null,estimate,
       currentShares:holding.shares,remainingShares:holding.shares===null?null:holding.shares+(input.side==='BUY'?qty:-qty),remainingCash:estimate===null?null:summary.cash.availableToTrade+(input.side==='SELL'?estimate:-estimate),estimatedProfit,estimatedProfitPercent:saleCost>0&&estimatedProfit!==null?estimatedProfit/saleCost*100:null,
       environment:ctx.a.environment,brokerId:ctx.a.snapshot.brokerId};
   }
@@ -245,7 +250,7 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
       if(d.action==='CANCEL'){await broker('/equity/orders/'+d.orderId,ctx.secret,{method:'DELETE'});tracker.record(id,ctx,d.order);result={...d,message:'Cancellation requested. Orders will refresh automatically to check the final result; a fill may have happened first.'};}
       else{const body={ticker:d.ticker,quantity:d.quantity*(d.side==='SELL'?-1:1),...(d.type==='LIMIT'?{limitPrice:d.limitPrice,timeValidity:d.timeValidity}:{extendedHours:d.extendedHours===true})};
         const order=orderView(await broker('/equity/orders/'+d.type.toLowerCase(),ctx.secret,{method:'POST',body}));
-        if(order.ticker!==d.ticker||order.side!==d.side||order.type!==d.type||!numeric(order.quantity)||Math.abs(order.quantity-d.quantity)>1e-8)throw fail(502,'The broker reply does not match the submitted order. Check Trading 212.');
+        if(order.ticker!==d.ticker||order.side!==d.side||order.type!==d.type||!numeric(order.quantity)||(d.sellAll?order.quantity!==d.quantity:Math.abs(order.quantity-d.quantity)>1e-8))throw fail(502,'The broker reply does not match the submitted order. Check Trading 212.');
         if(d.type==='MARKET'&&order.extendedHours!==null&&order.extendedHours!==(d.extendedHours===true))throw fail(502,'The broker reply has a different trading session. Check Trading 212.');
         tracker.record(id,ctx,order);
         result={...d,order,message:order.status==='FILLED'?'Order filled.':order.status==='REJECTED'?'Order rejected by Trading 212.':'Order received by Trading 212. Its status will update automatically.'};}

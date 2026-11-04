@@ -132,7 +132,7 @@ test('exact full available sell preserves quantity and limit price precision',as
 });
 test('100% cannot silently become a partial sale; decimal remainders retain exact boundaries',()=>{
  for(const precision of [0,1,2,3,4]){
-  assert.equal(orderPercentage({side:'SELL',percent:100,availableShares:3.12345678,precision}),'');
+  assert.equal(orderPercentage({side:'SELL',percent:100,availableShares:3.12345678,precision}),'3.12345678');
   assert.equal(orderPercentage({side:'SELL',percent:100,availableShares:3,precision}),'3');
  }
  assert.deepEqual(sellRemainder(.34560027,.345,3),{shares:'0.00060027',belowStep:true});
@@ -143,25 +143,62 @@ test('100% cannot silently become a partial sale; decimal remainders retain exac
  assert.deepEqual(sellRemainder(1e-8,0,4),{shares:'0.00000001',belowStep:true});
  assert.equal(sellRemainder(.3,.4,4),null);
 });
-test('manual and cash sales cannot leave a remainder below the current share step, including reserved shares',async t=>{
- const f=fixture(t);f.enable();savedPrecision(f,{precision:3,side:'SELL'});
- f.source.available=.34560027;
- for(const size of [{quantity:.34560027},{quantity:.345},{cashAmount:34.56}]){
-  await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',side:'SELL',...size}),/leave 0.00060027 available shares/);
+test('full available sales retain all broker decimals despite learned partial-order precision',async t=>{
+ for(const type of ['MARKET','LIMIT'])for(const available of [.34560027,1e-8,3.12345678]){
+  const f=fixture(t);f.enable();f.source.available=available;savedPrecision(f,{type,side:'SELL',precision:3});
+  const review=await f.service.preview('a',{...input,type,side:'SELL',quantity:available,sellAll:true});
+  assert.equal(review.quantity,available);assert.equal(review.sellAll,true);assert.equal(review.requestedQuantity,null);
+  assert.equal(f.writes().length,0);f.restart();
+  const result=await f.service.submit('a',{token:review.token,confirmed:true,quantity:999});assert.equal(result.state,'ACCEPTED');
+  assert.equal(JSON.parse(f.writes()[0].body).quantity,-available);assert.equal('sellAll' in JSON.parse(f.writes()[0].body),false);
+  f.restart();await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
  }
- const partial=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.172});
- assert.equal(partial.quantity,.172);assert.equal(f.writes().length,0);
- f.source.available=.345;f.advance(6000);
- const full=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.345});
- await f.service.submit('a',{token:full.token,confirmed:true});assert.equal(JSON.parse(f.writes()[0].body).quantity,-.345);
 });
-test('confirmation blocks newly created fractional remainders and legacy reviews without resizing or writing',async t=>{
- const f=fixture(t);f.enable();f.source.available=.345;
- const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.345});
- f.source.available=.34500027;f.advance(6000);
- await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/leave 0.00000027 available shares/);
- f.restart();await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/leave 0.00000027 available shares/);
- assert.equal(f.writes().length,0);assert.equal(f.service.attempt('a',review.token).attempt.quantity,.345);
+test('manual exact available quantity is a full sale; cash and partial quantities keep ordinary sizing',async t=>{
+ const f=fixture(t);f.enable();f.source.available=.34560027;savedPrecision(f,{side:'SELL',precision:3});
+ const full=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.34560027});assert.equal(full.sellAll,true);assert.equal(full.quantity,.34560027);
+ for(const size of [{quantity:.345},{cashAmount:34.56}]){
+  const partial=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',...size});assert.equal(partial.quantity,.345);assert.equal(partial.sellAll,false);
+ }
+ assert.equal(f.writes().length,0);
+});
+test('sell-all intent cannot bypass available shares, account/side/cash checks or quantity bounds',async t=>{
+ const f=fixture(t);f.enable();f.source.available=.34560027;
+ for(const extra of [{quantity:.345},{quantity:.4},{quantity:5},{quantity:.34560028},{quantity:.34560026}])await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',side:'SELL',sellAll:true,...extra}),/Available shares changed/);
+ for(const extra of [{side:'BUY'},{cashAmount:30}])await assert.rejects(()=>f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.34560027,sellAll:true,...extra}),/requires a sell order/);
+ await assert.rejects(()=>f.service.preview('a',{...input,side:'SELL',sellAll:'true'}),/valid sell-all/);
+ f.source.available=2000000;f.advance(6000);await assert.rejects(()=>f.service.preview('a',{...input,side:'SELL',quantity:2000000,sellAll:true}),/1,000,000/);
+ assert.equal(f.writes().length,0);
+});
+test('a reviewed full sale is never resized if available shares increase or decrease',async t=>{
+ for(const changed of [.34560026,.34560028,0]){
+  const f=fixture(t);f.enable();f.source.available=.34560027;
+  const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.34560027,sellAll:true});
+  f.source.available=changed;f.advance(6000);
+  await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/Available shares changed/);
+  f.restart();await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/Available shares changed/);
+  assert.equal(f.writes().length,0);assert.equal(f.service.attempt('a',review.token).attempt.quantity,.34560027);
+ }
+});
+test('an existing partial review cannot become a full sale or bypass a changed precision at confirmation',async t=>{
+ const f=fixture(t);f.enable();f.source.available=.34560027;
+ const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.3456});assert.equal(review.sellAll,false);
+ f.source.available=.3456;f.advance(6000);savedPrecision(f,{side:'SELL',precision:3});
+ await assert.rejects(()=>f.service.submit('a',{token:review.token,confirmed:true}),/precision changed/);assert.equal(f.writes().length,0);
+});
+test('an exact full-sale rejection preserves the broker reason and quantity without rounding or retry',async t=>{
+ const f=fixture(t);f.enable();f.source.available=.34560027;
+ const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.34560027});
+ f.source.write=()=>json({type:'/api-errors/quantity-precision-mismatch',detail:'invalid quantity precision 3'},400);
+ const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,'REJECTED');assert.equal(result.sellAll,true);assert.equal(result.quantity,.34560027);
+ f.restart();await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.writes().length,1);
+ const next=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:.34560027});assert.equal(next.quantity,.34560027);assert.equal(f.writes().length,1);
+});
+test('a broker response with a different tiny full-sale quantity remains uncertain and is never retried',async t=>{
+ const f=fixture(t);f.enable();f.source.available=1e-8;
+ const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:1e-8});
+ f.source.write=()=>json({id:75,ticker:'AMD_US_EQ',side:'SELL',type:'MARKET',quantity:0,status:'NEW'});
+ assert.equal((await f.service.submit('a',{token:review.token,confirmed:true})).state,'UNKNOWN');assert.equal(f.service.read('a').blocked,true);assert.equal(f.writes().length,1);
 });
 test('broker minimum-position rejection remains exact across restart and never learns a precision or retries',async t=>{
  const f=fixture(t);f.enable();const review=await f.service.preview('a',{...input,type:'MARKET',side:'SELL',quantity:1});
@@ -236,8 +273,8 @@ test('position reads never overlap an order write and refresh after its outcome'
 });
 test('sell percentages floor fractional shares and never include reserved shares',()=>{
  const size=(availableShares,percent)=>orderPercentage({side:'SELL',availableShares,percent});
- assert.deepEqual([25,50,75,100].map(p=>size(3.01234567,p)),['0.753','1.5061','2.2592','']);
- assert.equal(size(5.60285878,100),'');assert.equal(size(1.123456789,100),'');assert.equal(size(1e-8,100),'');assert.equal(size(1e-8,25),'');assert.equal(size(0.000000019,100),'');
+ assert.deepEqual([25,50,75,100].map(p=>size(3.01234567,p)),['0.753','1.5061','2.2592','3.01234567']);
+ assert.equal(size(5.60285878,100),'5.60285878');assert.equal(size(1.123456789,100),'1.123456789');assert.equal(size(1e-8,100),'1e-8');assert.equal(size(1e-8,25),'');assert.equal(size(0.000000019,100),'1.9e-8');
  for(const amount of [0,null,undefined,NaN,-1,Infinity,'3'])assert.equal(size(amount,100),'');
  for(const percent of [0,10,101,'25'])assert.equal(size(3,percent),'');assert.equal(size(1000001,100),'');
 });
@@ -253,7 +290,7 @@ test('Market buy shortcuts cap at 95% cash with cent and share rounding while ot
  assert.equal(marketBuyCashLimit(100.01),95);assert.equal(marketBuyCashLimit(.3),.28);assert.equal(marketBuyCashLimit(.01),0);assert.equal(marketBuyCashLimit(0),0);
  for(const cash of [null,undefined,'100',NaN,Infinity,-1]){assert.equal(marketBuyCashLimit(cash),null);assert.equal(size(100,{availableCash:cash}),'');}
  assert.equal(size(100,{price:0}),'');assert.equal(size(100,{availableCash:.01}),'');assert.equal(size(100,{precision:2}),'9.59');
- assert.equal(size(100,{type:'LIMIT'}),'10.101');assert.equal(size(100,{side:'SELL',availableShares:3.01234567}),'');assert.equal(size(100,{side:'SELL',availableShares:3.0123}),'3.0123');
+ assert.equal(size(100,{type:'LIMIT'}),'10.101');assert.equal(size(100,{side:'SELL',availableShares:3.01234567}),'3.01234567');assert.equal(size(100,{side:'SELL',availableShares:3.0123}),'3.0123');
  for(const cash of [.01,.02,.03,.3,1,100.01,1566.57,1000000])for(const price of [.01,.1,99,625.75])for(const percent of [25,50,75,100]){
   const q=size(percent,{availableCash:cash,price});if(q)assert.ok(Number(q)*price<=marketBuyCashLimit(cash)+1e-8);
  }
