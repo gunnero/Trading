@@ -13,11 +13,11 @@ try{
  const mainChart=page.locator('.chart-panel .price-chart'),mainBox=await mainChart.boundingBox(),priorSpan=await mainChart.evaluate(el=>+el.dataset.priceMax- +el.dataset.priceMin);
  await page.mouse.move(mainBox.x+mainBox.width-30,mainBox.y+100);await page.mouse.down();await page.mouse.move(mainBox.x+mainBox.width-30,mainBox.y+60,{steps:10});await page.mouse.up();await expect(mainChart).toHaveAttribute('data-price-scale','manual');expect(await mainChart.evaluate(el=>+el.dataset.priceMax- +el.dataset.priceMin)).toBeLessThan(priorSpan);
  await page.screenshot({path:'docs/qa/chart-interactive-actual-overview.png',fullPage:true});checks.push('Actual primary chart price-axis drag changes the displayed range');
- await page.getByRole('button',{name:'Open NQ chart',exact:true}).click();const dialog=page.getByRole('dialog');
+ await page.getByRole('combobox',{name:'Market group',exact:true}).selectOption('futures');await page.getByRole('button',{name:'Open NQ chart',exact:true}).click();const dialog=page.getByRole('dialog');
  await expect(dialog.locator('.price-chart')).toHaveAttribute('aria-label',/NQ Yahoo Finance 4h/,{timeout:40000});await expect(dialog.locator('.zone-role-status summary')).toContainText('30 min closes',{timeout:40000});
  await dialog.getByRole('button',{name:'Zoom in',exact:true}).click();await dialog.screenshot({path:'docs/qa/chart-interactive-actual-NQ.png'});
  checks.push('Actual QQQ/primary and NQ charts show confirmation history and respond to zoom');await page.close();
- const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});const mobile=await context.newPage();track(mobile);await mobile.goto(base);await mobile.getByRole('button',{name:'Open NQ chart',exact:true}).click();
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});const mobile=await context.newPage();track(mobile);await mobile.goto(base);await mobile.getByRole('combobox',{name:'Market group',exact:true}).selectOption('futures');await mobile.getByRole('button',{name:'Open NQ chart',exact:true}).click();
  const md=mobile.getByRole('dialog'),chart=md.locator('.price-chart');await expect(chart).toHaveAttribute('aria-label',/NQ Yahoo Finance 4h/,{timeout:40000});
  await chart.scrollIntoViewIfNeeded();const box=await chart.boundingBox(),x=box.x+box.width*.45,y=Math.max(50,Math.min(700,box.y+100));
  const cdp=await context.newCDPSession(mobile);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-25,y,id:0},{x:x+25,y,id:1}]});

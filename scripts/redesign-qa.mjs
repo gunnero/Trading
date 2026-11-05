@@ -30,9 +30,9 @@ try{
  }
  await page.setViewportSize({width:1488,height:1058});await page.goto(runtime.url+'/#overview');await expect(page.locator('.price-chart').first()).toBeVisible();
  await expect(page.locator('.desk-brand').first()).toContainText('Trading Desk');
- await expect(page.locator('.market-group summary h2')).toHaveText(['Market indicators','Futures','Funds / ETFs']);
- for(const group of ['indicators','futures','funds']){const card=page.locator('.market-group-'+group);await expect(card).toHaveAttribute('open','');await card.locator('summary').click();await expect(card).not.toHaveAttribute('open','');await card.locator('summary').click();}
- results.interactions.push('All three market groups are retained and collapse independently');
+ await expect(page.getByRole('combobox',{name:'Market group'}).locator('option')).toHaveText(['Market Indicators','Futures','Funds / ETFs']);
+ for(const group of ['futures','funds','indicators']){await page.getByRole('combobox',{name:'Market group'}).selectOption(group);await expect(page.locator('.market-ticker-quote').first()).toBeVisible();}
+ results.interactions.push('The compact market strip switches between all three instrument groups');
  await page.getByRole('button',{name:'Indicators',exact:true}).click();await expect(page.getByRole('checkbox',{name:/Session VWAP/})).toBeVisible();await page.screenshot({path:dir+'/overview-indicators-1488.png'});await page.getByRole('button',{name:'Indicators',exact:true}).click();
  await page.getByRole('button',{name:'Open VIX chart',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.screenshot({path:dir+'/context-chart-1488.png'});await page.getByRole('button',{name:'Close dialog',exact:true}).click();
  results.interactions.push('Chart indicator controls and market-context modal open and close');

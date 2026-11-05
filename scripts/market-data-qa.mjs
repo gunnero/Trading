@@ -12,7 +12,7 @@ const mark=s=>{checks.push(s);console.log('PASS '+s);};
 try{
  await mockMarket(page);await page.goto(process.env.OPENING_BELL_TEST_URL);
  await expect(page.getByRole('img',{name:/QQQ Yahoo Finance 4h/})).toBeVisible();await expect(page.getByRole('tab',{name:/QQQ/})).toContainText('707.85');
- await expect(page.locator('.market-data-caption')).toContainText('22:00');await expect(page.locator('.macro-strip')).toContainText('10 min delayed');await expect(page.locator('.macro-strip')).toContainText('Daily par yield');
+ await expect(page.locator('.market-data-caption')).toContainText('22:00');await page.getByRole('combobox',{name:'Market group',exact:true}).selectOption('futures');await expect(page.locator('.market-ticker')).toContainText('10 min delayed');await page.getByRole('combobox',{name:'Market group',exact:true}).selectOption('indicators');await expect(page.locator('.market-ticker')).toContainText('Daily par yield');
  expect(await page.locator('body').innerText()).not.toMatch(/Sample prices|Sample chart|Sample watchlist|SAMPLE SESSION/);
  await page.getByRole('button',{name:'Source & delays'}).click();await expect(page.getByRole('dialog')).toContainText('pre-market and after-hours chart prices');await expect(page.getByRole('dialog')).toContainText('Options bid/ask and Greeks');await page.keyboard.press('Escape');mark('Actual quote UI, source timestamps, delays and options limitations');
  // Hold one request while changing symbol again. No old chart may appear under the new heading.
