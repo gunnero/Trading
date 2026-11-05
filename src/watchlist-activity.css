@@ -1,0 +1,16 @@
+.watchlist-panel .watchlist-filters{padding:12px 18px 8px;gap:8px;align-items:center}
+.watchlist-panel .watchlist-filters .search-input{flex:1 1 190px;min-width:160px}
+.watchlist-panel .watchlist-filters select{font-size:12px;min-height:36px;padding:7px 10px;max-width:100%}
+.watchlist-panel .watchlist-filters .search-input input{font-size:12px;padding:8px 0;min-height:36px}
+.watchlist-ranking-note{margin:0;padding:0 18px 12px;color:var(--muted);font-size:10px;line-height:1.6}
+.watchlist-ranking-note>span{color:var(--primary)}
+.watchlist-loading{padding:20px;text-align:center;color:var(--muted)}
+.watchlist-panel .watchlist-reset{min-height:36px;font-size:12px;padding:5px}
+@media(max-width:760px){
+ .watchlist-panel .watchlist-filters{padding:12px 14px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .watchlist-panel .watchlist-filters .search-input{grid-column:1/-1;min-width:0}
+ .watchlist-panel .watchlist-filters select,.watchlist-panel .watchlist-filters .search-input input{min-height:44px;font-size:16px;min-width:0;width:100%}
+ .watchlist-panel .watchlist-filters>select[aria-label="Sort watchlist"]{grid-column:1/-1}
+ .watchlist-panel .watchlist-reset{justify-self:start;min-height:44px}
+ .watchlist-ranking-note{padding-inline:14px}
+}

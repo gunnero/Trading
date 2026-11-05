@@ -1,4 +1,5 @@
 import {parseWatchlist} from './market.js';
+import {quoteKey} from './quotes.mjs';
 
 export const WATCH_GROUPS = {STOCKS:'Stocks','DEPOSITARY RECEIPT':'Depositary receipts',FUND:'Funds / ETFs',FUTURES:'Futures',CRYPTO:'Crypto'};
 const equityExchanges = ['NASDAQ','NYSE','AMEX','CBOE','NYSEARCA','NYSEAMERICAN','BATS'];
@@ -7,6 +8,28 @@ export const readWatchlist = text => parseWatchlist(text,{allowEmpty:true});
 export function overviewWatchlist(entries) {
   const featured=['NVDA','AMD','MU','TSLA','COIN'].map(symbol=>entries.find(entry=>entry.symbol===symbol)).filter(Boolean);
   return [...featured,...entries.filter(entry=>!featured.some(item=>item.id===entry.id))].slice(0,5);
+}
+
+// Rank source percentages, never dollar changes or a missing value treated as zero.
+export function watchlistMove(entry,quotes) {
+  const result=quotes[quoteKey(entry)],change=result?.quote?.changePercent;
+  return result?.status==='ok'&&Number.isFinite(change)?change:null;
+}
+export function filterWatchlist(entries,quotes,{query='',group='All',movement='All',sort='Biggest move'}={}) {
+  const search=query.trim().toLowerCase();
+  const rows=entries.filter(entry=>{
+    if(group!=='All'&&entry.group!==group)return false;
+    if(!`${entry.symbol} ${entry.exchange}`.toLowerCase().includes(search))return false;
+    const change=watchlistMove(entry,quotes);
+    return movement==='All'||change!==null&&(movement==='Gainers'?change>0:movement==='Losers'?change<0:movement==='Unchanged'&&change===0);
+  });
+  if(sort==='Symbol')return rows.sort((a,b)=>a.symbol.localeCompare(b.symbol)||a.id.localeCompare(b.id));
+  if(sort==='Default')return rows;
+  return rows.sort((a,b)=>{
+    const left=watchlistMove(a,quotes),right=watchlistMove(b,quotes);
+    if(left===null||right===null)return left===right?0:left===null?1:-1;
+    return sort==='Top gainers'?right-left:sort==='Top losers'?left-right:Math.abs(right)-Math.abs(left);
+  });
 }
 
 export function newWatchEntry({symbol,exchange,group}) {
