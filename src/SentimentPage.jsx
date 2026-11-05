@@ -1,7 +1,7 @@
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {lazy,Suspense,useMemo,useState} from 'react';
-import {ArrowClockwise,CaretRight,Circle} from '@phosphor-icons/react';
+import {ArrowClockwise,CaretRight} from '@phosphor-icons/react';
 import {SentimentCard} from './Briefing';
 import {useFeed,SourceLink,Unavailable} from './Feeds';
 import {sentimentScore,sentimentDisplay,sentimentHistoryRange} from './data/sentiment.mjs';
@@ -19,6 +19,7 @@ const components=[
  ['junk_bond_demand','Junk bond demand','Lower-rated vs. investment-grade bonds'],
  ['safe_haven_demand','Safe-haven demand','Stock vs. Treasury bond returns'],
 ];
+const roundedScore=value=>Number.isFinite(value)?String(Math.round(value)):'—';
 const tone=rating=>rating?.toLowerCase().includes('fear')?'fear':rating?.toLowerCase().includes('greed')?'greed':'neutral';
 const dateLabel=date=>new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',day:'numeric',month:'short',year:'numeric'}).format(new Date(date+'T12:00:00Z'));
 const cadence=feed=>feed.source?.delivery==='daily'?'Daily CNN backup':feed.source?.delivery==='hourly'?'Hourly CNN snapshot':feed.source?.delivery==='api'?'CNN API snapshot':'Cadence not supplied';
@@ -31,9 +32,9 @@ function Overview({briefing,onSettings}){
  return <section className="sentiment-overview" aria-label="CNN Fear and Greed">
   {display.outdated&&<div className="sentiment-current-unavailable" role="status"><strong>Current reading unavailable</strong><p>{display.detail}</p></div>}
   <div className="sentiment-overview-grid"><div className="sentiment-score-panel">
-   <div className="sentiment-score-copy">{display.outdated&&<small className="sentiment-snapshot-label">Last available snapshot</small>}<div className="sentiment-value"><strong>{sentimentScore(reading.score)}</strong><span>/ 100</span></div><div className="sentiment-provider-rating">Provider rating <Rating rating={reading.rating}/></div></div>
+   <div className="sentiment-score-copy">{display.outdated&&<small className="sentiment-snapshot-label">Last available snapshot</small>}<div className="sentiment-value"><strong title={`Source score: ${sentimentScore(reading.score)}`}>{roundedScore(reading.score)}</strong><span>/ 100</span></div><div className="sentiment-provider-rating">Provider rating <Rating rating={reading.rating}/></div></div>
    {display.outdated?<p className="sentiment-gauge-unavailable">{display.label}<br/><small>The gauge returns when a current observation is available.</small></p>:<Suspense fallback={<div className="sentiment-gauge-loading">Loading scale…</div>}><Gauge score={reading.score} rating={reading.rating}/></Suspense>}
-  </div><div className="sentiment-comparisons"><h2>Comparisons</h2><table className="sentiment-history"><caption className="sr-only">Provider comparison scores</caption><tbody>{[['Previous close','previousClose'],['1 week','previousWeek'],['1 month','previousMonth'],['1 year','previousYear']].map(([label,key])=><tr key={key}><th scope="row">{label}</th><td><strong>{sentimentScore(reading[key])}</strong></td><td className="sentiment-comparison-time">Time not supplied</td></tr>)}</tbody></table></div></div>
+  </div><div className="sentiment-comparisons"><h2>Comparisons</h2><table className="sentiment-history"><caption className="sr-only">Provider comparison scores</caption><tbody>{[['Previous close','previousClose'],['1 week','previousWeek'],['1 month','previousMonth'],['1 year','previousYear']].map(([label,key])=><tr key={key}><th scope="row">{label}</th><td><strong>{sentimentScore(reading[key])}</strong></td></tr>)}</tbody></table></div></div>
   <div className="sentiment-source-line"><span>Source: <Source feed={feed}/></span><span className="reading-date">Observation: {marketTime(reading.observedAt)} {zoneLabel}</span>{feed.fetchedAt&&<span>Fetched: {marketTime(feed.fetchedAt)} {zoneLabel}</span>}<span className={`sentiment-source-status ${display.warning?'amber':'muted'}`}>{display.label}</span></div>
   <details className="sentiment-headline-details"><summary>Headline source details</summary><p>{cadence(feed)} · checks every 10 min · not a real-time feed.</p>{feed.checkedAt&&<p>Source checked {marketTime(feed.checkedAt)} {zoneLabel}</p>}</details>
   {display.detail&&!display.outdated&&<p className="sentiment-detail-note amber" role="status">{display.detail}</p>}
@@ -58,14 +59,10 @@ function History({feed,now}){
   {feed.status==='stale'&&<p className="sentiment-detail-note amber" role="status">Cached history · {feed.message}</p>}
  </section>;
 }
-function ComponentTable({items,readings,feed}){
- const {marketTime,zoneLabel}=useDisplayTime();
- return <table className="sentiment-component-table"><caption className="sr-only">CNN sentiment components: {items.map(item=>item[1]).join(', ')}</caption><thead><tr><th>Component</th><th>Rating</th><th>Value</th><th>Source status</th></tr></thead><tbody>{items.map(([id,title,description])=>{
-  const item=readings.get(id),observedAt=item?.observedAt||feed.data?.observedAt;
-  const status=!item?'Not supplied':feed.status==='stale'?'Cached':observedAt?'Observed':feed.fetchedAt?'Retrieved':'Time not supplied';
-  const timestamp=observedAt||feed.fetchedAt;
-  const timeLabel=timestamp?`${feed.status==='stale'?(observedAt?'Observed: ':'Retrieved: '):''}${marketTime(timestamp)} ${zoneLabel}`:'Time not supplied';
-  return <tr key={id} className="sentiment-component"><th scope="row"><strong>{title}</strong><span>{description}</span></th><td data-label="Rating"><Rating rating={item?.rating}/></td><td data-label="Value" className="sentiment-component-reading">{item?sentimentScore(item.score):'—'}</td><td data-label="Source status"><span className={`sentiment-component-status ${item&&observedAt&&feed.status!=='stale'?'observed':''}`}><Circle size={8} weight="fill"/>{status}</span><small>{item?timeLabel:'Waiting for source'}</small></td></tr>;
+function ComponentTable({items,readings}){
+ return <table className="sentiment-component-table"><caption className="sr-only">CNN sentiment components: {items.map(item=>item[1]).join(', ')}</caption><thead><tr><th>Component</th><th>Rating</th><th>Value</th></tr></thead><tbody>{items.map(([id,title,description])=>{
+  const item=readings.get(id);
+  return <tr key={id} className="sentiment-component"><th scope="row"><strong>{title}</strong><span>{description}</span></th><td data-label="Rating"><Rating rating={item?.rating}/></td><td data-label="Value" className="sentiment-component-reading" title={item?`Source score: ${sentimentScore(item.score)}`:undefined}>{roundedScore(item?.score)}</td></tr>;
  })}</tbody></table>;
 }
 export default function SentimentPage({briefing,onSettings}){
@@ -81,8 +78,7 @@ export default function SentimentPage({briefing,onSettings}){
   <section className="sentiment-components" aria-label="Seven sentiment indicators"><header><h2>Components</h2><div>Source: <Source feed={indicators}/> <span className="sentiment-component-cadence">{cadence(indicators)} · daily history</span></div></header>
    {!indicators.data&&<Unavailable feed={indicators}/>}
    {indicators.status==='stale'&&<p className="sentiment-detail-note amber" role="status">Cached components · {indicators.message}</p>}
-   {indicators.data&&[...readings.values()].some(item=>!item.observedAt&&!indicators.data.observedAt)&&<p className="sentiment-detail-note sentiment-retrieval-note">Retrieval time shows when Trading Desk received the data. CNN’s component observation times are not supplied, so their age cannot be confirmed.</p>}
-   <div className="sentiment-component-tables"><ComponentTable items={components.slice(0,4)} readings={readings} feed={indicators}/><ComponentTable items={components.slice(4)} readings={readings} feed={indicators}/></div>
+   <div className="sentiment-component-tables"><ComponentTable items={components.slice(0,4)} readings={readings}/><ComponentTable items={components.slice(4)} readings={readings}/></div>
    <details className="sentiment-source-details"><summary>About the readings & sources</summary><p>These are sentiment scores out of 100, not stock prices, VIX levels or put/call ratios. The rating comes from the provider. Components and the headline may update separately.</p><p>{indicators.data?.observedAt?`Component snapshot: ${marketTime(indicators.data.observedAt)} ${zoneLabel}.`:'The provider does not supply a snapshot observation time; freshness cannot be confirmed for undated components.'}{indicators.fetchedAt?` Fetched: ${marketTime(indicators.fetchedAt)} ${zoneLabel}.`:''}</p><p>Comparison timestamps are not supplied. Automatic sources are checked every 10 minutes; this is not a real-time feed. CNN combines seven measures of market behaviour. The index does not confirm a break-and-retest entry. Raw history for individual components is not supplied.</p>{briefing.sentiment.data&&<button className="text-button" onClick={onSettings}>Manage CNN connection<CaretRight size={16}/></button>}</details>
   </section>
  </div>;
