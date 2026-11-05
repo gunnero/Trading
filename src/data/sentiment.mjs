@@ -22,3 +22,10 @@ export function sentimentDisplay(feed,now=Date.now()){
   if(feed.source?.delivery==='daily')return {label:'Daily backup',warning:true,detail:'The daily archive is the newest available source. It publishes after the U.S. session, not throughout the trading day.'};
   return {label:feed.source?.delivery==='api'?'API snapshot':feed.source?.delivery==='hourly'?'Hourly snapshot':'As of',warning:false,detail:null};
 }
+
+// History dates belong to the provider's daily series, independent of the display timezone.
+export function sentimentHistoryRange(points,range,now=Date.now()){
+ const today=new Date(now).toISOString().slice(0,10);
+ const from=range==='All'?'0000-01-01':range==='YTD'?today.slice(0,4)+'-01-01':addDays(today,-({ '1M':30,'3M':90,'6M':180,'1Y':365 }[range]??30));
+ return points.filter(point=>point.date>=from&&point.date<=today);
+}

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFeedService,parseSentiment,SOURCES} from '../server/feeds.mjs';
 import {HOURLY_SENTIMENT_URL,HOURLY_SENTIMENT_SOURCE,parseHourlySentiment} from '../server/sentiment.mjs';
-import {sentimentDisplay,sentimentScore} from '../src/data/sentiment.mjs';
+import {sentimentDisplay,sentimentScore,sentimentHistoryRange} from '../src/data/sentiment.mjs';
 import {SENTIMENT_NOW,hourlySentiment,dailySentiment} from './fixtures/sentiment.mjs';
 const payloadFor=url=>url===HOURLY_SENTIMENT_URL?hourlySentiment():dailySentiment();
 const fetcher=async url=>Response.json(payloadFor(url));
@@ -89,4 +89,19 @@ test('Outdated readings stay outdated after close and over the weekend; closing 
  const close={...feed,data:{observedAt:'2026-10-23T20:00Z'}};
  for(const when of ['2026-10-24T14:00Z','2026-10-26T13:29Z'])assert.notEqual(sentimentDisplay(close,Date.parse(when)).outdated,true);
  assert.equal(sentimentDisplay(close,Date.parse('2026-10-26T13:30Z')).outdated,true);
+});
+
+
+test('Sentiment ranges keep provider dates, missing days and year boundaries intact',()=>{
+ const points=['2025-01-01','2025-12-01','2025-12-30','2026-01-01','2026-01-02','2026-01-03'].map((date,i)=>({date,score:i,rating:'fear'}));
+ const now=Date.parse('2026-01-02T01:00Z');
+ assert.deepEqual(sentimentHistoryRange(points,'YTD',now).map(p=>p.date),['2026-01-01','2026-01-02']);
+ assert.deepEqual(sentimentHistoryRange(points,'1M',now).map(p=>p.date),['2025-12-30','2026-01-01','2026-01-02']);
+ assert.equal(sentimentHistoryRange(points,'3M',now).length,4);
+ assert.equal(sentimentHistoryRange(points,'6M',now).length,4);
+ assert.equal(sentimentHistoryRange(points,'1Y',now).length,4);
+ assert.equal(sentimentHistoryRange(points,'All',now).length,5);
+ assert.equal(points.length,6);
+ assert.deepEqual(sentimentHistoryRange([],'All',now),[]);
+ assert.deepEqual(sentimentHistoryRange([{date:'2024-02-29',score:0}],'1M',Date.parse('2024-03-01T00:00Z')),[{date:'2024-02-29',score:0}]);
 });

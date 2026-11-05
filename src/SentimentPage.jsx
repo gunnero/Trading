@@ -1,67 +1,86 @@
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
-import {useMemo,useState} from 'react';
-import {ArrowClockwise,CaretRight,Gauge} from '@phosphor-icons/react';
+import {lazy,Suspense,useMemo,useState} from 'react';
+import {ArrowClockwise,CaretRight,Circle} from '@phosphor-icons/react';
 import {SentimentCard} from './Briefing';
-import {useFeed,SourceLink,Unavailable,FeedStatus} from './Feeds';
-
-import {sentimentScore} from './data/sentiment.mjs';
+import {useFeed,SourceLink,Unavailable} from './Feeds';
+import {sentimentScore,sentimentDisplay,sentimentHistoryRange} from './data/sentiment.mjs';
 import './sentiment.css';
 
+const Gauge=lazy(()=>import('./SentimentCharts').then(module=>({default:module.SentimentGauge})));
+const HistoryChart=lazy(()=>import('./SentimentCharts').then(module=>({default:module.SentimentHistoryChart})));
+const CNN='https://www.cnn.com/markets/fear-and-greed';
 const components=[
- ['market_momentum_sp500','Market momentum','The S&P 500’s position relative to its 125-day moving average.'],
- ['stock_price_strength','Stock price strength','Stocks reaching new highs compared with those reaching new lows.'],
- ['stock_price_breadth','Stock price breadth','Trading volume in rising stocks compared with falling stocks.'],
- ['put_call_options','Put & call options','The balance of put and call option activity across the market.'],
- ['market_volatility_vix','Market volatility','Expected S&P 500 volatility, measured with the VIX and its recent trend.'],
- ['junk_bond_demand','Junk bond demand','Demand for lower-rated debt compared with safer bonds.'],
- ['safe_haven_demand','Safe-haven demand','Stock returns compared with Treasury bond returns.'],
+ ['market_momentum_sp500','Market momentum','S&P 500 vs. 125-day moving average'],
+ ['stock_price_strength','Stock price strength','52-week highs vs. lows'],
+ ['stock_price_breadth','Stock price breadth','Trading volume: rising vs. falling stocks'],
+ ['put_call_options','Put & call options','Put volume vs. call volume'],
+ ['market_volatility_vix','Market volatility','VIX vs. its recent trend'],
+ ['junk_bond_demand','Junk bond demand','Lower-rated vs. investment-grade bonds'],
+ ['safe_haven_demand','Safe-haven demand','Stock vs. Treasury bond returns'],
 ];
-const tone=rating=>rating?.includes('fear')?'fear':rating?.includes('greed')?'greed':'neutral';
+const tone=rating=>rating?.toLowerCase().includes('fear')?'fear':rating?.toLowerCase().includes('greed')?'greed':'neutral';
 const dateLabel=date=>new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',day:'numeric',month:'short',year:'numeric'}).format(new Date(date+'T12:00:00Z'));
-function History({feed,now}){
- const [days,setDays]=useState(90),[selected,setSelected]=useState(null);
- const points=useMemo(()=>(feed.data?.points||[]).filter(p=>Date.parse(p.date+'T00:00:00Z')>=now-days*86400000),[feed.data,days,now]);
- const active=Math.min(selected??points.length-1,points.length-1),point=points[active];
- const start=Date.parse(points[0]?.date),end=Date.parse(points.at(-1)?.date),span=end-start||86400000;
- const x=p=>48+(Date.parse(p.date)-start)/span*660,y=p=>230-p.score*2;
- const path=points.map((p,i)=>`${i?'L':'M'}${x(p).toFixed(2)},${y(p).toFixed(2)}`).join(' ');
- function selectAt(event){const box=event.currentTarget.getBoundingClientRect(),target=(event.clientX-box.left)/box.width*740;let nearest=0;points.forEach((p,i)=>{if(Math.abs(x(p)-target)<Math.abs(x(points[nearest])-target))nearest=i;});setSelected(nearest);}
- return <section className="panel sentiment-timeline" aria-label="Fear and Greed history">
-  <header><div><span className="eyebrow">SENTIMENT OVER TIME</span><h2>How the mood has changed</h2></div><div className="segmented" role="group" aria-label="Sentiment history range">{[[30,'1M'],[90,'3M'],[365,'1Y']].map(([value,label])=><button key={value} aria-pressed={days===value} className={days===value?'selected':''} onClick={()=>{setDays(value);setSelected(null);}}>{label}</button>)}</div></header>
-  {!feed.data?<Unavailable feed={feed}/>:!points.length?<p className="sentiment-empty">No observations supplied for this period.</p>:<>
-   <div className="sentiment-history-reading" aria-live="polite"><strong>{sentimentScore(point.score)}</strong><span className={tone(point.rating)}>{point.rating}</span><time dateTime={point.date}>{dateLabel(point.date)}</time></div>
-   <svg viewBox="0 0 740 260" className="sentiment-history-chart" role="img" aria-label={`CNN sentiment history, ${dateLabel(points[0].date)} to ${dateLabel(points.at(-1).date)}. Use the slider below to read each observation.`} onPointerMove={selectAt} onPointerDown={selectAt}>
-    {[0,25,50,75,100].map(value=><g key={value}><line x1="48" x2="708" y1={230-value*2} y2={230-value*2} stroke="var(--border)" strokeDasharray={value===50?'4 5':undefined}/><text x="34" y={234-value*2} textAnchor="end">{value}</text></g>)}
-    <path d={path} fill="none" stroke="var(--green)" strokeWidth="2.5"/>
-    <line x1={x(point)} x2={x(point)} y1="25" y2="230" stroke="var(--muted)" strokeDasharray="3 5"/>
-    <circle cx={x(point)} cy={y(point)} r="5" fill="var(--green)" stroke="var(--panel)" strokeWidth="2"/>
-    <text x="48" y="252">{dateLabel(points[0].date)}</text><text x="708" y="252" textAnchor="end">{dateLabel(points.at(-1).date)}</text>
-   </svg>
-   <label className="sentiment-history-slider">Explore observations<input type="range" min="0" max={points.length-1} value={active} onChange={e=>setSelected(Number(e.target.value))} aria-label="Historical sentiment observation" aria-valuetext={`${dateLabel(point.date)}, ${sentimentScore(point.score)}, ${point.rating}`}/></label>
-   <p className="sentiment-detail-note">{points.length} supplied daily observations · Latest: {dateLabel(points.at(-1).date)}. Dates follow the provider’s daily series. Missing dates are not filled; the latest point may be an intraday snapshot.</p>
-  </>}
-  {feed.status==='stale'&&<p className="sentiment-detail-note amber" role="status">{feed.message}</p>}
-  <FeedStatus feed={feed} label={feed.status==='ok'?'Historical series':undefined}/>
+const cadence=feed=>feed.source?.delivery==='daily'?'Daily CNN backup':feed.source?.delivery==='hourly'?'Hourly CNN snapshot':feed.source?.delivery==='api'?'CNN API snapshot':'Cadence not supplied';
+function Rating({rating}){return <span className={`sentiment-rating ${tone(rating)}`}>{rating||'Not supplied'}</span>;}
+function Source({feed}){return <><SourceLink href={feed.source?.url||CNN}>CNN</SourceLink>{feed.source?.via&&<> via <SourceLink href={feed.source.via.url}>{feed.source.via.name}</SourceLink></>}</>;}
+function Overview({briefing,onSettings}){
+ const {sentiment:feed}=briefing,{marketTime,zoneLabel}=useDisplayTime(),reading=feed.data,display=sentimentDisplay(feed,briefing.now);
+ // Preserve the existing optional manual backup and its explicit save controls during an outage.
+ if(!reading)return <SentimentCard briefing={briefing} onSettings={onSettings}/>;
+ return <section className="sentiment-overview" aria-label="CNN Fear and Greed">
+  {display.outdated&&<div className="sentiment-current-unavailable" role="status"><strong>Current reading unavailable</strong><p>{display.detail}</p></div>}
+  <div className="sentiment-overview-grid"><div className="sentiment-score-panel">
+   <div className="sentiment-score-copy">{display.outdated&&<small className="sentiment-snapshot-label">Last available snapshot</small>}<div className="sentiment-value"><strong>{sentimentScore(reading.score)}</strong><span>/ 100</span></div><div className="sentiment-provider-rating">Provider rating <Rating rating={reading.rating}/></div></div>
+   {display.outdated?<p className="sentiment-gauge-unavailable">{display.label}<br/><small>The gauge returns when a current observation is available.</small></p>:<Suspense fallback={<div className="sentiment-gauge-loading">Loading scale…</div>}><Gauge score={reading.score} rating={reading.rating}/></Suspense>}
+  </div><div className="sentiment-comparisons"><h2>Comparisons</h2><table className="sentiment-history"><caption className="sr-only">Provider comparison scores</caption><tbody>{[['Previous close','previousClose'],['1 week','previousWeek'],['1 month','previousMonth'],['1 year','previousYear']].map(([label,key])=><tr key={key}><th scope="row">{label}</th><td><strong>{sentimentScore(reading[key])}</strong></td><td className="sentiment-comparison-time">Time not supplied</td></tr>)}</tbody></table></div></div>
+  <div className="sentiment-source-line"><span>Source: <Source feed={feed}/></span><span className="reading-date">Observation: {marketTime(reading.observedAt)} {zoneLabel}</span>{feed.fetchedAt&&<span>Fetched: {marketTime(feed.fetchedAt)} {zoneLabel}</span>}<span className={`sentiment-source-status ${display.warning?'amber':'muted'}`}>{display.label}</span></div>
+  <details className="sentiment-headline-details"><summary>Headline source details</summary><p>{cadence(feed)} · checks every 10 min · not a real-time feed.</p>{feed.checkedAt&&<p>Source checked {marketTime(feed.checkedAt)} {zoneLabel}</p>}</details>
+  {display.detail&&!display.outdated&&<p className="sentiment-detail-note amber" role="status">{display.detail}</p>}
  </section>;
 }
+function History({feed,now}){
+ const [range,setRange]=useState('1M'),[selected,setSelected]=useState(null);
+ const {marketTime,zoneLabel}=useDisplayTime();
+ const points=useMemo(()=>sentimentHistoryRange(feed.data?.points||[],range,now),[feed.data,range,now]);
+ const active=Math.min(selected??points.length-1,points.length-1),point=points[active];
+ return <section className="sentiment-timeline" aria-label="Fear and Greed history">
+  <header><h2>History</h2><div className="sentiment-ranges" role="group" aria-label="Sentiment history range">{['1M','3M','6M','YTD','1Y','All'].map(value=><button key={value} aria-pressed={range===value} onClick={()=>{setRange(value);setSelected(null);}}>{value}</button>)}</div></header>
+  {!feed.data?<Unavailable feed={feed}/>:!points.length?<p className="sentiment-empty">No observations supplied for this period.</p>:<>
+   <Suspense fallback={<div className="sentiment-history-chart" role="status">Loading history…</div>}><HistoryChart points={points} selected={active}/></Suspense>
+   <details className="sentiment-history-details"><summary>Explore observations & source details</summary>
+    <div className="sentiment-history-reading" aria-live="polite"><strong>{sentimentScore(point.score)}</strong><Rating rating={point.rating}/><time dateTime={point.date}>{dateLabel(point.date)}</time></div>
+    <label className="sentiment-history-slider">Explore observations<input type="range" min="0" max={points.length-1} value={active} onChange={e=>setSelected(Number(e.target.value))} aria-label="Historical sentiment observation" aria-valuetext={`${dateLabel(point.date)}, ${sentimentScore(point.score)}, ${point.rating}`}/></label>
+    <p className="sentiment-detail-note">{points.length} supplied daily observations · Latest: {dateLabel(points.at(-1).date)}. Dates follow the provider’s daily series. Missing dates are not filled; the latest point may be an intraday snapshot.</p>
+    <p className="sentiment-detail-note">Source: <Source feed={feed}/>{feed.fetchedAt&&<> · Fetched {marketTime(feed.fetchedAt)} {zoneLabel}</>}</p>
+   </details>
+  </>}
+  {feed.status==='stale'&&<p className="sentiment-detail-note amber" role="status">Cached history · {feed.message}</p>}
+ </section>;
+}
+function ComponentTable({items,readings,feed}){
+ const {marketTime,zoneLabel}=useDisplayTime();
+ return <table className="sentiment-component-table"><caption className="sr-only">CNN sentiment components: {items.map(item=>item[1]).join(', ')}</caption><thead><tr><th>Component</th><th>Rating</th><th>Value</th><th>Source status</th></tr></thead><tbody>{items.map(([id,title,description])=>{
+  const item=readings.get(id),observedAt=item?.observedAt||feed.data?.observedAt;
+  const status=!item?'Not supplied':feed.status==='stale'?'Cached':observedAt?'Observed':'Time not supplied';
+  return <tr key={id} className="sentiment-component"><th scope="row"><strong>{title}</strong><span>{description}</span></th><td data-label="Rating"><Rating rating={item?.rating}/></td><td data-label="Value" className="sentiment-component-reading">{item?sentimentScore(item.score):'—'}</td><td data-label="Source status"><span className={`sentiment-component-status ${item&&observedAt&&feed.status!=='stale'?'observed':''}`}><Circle size={8} weight="fill"/>{status}</span><small>{observedAt?`${marketTime(observedAt)} ${zoneLabel}`:item?'Freshness unconfirmed':'Waiting for source'}</small></td></tr>;
+ })}</tbody></table>;
+}
 export default function SentimentPage({briefing,onSettings}){
-  const {briefingTime,zoneLabel}=useDisplayTime();
- const details=useFeed('/api/sentiment/details');
+ const {marketTime,zoneLabel}=useDisplayTime(),details=useFeed('/api/sentiment/details');
  const fallback={status:details.status,message:details.message,data:null};
  const indicators=details.data?.components||fallback,history=details.data?.history||fallback;
  const readings=new Map((indicators.data?.components||[]).map(item=>[item.id,item]));
  const refresh=()=>{briefing.sentiment.refresh();details.refresh();};
  return <div className="sentiment-page">
-  <PageHeader title="Fear & Greed" description="The mood of the U.S. stock market, and the indicators behind it." actions={<button className="button outline" onClick={refresh} disabled={details.refreshing||details.status==='loading'}><ArrowClockwise size={17}/>Refresh readings</button>}/>
-  <div className="sentiment-hero"><SentimentCard briefing={briefing} onSettings={onSettings}/><History feed={{...history,refresh:details.refresh,refreshing:details.refreshing}} now={briefing.now}/></div>
-  <section className="sentiment-components" aria-label="Seven sentiment indicators"><header><div><span className="eyebrow">THE SEVEN INDICATORS</span><h2>What’s behind the score?</h2></div><SourceLink href="https://www.oanor.dev/api/stockfeargreed-api">CNN data via Oanor</SourceLink></header>
-   <p className="sentiment-detail-note">These are sentiment scores out of 100, not stock prices, VIX levels or put/call ratios. Open an indicator to see what it measures.</p>
+  <PageHeader title="Fear & Greed" description="CNN market sentiment and its components." actions={<button className="button primary" onClick={refresh} disabled={briefing.sentiment.refreshing||details.refreshing||details.status==='loading'}><ArrowClockwise size={18}/>Refresh readings</button>}/>
+  <Overview briefing={briefing} onSettings={onSettings}/>
+  <History feed={history} now={briefing.now}/>
+  <section className="sentiment-components" aria-label="Seven sentiment indicators"><header><h2>Components</h2><div>Source: <Source feed={indicators}/> <span className="sentiment-component-cadence">{cadence(indicators)} · daily history</span></div></header>
    {!indicators.data&&<Unavailable feed={indicators}/>}
-   {indicators.status==='stale'&&<p className="sentiment-detail-note amber" role="status">{indicators.message}</p>}
-   {indicators.data&&<p className="sentiment-detail-note">{indicators.data.observedAt?`Indicator snapshot · ${briefingTime(indicators.data.observedAt)} ${zoneLabel}`:'The provider does not supply an observation time for this component snapshot; its freshness cannot be confirmed.'}{indicators.fetchedAt?` Retrieved ${briefingTime(indicators.fetchedAt)} ${zoneLabel}.`:''} Components and the headline may update separately.</p>}
-   <div className="sentiment-components-grid">{components.map(([id,title,description],index)=>{const item=readings.get(id);return <details className={`panel sentiment-component ${item?tone(item.rating):''}`} key={id}><summary><span className="sentiment-component-number">0{index+1}</span><h3>{title}</h3><CaretRight size={16}/><div className="sentiment-component-reading"><strong>{item?sentimentScore(item.score):'—'}</strong><span>{item?item.rating:'Not supplied'}</span></div>{item&&<div className="sentiment-component-scale" aria-hidden="true"><i style={{width:`${item.score}%`}}/></div>}</summary><div className="sentiment-component-description"><p>{description}</p>{item&&<small>{item.observedAt?`Observed ${briefingTime(item.observedAt)} ${zoneLabel}`:'Individual observation time not supplied.'}</small>}</div></details>;})}</div>
+   {indicators.status==='stale'&&<p className="sentiment-detail-note amber" role="status">Cached components · {indicators.message}</p>}
+   <div className="sentiment-component-tables"><ComponentTable items={components.slice(0,4)} readings={readings} feed={indicators}/><ComponentTable items={components.slice(4)} readings={readings} feed={indicators}/></div>
+   <details className="sentiment-source-details"><summary>About the readings & sources</summary><p>These are sentiment scores out of 100, not stock prices, VIX levels or put/call ratios. The rating comes from the provider. Components and the headline may update separately.</p><p>{indicators.data?.observedAt?`Component snapshot: ${marketTime(indicators.data.observedAt)} ${zoneLabel}.`:'The provider does not supply a snapshot observation time; freshness cannot be confirmed for undated components.'}{indicators.fetchedAt?` Fetched: ${marketTime(indicators.fetchedAt)} ${zoneLabel}.`:''}</p><p>Comparison timestamps are not supplied. Automatic sources are checked every 10 minutes; this is not a real-time feed. CNN combines seven measures of market behaviour. The index does not confirm a break-and-retest entry. Raw history for individual components is not supplied.</p>{briefing.sentiment.data&&<button className="text-button" onClick={onSettings}>Manage CNN connection<CaretRight size={16}/></button>}</details>
   </section>
-  <section className="panel sentiment-about"><Gauge size={25}/><div><h2>Reading the index</h2><p>Lower scores indicate fear; higher scores indicate greed. CNN combines seven measures of market behaviour into one index. Compare it with your levels, price action and the session’s events. It does not confirm a break-and-retest entry.</p><p>The history shows the index score. Raw historical series for the individual indicators are not supplied by this connection.</p></div></section>
  </div>;
 }
