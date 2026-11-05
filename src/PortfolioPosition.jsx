@@ -3,12 +3,13 @@ import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useDisplayTime} from './DisplayTime';
 
 const tone=value=>value>0?'green':value<0?'red':'';
-export function PortfolioPosition({position}){
+export function PortfolioPosition({position,compact=false,children}){
   const {money,number,privateMode}=usePortfolioPrivacy();
   const {clockStamp,zoneLabel}=useDisplayTime();
   const {holding:h,currency,owner,accountLabel,source,sourceLabel,observedAt,lastSuccess,status,environment}=position;
   const symbol=position.listing?.symbol||portfolioHoldingLabel(h).symbol;
   const date=source==='api'?lastSuccess:observedAt;
+  if(compact)return <section className="pm-position company-position" aria-label="Account holding"><div className="company-position-strip"><strong>{owner} · {accountLabel}{environment==='demo'?' · DEMO':''}</strong><span>{number(h.quantity)} shares</span><span>Average <b>{money(h.averagePrice,h.instrumentCurrency)}</b></span><span>Unrealized <b className={tone(h.unrealized)}>{money(h.unrealized,currency)}{!privateMode&&Number.isFinite(h.unrealized)&&h.cost>0?` (${h.unrealized>0?'+':''}${(h.unrealized/h.cost*100).toFixed(2)}%)`:''}</b></span>{position.onTrade&&!privateMode&&<div className="company-position-trades"><button onClick={()=>position.onTrade('BUY')}>Buy</button><button onClick={()=>position.onTrade('SELL')}>Sell</button></div>}</div><details className="company-disclosure"><summary>Holding & broker details</summary><p>Value: {money(h.value,currency)} · {status} · Broker last price: {money(h.price,h.instrumentCurrency)} · Broker ID: {h.ticker}{h.isin?` · ISIN: ${h.isin}`:''}</p><p>{sourceLabel} · {date?`${source==='api'?'Synced':'Observed'} ${clockStamp(date)} ${zoneLabel}`:'Source date unknown'}. Broker prices and Yahoo chart quotes are separate readings and can differ.{source==='api'?' Broker quote observation time is not supplied.':''}</p>{children}</details></section>;
   return <section className="pm-position" aria-label="Account holding">
     <header><div><span className="pm-eyebrow">{owner} · {accountLabel}{environment==='demo'?' · DEMO':''}</span><h3>Your investment</h3><p>{symbol?`${symbol} · `:''}{number(h.quantity)} shares</p></div><span className="pm-position-status">{status}</span></header>
     <dl><div><dt>Value · {currency}</dt><dd>{money(h.value,currency)}</dd></div><div><dt>Return · {currency}</dt><dd className={tone(h.unrealized)}>{money(h.unrealized,currency)}{Number.isFinite(h.unrealized)&&h.cost>0&&<small>{h.unrealized>0?'+':''}{(h.unrealized/h.cost*100).toFixed(2)}%</small>}</dd></div><div><dt>Shares</dt><dd>{number(h.quantity)}</dd></div><div><dt>Average price · {h.instrumentCurrency}</dt><dd className="pm-average-color">{money(h.averagePrice,h.instrumentCurrency)}</dd></div></dl>

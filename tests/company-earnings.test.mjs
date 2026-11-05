@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {earningsHistory,companyEarningsSeries} from '../server/company-earnings.mjs';
-import {earningsComparison} from '../src/data/company-earnings.mjs';
+import {earningsComparison,reportedRevenue} from '../src/data/company-earnings.mjs';
 const now=Date.parse('2026-10-29T22:00Z');
 const row=(period,actual,estimate,extras={})=>({fiscalQuarter:period,actual:{raw:actual},estimate:{raw:estimate},...extras});
 const module=quarterly=>({earningsChart:{quarterly}});
@@ -27,4 +27,14 @@ test('Surprise uses provider percentage, or an explicitly calculated fallback wi
  assert.equal(earningsComparison({actual:null,estimate:2}).result,'Pending');
  assert.equal(earningsComparison({actual:0,estimate:null}).result,'Reported');
  assert.equal(earningsComparison({actual:1,estimate:2}).result,'Miss');
+});
+
+test('Revenue joins only one exact fiscal quarter, preserving zero and rejecting ambiguous periods',()=>{
+ const financials=[{period:'2Q2027',revenue:60e9},{period:'2Q2026',revenue:0}];
+ assert.equal(reportedRevenue({period:'2Q2027'},financials),60e9);
+ assert.equal(reportedRevenue({period:'2Q2026'},financials),0);
+ assert.equal(reportedRevenue({period:'3Q2027'},financials),null);
+ assert.equal(reportedRevenue({period:'2Q2027'},[...financials,{period:'2Q2027',revenue:61e9}]),null);
+ assert.equal(reportedRevenue({period:'2027'},financials),null);
+ assert.equal(reportedRevenue({period:'2Q2027'},[{period:'2Q2027',revenue:null}]),null);
 });

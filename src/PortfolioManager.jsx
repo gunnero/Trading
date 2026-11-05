@@ -118,10 +118,9 @@ function HoldingDetail({holding,account,owner,sheet,watchlist,setupInterval,onTr
   const choices=portfolioListingChoices(watchlist),automatic=portfolioListing(holding,watchlist),entry=automatic||choices.find(e=>e.id===chosen);
   const position={holding,onTrade:account.connected&&!privacy.privateMode?onTrade:null,listing:entry,currency:account.snapshot.currency,owner,accountLabel:privacy.label(account.label,account.id),sourceLabel:privacy.privateMode?'Saved snapshot':account.snapshot.sourceLabel,source:account.snapshot.source,observedAt:account.snapshot.observedAt,lastSuccess:account.lastSuccess,status:portfolioStatus(account),environment:account.environment};
   return <>
-    <StockHours accountId={account.id} connected={account.connected} ticker={holding.ticker} name={holding.name}/>
-    {automatic&&<p className="pm-auto-listing">Chart matched automatically · <strong>{automatic.exchange}:{automatic.symbol}</strong></p>}
     {!automatic&&<div className="pm-listing-picker"><label>Stock / ETF listing<select aria-label="Holding chart listing" value={entry?.id||''} onChange={e=>setChosen(e.target.value)}><option value="" disabled>Choose this holding’s ticker</option>{choices.map(e=><option key={e.id} value={e.id}>{e.exchange}:{e.symbol}</option>)}</select></label><p>No unique automatic match for {holding.name} ({holding.ticker}). Choose this holding’s own ticker and currency. QQQ is a separate ETF, not an exchange selection. This choice applies to this view only.</p></div>}
     {entry?<CompanyDetail key={entry.id} entry={entry} sheet={sheet} setupInterval={setupInterval} position={position}/>:<><PortfolioPosition position={position}/><div className="empty"><h3>Choose a chart listing</h3><p>Your holding details are available above. A matching listing is needed for its chart, company details and your saved levels.</p></div></>}
+    <details className="company-disclosure"><summary>Listing & trading hours</summary>{automatic&&<p className="pm-auto-listing">Chart matched automatically · <strong>{automatic.exchange}:{automatic.symbol}</strong></p>}<StockHours accountId={account.id} connected={account.connected} ticker={holding.ticker} name={holding.name}/></details>
   </>;
 }
 
