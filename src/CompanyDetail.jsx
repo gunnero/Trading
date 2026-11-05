@@ -106,7 +106,7 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
   </div>}
   {tab==='financials'&&(data?<Financials data={data} clockStamp={clockStamp} zoneLabel={zoneLabel}/>:<div className="empty"><h3>{snapshot.status==='loading'?'Loading financials…':'Financials unavailable'}</h3><p>{snapshot.message||'Fetching the company snapshot.'}</p></div>)}
   {tab==='earnings'&&<CompanyEarnings key={key} data={data} status={snapshot.status} message={snapshot.message}/>}
-  {tab==='news'&&<CompanyNews symbol={entry.symbol.replaceAll('.','-')}/>}
+  {tab==='news'&&<CompanyNews key={entry.id} symbol={entry.symbol.replaceAll('.','-')}/>}
   </div>
   <footer className="company-footer"><span role="status">{source}{tab==='financials'?' · TTM: trailing 12 months':''}</span><div><button className="icon-button" aria-label="Refresh company snapshot" onClick={snapshot.refresh}><ArrowsClockwise size={15}/></button><a href={data?.sourceUrl||`https://finance.yahoo.com/quote/${encodeURIComponent(entry.symbol.replaceAll('.','-'))}/`} target="_blank" rel="noopener noreferrer">Source page <ArrowUpRight size={13}/></a></div></footer>
  </div>;
