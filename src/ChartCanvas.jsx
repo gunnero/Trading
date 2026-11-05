@@ -129,6 +129,10 @@ export function TreasuryHistoryChart({points}) {
 // Read-only overview: independent of full-chart saved axes, panels and drawings.
 export function GridChart({symbol,timeframe,candles,indicators,instrument,provider}){
   const {clockStamp,zoneLabel}=useDisplayTime();
+  const singleSession=candles[0].date===candles.at(-1).date;
+  const dateFormat=new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',month:'short',...(['W','M'].includes(timeframe)?{year:'2-digit'}:{day:'numeric',...(candles[0].date.slice(0,4)!==candles.at(-1).date.slice(0,4)?{year:'2-digit'}:{})})});
+  const labels=candles.map(row=>singleSession?clockStamp(row.timestamp*1000).split(' · ').at(-1):dateFormat.format(new Date(`${row.date}T12:00:00Z`)));
+  const lastClose=candles.at(-1).ohlc[1];
   const low=Math.min(...candles.map(row=>row.ohlc[2])),high=Math.max(...candles.map(row=>row.ohlc[3]));
   const padding=Math.max((high-low)*.12,high*.001),min=low-padding,max=high+padding;
   const zones=instrument?.zones.filter(zone=>zone.low<=max&&zone.high>=min)||[];
@@ -138,15 +142,15 @@ export function GridChart({symbol,timeframe,candles,indicators,instrument,provid
     const groups=new Map();values.forEach((value,index)=>{const session=indicators.sessions?.[index]||candles[index]?.date;if(!groups.has(session))groups.set(session,Array(candles.length).fill(null));groups.get(session)[index]=value;});
     return [...groups].map(([session,data])=>({id:`vwap-${session}`,name,type:'line',data,showSymbol:false,connectNulls:false,lineStyle:{color,width:1.2},silent:true}));
   });
-  const {ref}=useChart({animation:false,textStyle:{fontFamily:'Inter, sans-serif'},grid:[{left:8,right:58,top:12,bottom:36},{left:8,right:58,bottom:36,height:28}],
+  const {ref}=useChart({animation:false,textStyle:{fontFamily:'Inter, sans-serif'},grid:[{left:10,right:62,top:14,bottom:78},{left:10,right:62,bottom:32,height:30}],
     tooltip:{show:false},
     xAxis:[{type:'category',data:candles.map(row=>row.timestamp),boundaryGap:true,axisLabel:{show:false},axisTick:{show:false},axisLine:{show:false}},
-      {type:'category',gridIndex:1,data:candles.map(row=>candles[0].date===candles.at(-1).date?clockStamp(row.timestamp*1000).split(' · ').at(-1):clockStamp(row.timestamp*1000).replace(' · ','\n')),axisLabel:{color:'#6f6483',fontSize:10,lineHeight:13,hideOverlap:true,interval:Math.max(1,Math.floor(candles.length/4))},axisTick:{show:false},axisLine:{lineStyle:{color:'#ddd8ea'}}}],
-    yAxis:[{type:'value',position:'right',min,max,splitNumber:4,axisLabel:{color:'#6f6483',fontSize:10,formatter:value=>value.toFixed(2)},splitLine:{lineStyle:{color:'#e9e3f2'}}},{type:'value',gridIndex:1,show:false}],
+      {type:'category',gridIndex:1,data:labels,axisLabel:{color:'#6f6483',fontSize:10,lineHeight:13,hideOverlap:true,interval:Math.max(1,Math.floor(candles.length/4))},axisTick:{show:false},axisLine:{lineStyle:{color:'#ddd8ea'}}}],
+    yAxis:[{type:'value',position:'right',min,max,splitNumber:4,axisLabel:{color:'#6f6483',fontSize:11,formatter:value=>value.toFixed(2)},splitLine:{lineStyle:{color:'#e9e3f2'}}},{type:'value',gridIndex:1,show:false}],
     series:[{id:'candles',type:'candlestick',data:candles.map(row=>row.ohlc),itemStyle:{color:colors.green,color0:colors.red,borderColor:colors.green,borderColor0:colors.red},barMaxWidth:10,
       markArea:{silent:true,data:zones.filter(zone=>zone.low!==zone.high).map(zone=>[{yAxis:zone.low,itemStyle:{color:zone.type==='S'?'#ef747324':zone.type==='D'?'#29c5b029':'#8f590024'}},{yAxis:zone.high}])},
-      markLine:{silent:true,symbol:['none','none'],label:{show:false},data:zones.filter(zone=>zone.low===zone.high).map(zone=>({yAxis:zone.low,lineStyle:{color:zone.type==='S'?colors.red:zone.type==='D'?colors.green:colors.amber,width:1}}))}},
+      markLine:{silent:true,symbol:['none','none'],label:{show:false},data:[{yAxis:lastClose,lineStyle:{color:'#713bdd',type:'dotted',width:1},label:{show:true,position:'end',formatter:lastClose.toFixed(2),backgroundColor:'#713bdd',color:'#fff',padding:[3,4],borderRadius:3,fontSize:10}},...zones.filter(zone=>zone.low===zone.high).map(zone=>({yAxis:zone.low,lineStyle:{color:zone.type==='S'?colors.red:zone.type==='D'?colors.green:colors.amber,width:1}}))]}},
       {id:'volume',type:'bar',xAxisIndex:1,yAxisIndex:1,silent:true,data:candles.map(row=>({value:row.volume,itemStyle:{color:row.ohlc[1]>=row.ohlc[0]?'#087a4b3d':'#bb304a4a'}}))},...overlays],
   });
-  return <div ref={ref} className="grid-mini-chart" role="img" aria-label={`${symbol} ${timeframe} ${provider} chart · ${candles.length} available candles · ${zoneLabel} time · EMA 9/21 and VWAP when available`}/>;
+  return <div ref={ref} className="grid-mini-chart" role="img" data-candle-count={candles.length} data-history-from={candles[0].date} data-history-to={candles.at(-1).date} aria-label={`${symbol} ${timeframe} ${provider} chart · ${candles.length} available candles from ${candles[0].date} to ${candles.at(-1).date} · Last candle close ${lastClose.toFixed(2)} · ${zoneLabel} time · EMA 9/21 and VWAP when available`}/>;
 }

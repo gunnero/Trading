@@ -11,23 +11,28 @@ import {gridEntries,gridHistory} from './data/chart-grid.mjs';
 import {quoteKey,quotePrice,quoteChange,quoteTone} from './data/quotes.mjs';
 import {matchingInstrument} from './data/market';
 import {stageLabel} from './data/retests.mjs';
+import {TIMEFRAMES} from './data/candles';
 import './chart-grid.css';
 
 function GridCard({entry,history={status:'loading'},sheet,setup,interval,range,pinned,pinDisabled,onPin,onOpen}){
   const key=quoteKey(entry),roles=useZoneRoles(matchingInstrument(entry,sheet),sheet.date,key);
   const {quoteStamp,clockStamp,zoneLabel}=useDisplayTime(),view=gridHistory(history,range),quote=history.quote;
   const stale=history.status==='stale',indicators=view.indicators?.series||{};
-  const missing=['ema9','ema21','vwap'].filter(id=>!indicators[id]?.some(value=>Number.isFinite(value)));
+  const intraday=!['D','W','M'].includes(interval),expected=intraday?['ema9','ema21','vwap']:['ema9','ema21'];
+  const missing=expected.filter(id=>!indicators[id]?.some(value=>Number.isFinite(value)));
   const result=stale?{stage:'stale'}:setup||{stage:'no-levels'};
   return <article className={`grid-chart-card ${pinned?'is-pinned':''}`} data-market-key={key}>
     <header><button className="grid-symbol" onClick={onOpen} aria-label={`Expand ${entry.symbol} chart`}><strong>{entry.symbol}</strong><small>{entry.exchange}</small></button><div className="grid-card-price"><strong>{quotePrice(quote)}</strong><span className={quoteTone(quote)}>{quoteChange(quote)}</span></div><button className="icon-button" aria-label={`${pinned?'Unpin':'Pin'} ${entry.symbol}`} aria-pressed={pinned} disabled={pinDisabled&&!pinned} onClick={onPin}><PushPin size={17} weight={pinned?'fill':'regular'}/></button><button className="icon-button" onClick={onOpen} aria-label={`Open ${entry.symbol} full chart`}><ArrowsOutSimple size={18}/></button></header>
     <div className="grid-card-status"><span className={result.stage==='confirmed'?(result.direction==='bearish'?'red':'green'):'muted'}>{result.stage==='not-scanned'?'Not in stock scan':stageLabel(result.stage)}{result.direction?` · ${result.direction}`:''}</span><small>{result.timeframe||'—'} setup</small></div>
     {view.candles.length?<button className="grid-chart-open" onClick={onOpen} aria-label={`Inspect ${entry.symbol} chart`}><GridChart symbol={entry.symbol} timeframe={interval} candles={view.candles} indicators={view.indicators} instrument={roles.instrument} provider={quote?.provider||marketFeed.label}/></button>:<div className="grid-chart-empty" role="status"><strong>{history.status==='loading'?'Loading candles…':'Chart unavailable'}</strong><span>{history.message||'Waiting for actual source history.'}</span></div>}
-    <footer><span className={stale?'amber':''}>{stale?'Cached / old · ':''}{quote?`${quote.provider||marketFeed.label} · ${quoteStamp(quote)}`:marketFeed.label}</span>
-      <span>{view.date?`Regular-session history · ${range==='session'?view.date:'available history'} · ${view.candles.length} bars`:'Regular-session history unavailable'}{view.candles.at(-1)?.partial?' · Partial final bar':''}</span>
-      {view.candles.length>0&&<span>Last bar {clockStamp(view.candles.at(-1).timestamp*1000)} · {zoneLabel}{missing.length?` · ${missing.map(id=>({ema9:'EMA 9',ema21:'EMA 21',vwap:'VWAP'}[id])).join(', ')} unavailable`:' · EMA 9/21 + VWAP'}</span>}
+    <footer><span className="grid-history-span">{view.date?`${view.from===view.date?view.date:`${view.from} → ${view.date}`} · ${view.candles.length} bars · ${interval}`:'Regular-session history unavailable'}{view.candles.at(-1)?.partial?' · Partial final bar':''}</span>
+      <span className={stale?'amber':''}>{stale?'Cached / old · ':''}{quote?`${quote.provider||marketFeed.label} · ${quoteStamp(quote)}`:marketFeed.label}</span>
+      <details className="grid-card-details"><summary>Source & setup details</summary>
+      <span>Regular-session history · {range==='session'?'latest session':'available history'}</span>
+      {view.candles.length>0&&<span>Last bar {clockStamp(view.candles.at(-1).timestamp*1000)} · {zoneLabel}{missing.length?` · ${missing.map(id=>({ema9:'EMA 9',ema21:'EMA 21',vwap:'VWAP'}[id])).join(', ')} unavailable`:intraday?' · EMA 9/21 + VWAP':' · EMA 9/21 · VWAP is intraday only'}</span>}
       <span>{roles.instrument?`Levels ${roles.date} · ${roles.instrument.timeframe} · ${roles.status==='ok'?'confirmed roles':roles.status==='stale'?'cached roles':'imported roles; confirmation pending'}`:'No matching imported levels'}</span>
       {result.through&&<span>Setup checked through {clockStamp(result.through*1000)} · {result.sessionDate}</span>}
+      </details>
     </footer>
   </article>;
 }
@@ -40,13 +45,14 @@ export default function ChartGrid({watchlist,sheet,scan,config,onChange,onOpen})
   return <section className="chart-grid-desk" aria-label="Top / Hot chart grid">
     <div className="chart-grid-heading"><div><h2>Market radar</h2><p>Compare your watchlist. Inspect a setup. Keep your shortlist pinned.</p></div><span className="grid-feed-status"><Info size={16}/>Real-time feed not connected</span></div>
     <div className="chart-grid-controls"><div className="segmented" aria-label="Grid source">{[['watchlist','Watchlist'],['scanner','Scanner']].map(([mode,label])=><button key={mode} aria-pressed={config.mode===mode} className={config.mode===mode?'selected':''} onClick={()=>update({mode})}>{label}</button>)}</div>
-      <label>Chart interval<select aria-label="Grid chart interval" value={config.interval} onChange={event=>update({interval:event.target.value})}>{['2m','5m','15m'].map(frame=><option key={frame}>{frame}</option>)}</select></label>
-      <label>Range<select aria-label="Grid history range" value={config.range} onChange={event=>update({range:event.target.value})}><option value="session">Latest session</option><option value="history">Available history</option></select></label>
+      <div className="segmented grid-perspective" aria-label="Chart perspective"><button aria-pressed={config.interval==='4h'&&config.range==='history'} className={config.interval==='4h'&&config.range==='history'?'selected':''} onClick={()=>update({interval:'4h',range:'history'})}>Big picture</button><button aria-pressed={config.interval==='15m'&&config.range==='session'} className={config.interval==='15m'&&config.range==='session'?'selected':''} onClick={()=>update({interval:'15m',range:'session'})}>Intraday</button></div>
+      <label>Chart interval<select aria-label="Grid chart interval" value={config.interval} onChange={event=>update({interval:event.target.value,...(['D','W','M'].includes(event.target.value)?{range:'history'}:{})})}>{TIMEFRAMES.map(frame=><option key={frame} value={frame}>{({D:'Daily',W:'Weekly',M:'Monthly'})[frame]||frame}</option>)}</select></label>
+      <label>Range<select aria-label="Grid history range" value={config.range} onChange={event=>update({range:event.target.value})}><option value="session" disabled={['D','W','M'].includes(config.interval)}>Latest session</option><option value="history">Available history</option></select></label>
       <div className="grid-pagination"><button className="icon-button" disabled={current===0} onClick={()=>setPage(current-1)} aria-label="Previous grid page"><CaretLeft size={18}/></button><span>{current+1} / {pages}</span><button className="icon-button" disabled={current>=pages-1} onClick={()=>setPage(current+1)} aria-label="Next grid page"><CaretRight size={18}/></button></div>
     </div>
-    <p className="grid-source-note">{marketFeed.label} · checks every minute while visible · delivery may be delayed. Latest session shows available bars, which may cover only part of the session. {config.mode==='scanner'?'Scanner shows qualifying stocks/ADRs ranked by your existing rules; pinned symbols stay visible.':'Watchlist includes eligible U.S. stocks, ADRs and funds.'} Chart interval does not change setup confirmation.</p>
+    <p className="grid-source-note">{config.range==='history'?'Showing the wider history supplied for each chart. Choose Daily, Weekly or Monthly for a longer view.':'Latest session shows available intraday bars; the session may be incomplete.'} Expand a chart to zoom and explore. Chart interval does not change setup confirmation.</p>
     {config.mode==='scanner'&&!remaining.length&&!pinned.length?<div className="empty"><h3>{scan.status==='loading'?'Checking your watchlist…':'No qualifying setups'}</h3><p>Use Watchlist to browse charts, or Scan details above to see data gaps and unmet rules.</p></div>:entries.length?<div className="chart-grid-cards">{entries.map(entry=><GridCard key={`${quoteKey(entry)}:${config.interval}`} entry={entry} history={data[quoteKey(entry)]} sheet={sheet} setup={scan.byKey[quoteKey(entry)]||{stage:scan.status==='loading'?'loading':entry.group==='FUND'?'not-scanned':'no-levels'}} interval={config.interval} range={config.range} pinned={config.pins.includes(quoteKey(entry))} pinDisabled={pinned.length>=6} onPin={()=>togglePin(quoteKey(entry))} onOpen={()=>onOpen(entry)}/>)}</div>:<div className="empty"><h3>No eligible watchlist symbols</h3><p>Add U.S. stocks, ADRs or funds in Settings → Watchlist.</p></div>}
-    <p className="grid-source-note">Monitoring only · real-time market data and options liquidity are not connected.</p>
+    <p className="grid-source-note">{marketFeed.label} · checks every minute while visible · delivery may be delayed. {config.mode==='scanner'?'Scanner ranks qualifying stocks/ADRs using your existing rules; pinned symbols stay visible.':'Watchlist includes eligible U.S. stocks, ADRs and funds.'} Real-time market data and options liquidity are not connected.</p>
   </section>;
 }
 

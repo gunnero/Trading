@@ -4,3 +4,14 @@
 .chart-grid-controls .segmented button,.desk-view-controls .segmented button{padding:8px 12px;font-size:12px;min-height:34px}
 
 }
+
+.chart-grid-desk .grid-mini-chart,.chart-grid-desk .grid-chart-empty{height:320px}
+.chart-grid-desk .grid-history-span{color:var(--text);font-size:11px}
+.chart-grid-desk .grid-card-details{font-size:11px}
+.chart-grid-desk .grid-card-details summary{cursor:pointer;padding:3px 0;color:var(--muted)}
+.chart-grid-desk .grid-card-details[open]{padding-bottom:4px}
+.chart-grid-desk .grid-card-details>span{display:block;margin-top:5px;line-height:1.6}
+.chart-grid-desk .grid-card-details summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.chart-grid-desk .chart-grid-controls select{min-height:36px;padding:7px 9px;font-size:12px}
+@media(min-width:1700px){.chart-grid-desk .grid-mini-chart{height:360px}}
+@media(max-width:760px){.chart-grid-desk .chart-grid-controls{gap:10px}.chart-grid-desk .chart-grid-controls label{flex:1 1 160px}.chart-grid-desk .chart-grid-controls select{min-height:44px;font-size:16px}.chart-grid-desk .grid-pagination{margin-left:auto}.chart-grid-desk .grid-mini-chart{height:300px}.chart-grid-desk .grid-perspective button{min-height:44px}}
