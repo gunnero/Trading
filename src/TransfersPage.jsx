@@ -3,7 +3,7 @@ import {ArrowsLeftRight,ArrowClockwise,DownloadSimple,LinkBreak,Check,UploadSimp
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {apiFetch,authRequest} from './auth-client';
-import {ibkrBankBreakdown,MAX_BANK_SOURCES,ACTIVITIES,descriptionPlatform,suggestion,transferSummary,moneyText,tradingRows,groupInstallments,bankMkdCoverage,addMoney,subtractMoney,recoveryReserve} from './data/transfers.mjs';
+import {ibkrBankBreakdown,MAX_BANK_SOURCES,PLATFORMS,ACTIVITIES,descriptionPlatform,suggestion,transferSummary,moneyText,tradingRows,groupInstallments,bankMkdCoverage,addMoney,subtractMoney,recoveryReserve} from './data/transfers.mjs';
 import './transfers.css';
 async function request(action,body,token){const response=await apiFetch('/api/transfers'+(action?'/'+action:''),body===undefined?{headers:{'X-Transfers-Token':token}}:{method:'POST',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web','X-Transfers-Token':token},body:JSON.stringify(body)});const result=await response.json();if(!response.ok)throw Object.assign(Error(result.message||'The ledger is unavailable.'),{locked:response.status===423});return result;}
 function SourceForm({snapshot,onSave,busy}){
