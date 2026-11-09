@@ -37,11 +37,12 @@ export function suggestion(row){const text=`${row.recipient||''} ${row.descripti
 export function descriptionPlatform(row){
  const text=(row.description||'').normalize('NFKC').replace(/\s+/g,' ').trim();
  if(/\bVANQUISH TRADER\b/i.test(text))return 'Vanquish';
+ if(/\bLONDON TRADING 212\b/i.test(text))return 'Trading212';
  return '';
 }
 export function automaticDescriptionReview(row){
- if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||descriptionPlatform(row)!=='Vanquish'||!row.amount?.startsWith('-'))return null;
- try{return {...validateReview(row,{platform:'Vanquish',activity:'cost'}),automatic:true};}catch{return null;}
+ if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||!['Vanquish','Trading212'].includes(descriptionPlatform(row))||!row.amount?.startsWith('-'))return null;
+ try{const platform=descriptionPlatform(row);if(platform==='Trading212'&&row.kind!=='card')return null;return {...validateReview(row,{platform,activity:platform==='Trading212'?'deposit':'cost'}),automatic:true};}catch{return null;}
 }
 export function tradingRows(rows){return rows.filter(row=>descriptionPlatform(row)).map(row=>({...row,review:row.review||automaticDescriptionReview(row)}));}
 export function validateReview(row,review){

@@ -96,7 +96,7 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
   res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
   try{
    if(req.method==='GET'&&path==='/api/transfers/summary'){
-    const totals=transferSummary(tradingRows(store.read().data.rows)).filter(total=>total.currency==='USD');
+    const totals=transferSummary(tradingRows(store.read().data.rows),'Vanquish').filter(total=>total.currency==='USD');
     const net=totals.reduce((sum,total)=>addMoney(sum,subtractMoney(addMoney(total.withdrawal,total.refund),addMoney(total.cost,total.deposit))),'0');
     res.end(JSON.stringify({currency:'USD',net,entries:totals.reduce((count,total)=>count+total.count,0)}));return;
    }
