@@ -44,7 +44,28 @@ export function automaticDescriptionReview(row){
  if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||!['Vanquish','Trading212'].includes(descriptionPlatform(row))||!row.amount?.startsWith('-'))return null;
  try{const platform=descriptionPlatform(row);if(platform==='Trading212'&&row.kind!=='card')return null;return {...validateReview(row,{platform,activity:platform==='Trading212'?'deposit':'cost'}),automatic:true};}catch{return null;}
 }
-export function tradingRows(rows){return rows.filter(row=>descriptionPlatform(row)).map(row=>({...row,review:row.review||automaticDescriptionReview(row)}));}
+// Account credits identify the sender; card credits carry the original currency.
+// Pair only unique exact MKD amounts within three booking days. Never pair by
+// the card purchase date: banks can reuse the original deposit date on refunds.
+export function tradingRows(rows){
+ const named=row=>/\bLONDON TRADING 212\b/i.test((row.recipient||'').normalize('NFKC').replace(/\s+/g,' '));
+ const positive=value=>typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value)&&Number(value)>0;
+ const safe=row=>!row.possibleDuplicate&&!row.possibleChange&&row.review?.activity!=='exclude';
+ const accounts=rows.filter(row=>row.kind==='account'&&row.currency==='MKD'&&positive(row.amount));
+ const cards=rows.filter(row=>row.kind==='card'&&positive(row.amount)&&positive(row.settlementAmount)&&validDay(row.bookingDate)&&validDay(row.date)&&row.review?.activity!=='exclude'&&(!row.review||row.review.platform==='Trading212'&&row.review.activity==='withdrawal')&&(/^(?:Uplata na tekuai raeun \(kartica\))$/i.test((row.description||'').trim())||descriptionPlatform(row)==='Trading212'));
+ const related=(account,card)=>validDay(account.date)&&addMoney(account.amount,'0')===addMoney(card.settlementAmount,'0')&&Date.parse(card.bookingDate)>=Date.parse(account.date)&&Date.parse(card.bookingDate)-Date.parse(account.date)<=3*86400000;
+ const links=new Map(),settlements=new Set();
+ for(const account of accounts.filter(row=>named(row)&&safe(row)&&(!row.review||row.review.platform==='Trading212'&&row.review.activity==='withdrawal'))){
+  const matches=cards.filter(card=>related(account,card));
+  if(matches.length!==1||accounts.filter(other=>related(other,matches[0])).length!==1)continue;
+  links.set(matches[0],account);settlements.add(account);
+ }
+ return rows.filter(row=>descriptionPlatform(row)||named(row)||links.has(row)).map(row=>({...row,
+  review:row.review||(links.has(row)&&safe(row)?{platform:'Trading212',activity:'withdrawal',automatic:true}:automaticDescriptionReview(row)),
+  ...(links.has(row)?{linkedAccountId:links.get(row).id,matchedPlatform:'Trading212'}:{}),
+  ...(settlements.has(row)?{settlementOnly:true}:{})
+ }));
+}
 export function validateReview(row,review){
  if(!review||!Object.hasOwn(ACTIVITIES,review.activity))throw Error('Choose a transaction category.');
  if(review.activity==='exclude')return {platform:'',activity:'exclude'};
@@ -57,7 +78,7 @@ export function validateReview(row,review){
 export function transferSummary(rows,platform=''){
  const groups=new Map();
  const purchases=groupInstallments(rows).flatMap(group=>{if(!group.children)return [group];const included=group.children.filter(row=>row.review&&row.review.activity!=='exclude');return included.every(row=>row.review.platform==='Vanquish'&&row.review.activity==='cost')?included.slice(0,1):group.children;});
- for(const row of purchases){if(!row.review||row.review.activity==='exclude'||platform&&row.review.platform!==platform)continue;
+ for(const row of purchases){if(row.settlementOnly||!row.review||row.review.activity==='exclude'||platform&&row.review.platform!==platform)continue;
   const key=`${row.review.platform}:${row.currency}`,total=groups.get(key)||{platform:row.review.platform,currency:row.currency,deposit:'0',withdrawal:'0',cost:'0',refund:'0',fee:'0',missingFees:0,count:0};
   total[row.review.activity]=addMoney(total[row.review.activity],magnitude(row.amount));
   if(row.fee===null)total.missingFees++;else total.fee=addMoney(total.fee,row.fee);
