@@ -51,6 +51,13 @@ export function automaticDescriptionReview(row){
 // Pair only unique exact MKD amounts within three booking days. Never pair by
 // the card purchase date: banks can reuse the original deposit date on refunds.
 export function tradingRows(rows){
+ // The bank repeats wire fees in the card history. Only reconcile a unique
+ // account fee with a unique exact card representation; retain raw records.
+ const feeAccount=row=>row.kind==='account'&&row.currency==='MKD'&&row.amount?.startsWith('-')&&row.description==='Провизија за девизен налог за плаќање'&&descriptionPlatform(row)==='IBKR';
+ const sameFee=(a,b)=>a.date===b.date&&a.currency===b.currency&&a.amount===b.amount;
+ const resolvedFees=new Set(rows.filter(row=>feeAccount(row)&&!row.possibleChange&&validDay(row.date)&&rows.filter(other=>feeAccount(other)&&sameFee(row,other)).length===1&&rows.filter(other=>other.kind==='card'&&sameFee(row,other)&&other.description==='1980 - 1980 - Девизен налог за плаќање'&&!other.possibleChange&&!other.review).length===1));
+ rows=rows.map(row=>resolvedFees.has(row)?{...row,possibleDuplicate:false,reconciledBankFee:true}:row);
+
  const named=row=>/\bLONDON TRADING 212\b/i.test((row.recipient||'').normalize('NFKC').replace(/\s+/g,' '));
  const positive=value=>typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value)&&Number(value)>0;
  const safe=row=>!row.possibleDuplicate&&!row.possibleChange&&row.review?.activity!=='exclude';

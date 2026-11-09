@@ -213,3 +213,12 @@ test('confirmed identical purchases keep separate installment plans and stable U
  assert.equal(bankMkdCoverage(complete).fullAmount,'10946');assert.equal(bankMkdCoverage(complete).remaining,'0');assert.equal(transferSummary(complete)[0].cost,'198');
  for(const patch of [{possibleDuplicate:true},{possibleChange:true},{review:{platform:'Vanquish',activity:'cost',automatic:true}},{settlementAmount:'-913'},{id:'first:1'}])assert.equal(bankMkdCoverage([first[0],{...first[1],...patch}]).fullAmount,null);
 });
+test('remember applies immediately to matching pending rows without overwriting reviews or flags',()=>{
+ const temp=temporary(),store=openTransfersStore(temp.directory);
+ try{
+ store.ingest([{source,rows:[row(),row({date:'2026-10-21'}),row({date:'2026-10-22'}),row({date:'2026-10-23'})]}]);
+ store.change(data=>{data.rows.find(r=>r.date==='2026-10-22').possibleDuplicate=true;data.rows.find(r=>r.date==='2026-10-23').review={platform:'',activity:'exclude'};return data;});
+ const before=store.read();store.review(before.data.rows.find(r=>r.date==='2026-10-20').id,{platform:'IBKR',activity:'deposit'},true,before.revision);
+ const rows=store.read().data.rows;assert.equal(rows.find(r=>r.date==='2026-10-21').review.activity,'deposit');assert.equal(rows.find(r=>r.date==='2026-10-22').review,null);assert.equal(rows.find(r=>r.date==='2026-10-23').review.activity,'exclude');
+ }finally{store.close();temp.remove();}
+});
