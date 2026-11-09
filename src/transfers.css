@@ -13,3 +13,5 @@
 
 .transfer-currency-total strong.transfer-net-negative{color:var(--red)}
 .transfer-currency-total strong.transfer-net-positive{color:var(--green)}
+
+.transfer-global{margin-bottom:20px}.transfer-global header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.transfer-global header>span{font-size:12px;color:var(--muted)}.transfer-mkd-net>span,.transfer-mkd-net>strong,.transfer-mkd-net>small{display:block}.transfer-mkd-net>strong{margin:8px 0;font-size:22px;overflow-wrap:anywhere}

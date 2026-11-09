@@ -7,7 +7,7 @@ import {join,dirname,resolve} from 'node:path';
 import {rm} from 'node:fs/promises';
 import {parseNlbCardTable} from './nlb-card-export.mjs';
 import {openTransfersStore} from './transfers-store.mjs';
-import {validDay,MAX_BANK_SOURCES,normalizeExport,tradingRows,transferSummary,addMoney,subtractMoney} from '../src/data/transfers.mjs';
+import {globalTradingSummary,validDay,MAX_BANK_SOURCES,normalizeExport,tradingRows} from '../src/data/transfers.mjs';
 const require=createRequire(import.meta.url);
 const cli=join(dirname(require.resolve('nlbcli/package.json')),'dist/index.mjs');
 const day=date=>date.toISOString().slice(0,10);
@@ -21,8 +21,8 @@ export function runNlb(args,{signal}={}){
   if(error){const auth=error.code===3,timeout=error.killed&&error.signal==='SIGTERM';reject(Object.assign(Error(auth?'NLB approval is required. Reconnect and approve on your phone.':timeout?'NLB did not respond before the read timed out. Retry to resume saved progress.':'NLB could not complete the read. Retry to resume saved progress.'),{auth}));}else resolve(stdout);
  }));
 }
-export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),removeSession}={}){
- const fx=createNbrmRates(directory);
+export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),removeSession,ratesProvider}={}){
+ const fx=ratesProvider||createNbrmRates(directory);
  const store=openTransfersStore(directory),profile='opening-bell-'+createHash('sha256').update(resolve(directory)).digest('hex').slice(0,20);
  const sessionPath=join(process.env.HOME||'~','.nlbcli','profiles',profile,'session.json');
  const erase=removeSession||(()=>rm(sessionPath,{force:true}));
@@ -98,9 +98,9 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
   res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');
   try{
    if(req.method==='GET'&&path==='/api/transfers/summary'){
-    const totals=transferSummary(tradingRows(store.read().data.rows),'Vanquish').filter(total=>total.currency==='USD');
-    const net=totals.reduce((sum,total)=>addMoney(sum,subtractMoney(addMoney(total.withdrawal,total.refund),addMoney(total.cost,total.deposit))),'0');
-    res.end(JSON.stringify({currency:'USD',net,entries:totals.reduce((count,total)=>count+total.count,0)}));return;
+    const rates=await fx.read();
+    const {components,...summary}=globalTradingSummary(tradingRows(store.read().data.rows),rates);
+    res.end(JSON.stringify(summary));return;
    }
    if(req.method==='GET'&&path==='/api/transfers/fx'){res.end(JSON.stringify(await fx.read()));return;}
    if(req.method==='GET'&&path==='/api/transfers'){res.end(JSON.stringify(store.read()));return;}

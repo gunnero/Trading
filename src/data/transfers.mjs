@@ -225,3 +225,27 @@ export function recoveryReserve(rows){
  const tax=fromUnits(((profit+5000000n)/10000000n)*1000000n);
  return {paid,received,remaining:fromUnits(delta<0n?-delta:0n),profit:fromUnits(profit),tax,calculated:coverage.calculated};
 }
+
+// Shared by the full ledger and privacy-limited sidebar endpoint. MKD is the
+// common basis: actual settlements, projected Vanquish installments, then FX.
+export function globalTradingSummary(rows,fx=null){
+ const included=rows.filter(r=>!r.settlementOnly&&r.review&&r.review.activity!=='exclude');
+ const ibkr=ibkrBankBreakdown(rows,fx);
+ const vanquishRows=rows.filter(r=>r.review?.platform==='Vanquish'||descriptionPlatform(r)==='Vanquish');
+ const reserve=recoveryReserve(vanquishRows);
+ const vanquish=reserve.paid!==null&&reserve.received!==null?subtractMoney(reserve.received,reserve.paid):null;
+ let trading212='0',estimated=ibkr.estimated||reserve.calculated;
+ for(const row of included.filter(r=>r.review.platform==='Trading212')){
+  let amount=row.currency==='MKD'?row.amount:row.settlementAmount;
+  if(amount==null){
+   if(fx?.rates?.[row.currency]){amount=convertMoney(row.amount,fx.rates[row.currency]);estimated=true;}
+   else {trading212=null;break;}
+  }
+  trading212=addMoney(trading212,amount);
+ }
+ const components={IBKR:ibkr.mkdNet,Trading212:trading212,Vanquish:vanquish};
+ const mkd=Object.values(components).every(v=>v!==null)?Object.values(components).reduce(addMoney,'0'):null;
+ const usd=mkd!==null&&fx?.rates?.USD?convertMoney(mkd,'1',fx.rates.USD):null;
+ const eur=mkd!==null&&fx?.rates?.EUR?convertMoney(mkd,'1',fx.rates.EUR):null;
+ return {currency:'USD',net:usd,totals:{MKD:mkd,USD:usd,EUR:eur},estimated:estimated||!!fx?.rates,rateDate:fx?.date||null,cached:!!fx?.cached,entries:included.length,pending:rows.filter(r=>!r.settlementOnly&&!r.review).length,components};
+}
