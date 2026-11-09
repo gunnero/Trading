@@ -235,7 +235,9 @@ export function globalTradingSummary(rows,fx=null){
  const reserve=recoveryReserve(vanquishRows);
  const vanquish=reserve.paid!==null&&reserve.received!==null?subtractMoney(reserve.received,reserve.paid):null;
  let trading212='0',estimated=ibkr.estimated||reserve.calculated;
- for(const row of included.filter(r=>r.review.platform==='Trading212')){
+ // Trading212's displayed MKD balance comes from card settlements. Account
+ // representations may have manual reviews but must not be added again.
+ for(const row of included.filter(r=>r.review.platform==='Trading212'&&r.kind==='card')){
   let amount=row.currency==='MKD'?row.amount:row.settlementAmount;
   if(amount==null){
    if(fx?.rates?.[row.currency]){amount=convertMoney(row.amount,fx.rates[row.currency]);estimated=true;}
