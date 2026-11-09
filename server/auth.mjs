@@ -201,7 +201,7 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
           if(factor?.kind!=='totp')throw fail(403,'Enter a fresh six-digit authenticator code. If you just used it, wait for the next code.');
           store.transaction(()=>{current(row);if(store.owner().totp!==user.totp)throw fail(403,'Your authenticator changed. Try again.');store.consumeFactor(factor);});
           for(const [key,grant] of transferGrants)if(grant.expires<=store.now()||grant.session===row.id)transferGrants.delete(key);
-          const token=randomBytes(32).toString('base64url'),expires=store.now()+15*60_000;
+          const token=randomBytes(32).toString('base64url'),expires=store.now()+60*60_000;
           transferGrants.set(hash(token),{session:row.id,expires});return json(res,200,{token,expires});
         }
         if(path==='/api/auth/transfers-lock'){

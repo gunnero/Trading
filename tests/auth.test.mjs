@@ -184,7 +184,7 @@ test('Transfers requires a short-lived authenticator grant bound to the current 
  const other=a.auth.newSession();assert.equal((await read('/api/transfers',grant.token,'ob_local_session='+other.token)).status,423);
  await a.post('transfers-lock',{}, {'X-Transfers-Token':grant.token});assert.equal((await read('/api/transfers',grant.token)).status,423);
  assert.equal((await a.post('transfers-unlock',{code:code()})).response.status,403);a.advance(30000);
- const next=(await a.post('transfers-unlock',{code:code()})).body;a.advance(15*60_000+1);assert.equal((await read('/api/transfers',next.token)).status,423);assert.equal((await read('/api/transfers/summary')).status,200);
+ const next=(await a.post('transfers-unlock',{code:code()})).body;a.advance(15*60_000+1);assert.equal((await read('/api/transfers',next.token)).status,200);a.advance(45*60_000);assert.equal((await read('/api/transfers',next.token)).status,423);assert.equal((await read('/api/transfers/summary')).status,200);
  const final=(await a.post('transfers-unlock',{code:code()})).body;await a.post('logout');assert.equal((await read('/api/transfers',final.token)).status,401);
 });
 
