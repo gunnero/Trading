@@ -98,6 +98,29 @@ export function validateReview(row,review){
  if(outgoing!==['deposit','cost'].includes(review.activity))throw Error('The category must match the source amount direction.');
  return {platform:review.platform,activity:review.activity};
 }
+// Fees remain MKD. A unique same-day bank wire identifies the currency section,
+// not an exchange rate; incomplete conversion evidence never becomes zero.
+export function ibkrBankBreakdown(rows){
+ const included=rows.filter(r=>!r.settlementOnly&&r.review?.platform==='IBKR'&&r.review.activity!=='exclude');
+ const wires=included.filter(r=>r.kind==='account'&&['USD','EUR'].includes(r.currency)&&['deposit','withdrawal'].includes(r.review.activity));
+ const fees=included.filter(r=>r.kind==='account'&&r.currency==='MKD'&&r.review.activity==='cost'&&r.description==='Провизија за девизен налог за плаќање');
+ const groups=Object.fromEntries(['USD','EUR'].map(c=>[c,{fee:'0',mkdNet:null,missingConversions:0,count:0}]));
+ let unmatchedFees='0';
+ for(const fee of fees){
+  const candidates=wires.filter(w=>w.review.activity==='deposit'&&w.description==='Девизен налог за плаќање'&&w.date===fee.date&&validDay(w.date)&&w.recipient===fee.recipient&&!w.possibleChange&&(!w.possibleDuplicate||w.review&&!w.review.automatic));
+  if(candidates.length===1&&!fee.possibleChange)groups[candidates[0].currency].fee=addMoney(groups[candidates[0].currency].fee,magnitude(fee.amount));
+  else unmatchedFees=addMoney(unmatchedFees,magnitude(fee.amount));
+ }
+ for(const currency of ['USD','EUR']){
+  const group=groups[currency],items=wires.filter(w=>w.currency===currency);group.count=items.length;
+  const known=items.filter(w=>w.settlementAmount&&w.settlementAmount!=='0'&&w.settlementAmount.startsWith('-')===w.amount.startsWith('-'));
+  group.missingConversions=items.length-known.length;
+  if(!group.missingConversions)group.mkdNet=subtractMoney(known.reduce((sum,w)=>addMoney(sum,w.settlementAmount),'0'),group.fee);
+ }
+ const nativeNet=included.filter(r=>r.currency==='MKD'&&!fees.includes(r)).reduce((sum,r)=>addMoney(sum,r.amount),'0');
+ return {groups,unmatchedFees,totalFees:fees.reduce((sum,r)=>addMoney(sum,magnitude(r.amount)),'0'),mkdNet:Object.values(groups).every(g=>g.mkdNet!==null)?addMoney(nativeNet,subtractMoney(addMoney(groups.USD.mkdNet,groups.EUR.mkdNet),unmatchedFees)):null};
+}
+
 export function transferSummary(rows,platform=''){
  const groups=new Map();
  const purchases=groupInstallments(rows).flatMap(group=>{if(!group.children)return [group];const included=group.children.filter(row=>row.review&&row.review.activity!=='exclude');return included.every(row=>row.review.platform==='Vanquish'&&row.review.activity==='cost')?included.slice(0,1):group.children;});
