@@ -65,6 +65,21 @@ export function transferSummary(rows,platform=''){
  return [...groups.values()].map(g=>({...g,netContributions:subtractMoney(g.deposit,g.withdrawal),netCosts:subtractMoney(g.cost,g.refund)})).sort((a,b)=>a.platform.localeCompare(b.platform)||a.currency.localeCompare(b.currency));
 }
 
+// Identical, explicitly confirmed purchases can share the same bank description/date.
+// Split equivalent installment occurrences into parallel plans; never resolve flagged
+// amendments or differing amounts by guessing which purchase owns a later charge.
+function parallelPlans(group){
+ const stages=new Map();
+ for(const item of group.items){if(!stages.has(item.number))stages.set(item.number,[]);stages.get(item.number).push(item);}
+ const first=stages.get(1)||[];
+ if(first.length<2||first.some(({row})=>row.review?.automatic))return [group];
+ if(group.items.some(({row})=>!row.id||row.possibleDuplicate||row.possibleChange||row.review?.platform!=='Vanquish'||row.review?.activity!=='cost'||!row.settlementAmount?.startsWith('-'))||new Set(group.items.map(x=>x.row.id)).size!==group.items.length)return [group];
+ for(const items of stages.values())if(items.length>first.length||new Set(items.map(x=>x.row.settlementAmount)).size!==1||new Set(items.map(x=>x.row.bookingDate)).size!==1||!items[0].row.bookingDate)return [group];
+ const plans=first.map(()=>({...group,items:[]}));
+ for(const items of stages.values())items.slice().sort((a,b)=>a.row.id.localeCompare(b.row.id)).forEach((item,i)=>plans[i].items.push(item));
+ return plans;
+}
+
 // Group only installments sharing the card, published date, merchant and amount.
 // Repeated installment numbers are ambiguous and remain separate.
 export function groupInstallments(rows){
@@ -78,7 +93,7 @@ export function groupInstallments(rows){
   if(!groups.has(key))groups.set(key,{merchant,count,items:[]});groups.get(key).items.push({row,number});
  }
  const byId=new Map();
- for(const group of groups.values()){
+ for(const group of [...groups.values()].flatMap(parallelPlans)){
   if(group.items.length<2||new Set(group.items.map(item=>item.number)).size!==group.items.length)continue;
   const children=group.items.sort((a,b)=>a.number-b.number).map(item=>item.row);
   const entry={...children[0],id:'installments:'+children[0].id,description:group.merchant,children,installmentCount:group.count,amount:children[0].amount,rawAmount:children.reduce((total,row)=>addMoney(total,row.amount),'0')};
@@ -101,7 +116,7 @@ export function bankMkdCoverage(rows){
   const key=JSON.stringify([row.sourceKey,row.date,match[1].replace(/\s+/g,' ').toUpperCase(),row.amount,row.currency,count]);
   if(!plans.has(key))plans.set(key,{count,items:[]});plans.get(key).items.push({row,number});
  }
- for(const {count,items} of plans.values()){
+ for(const {count,items} of [...plans.values()].flatMap(parallelPlans)){
   if(new Set(items.map(item=>item.number)).size!==items.length){uncertain=true;continue;}
   if(items.length===count)continue;
   if(items.some(item=>item.row.settlementAmount==null||!item.row.settlementAmount.startsWith('-')||item.row.possibleDuplicate||item.row.possibleChange)){uncertain=true;continue;}

@@ -200,3 +200,16 @@ test('MKD recovery reserve is a cumulative estimate with exact threshold, roundi
  assert.equal(recoveryReserve([cost,{...payout('10'),review:null}]).tax,null);
  assert.equal(recoveryReserve([cost,{...cost,id:'mirror',kind:'account',currency:'MKD',amount:'-5500'},payout('6500')]).tax,'100');
 });
+
+test('confirmed identical purchases keep separate installment plans and stable USD totals',async()=>{
+ const {bankMkdCoverage,groupInstallments}=await import('../src/data/transfers.mjs');
+ const base={kind:'card',sourceKey:'card:test',date:'2026-11-02',bookingDate:'2026-11-04',description:'MIAMI VANQUISH TRADER 1/6',amount:'-99',currency:'USD',settlementAmount:'-912',fee:null,review:{platform:'Vanquish',activity:'cost'}};
+ const first=[{...base,id:'first:1'},{...base,id:'first:2'}];
+ assert.equal(bankMkdCoverage(first).fullAmount,'10944');assert.equal(bankMkdCoverage(first).remainingCount,10);assert.equal(transferSummary(first)[0].cost,'198');
+ const second=first.map((r,i)=>({...r,id:`second:${i+1}`,bookingDate:'2026-12-04',description:'MIAMI VANQUISH TRADER 2/6'}));
+ for(const rows of [[...first,second[0]],[...first,...second],[...second,...first].reverse()]){assert.equal(transferSummary(rows)[0].cost,'198');assert.equal(bankMkdCoverage(rows).fullAmount,'10944');}
+ assert.equal(groupInstallments([...first,...second]).length,2);
+ const complete=Array.from({length:6},(_,i)=>first.map((r,j)=>({...r,id:`${i}:${j}`,description:`MIAMI VANQUISH TRADER ${i+1}/6`,settlementAmount:i===5?'-913':'-912'}))).flat();
+ assert.equal(bankMkdCoverage(complete).fullAmount,'10946');assert.equal(bankMkdCoverage(complete).remaining,'0');assert.equal(transferSummary(complete)[0].cost,'198');
+ for(const patch of [{possibleDuplicate:true},{possibleChange:true},{review:{platform:'Vanquish',activity:'cost',automatic:true}},{settlementAmount:'-913'},{id:'first:1'}])assert.equal(bankMkdCoverage([first[0],{...first[1],...patch}]).fullAmount,null);
+});
