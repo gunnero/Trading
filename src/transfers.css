@@ -10,3 +10,6 @@
 .transfer-tax-reserve header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.transfer-tax-reserve header span{font-size:12px;color:var(--amber)}.transfer-tax-reserve dl{font-size:12px;margin:20px 0}.transfer-tax-reserve dl div{display:flex;justify-content:space-between;gap:10px;margin:10px 0}.transfer-tax-reserve dt{color:var(--muted)}.transfer-tax-reserve dd{margin:0;text-align:right;overflow-wrap:anywhere}
 
 }
+
+.transfer-currency-total strong.transfer-net-negative{color:var(--red)}
+.transfer-currency-total strong.transfer-net-positive{color:var(--green)}
