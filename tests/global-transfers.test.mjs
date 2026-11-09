@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {globalTradingSummary} from '../src/data/transfers.mjs';
+import {globalTradingSummary,globalRecoveryReserve} from '../src/data/transfers.mjs';
 const fx={date:'2026-11-09',rates:{USD:'50',EUR:'60'}};
 const row=(platform,currency,amount,activity,extra={})=>({kind:'account',date:'2026-11-01',currency,amount,review:{platform,activity},...extra});
 test('global net sums actual settlements, IBKR fees and projected installments once',()=>{
@@ -13,4 +13,11 @@ test('incomplete coverage never becomes a partial global total, and pending entr
 });
 test('global positive means all platforms together recovered their costs',()=>{
  const rows=[row('Trading212','USD','-100','deposit',{kind:'card',settlementAmount:'-5000'}),row('IBKR','EUR','-100','deposit'),row('Vanquish','USD','300','withdrawal',{settlementAmount:'15000'})];assert.equal(globalTradingSummary(rows,fx).net,'80');
+});
+
+test('all-platform recovery reserve reconciles to global net, ignores account copies and applies ten percent only above recovery',()=>{
+ const rows=[row('IBKR','EUR','-100','deposit'),row('IBKR','MKD','-600','cost',{description:'Провизија за девизен налог за плаќање'}),row('Trading212','USD','-100','deposit',{kind:'card',settlementAmount:'-5000'}),row('Trading212','MKD','-5000','deposit'),row('Vanquish','USD','-20','cost',{kind:'card',description:'VANQUISH TRADER',settlementAmount:'-1000'})];
+ let reserve=globalRecoveryReserve(rows,fx);assert.equal(reserve.paid,'12600');assert.equal(reserve.received,'0');assert.equal(reserve.remaining,'12600');assert.equal(reserve.tax,'0');
+ rows.push(row('IBKR','EUR','220','withdrawal'));reserve=globalRecoveryReserve(rows,fx);assert.equal(reserve.received,'13200');assert.equal(reserve.profit,'600');assert.equal(reserve.remaining,'0');assert.equal(reserve.tax,'60');assert.equal(globalTradingSummary(rows,fx).totals.MKD,reserve.profit);
+ assert.equal(globalRecoveryReserve(rows,null).tax,null);
 });

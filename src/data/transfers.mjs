@@ -251,3 +251,21 @@ export function globalTradingSummary(rows,fx=null){
  const eur=mkd!==null&&fx?.rates?.EUR?convertMoney(mkd,'1',fx.rates.EUR):null;
  return {currency:'USD',net:usd,totals:{MKD:mkd,USD:usd,EUR:eur},estimated:estimated||!!fx?.rates,rateDate:fx?.date||null,cached:!!fx?.cached,entries:included.length,pending:rows.filter(r=>!r.settlementOnly&&!r.review).length,components};
 }
+
+// User-defined cross-platform planning reserve, not a statutory tax calculation.
+export function globalRecoveryReserve(rows,fx=null){
+ const summary=globalTradingSummary(rows,fx);
+ const vanquish=recoveryReserve(rows.filter(r=>r.review?.platform==='Vanquish'||descriptionPlatform(r)==='Vanquish'));
+ const unavailable={paid:null,received:null,remaining:null,profit:null,tax:null,calculated:summary.estimated};
+ if(summary.totals.MKD===null||vanquish.paid===null||vanquish.received===null)return unavailable;
+ let paid=vanquish.paid,received=vanquish.received;
+ for(const row of rows.filter(r=>!r.settlementOnly&&r.review&&r.review.activity!=='exclude'&&(r.review.platform==='IBKR'||r.review.platform==='Trading212'&&r.kind==='card'))){
+  let amount=row.currency==='MKD'?row.amount:row.settlementAmount;
+  if(amount==null){if(!fx?.rates?.[row.currency])return unavailable;amount=convertMoney(row.amount,fx.rates[row.currency]);}
+  if(amount.startsWith('-'))paid=addMoney(paid,magnitude(amount));else received=addMoney(received,amount);
+ }
+ // The reserve must reconcile to the same combined net displayed above.
+ if(subtractMoney(received,paid)!==summary.totals.MKD)return unavailable;
+ const delta=units(received)-units(paid),profit=delta>0n?delta:0n;
+ return {paid,received,remaining:fromUnits(delta<0n?-delta:0n),profit:fromUnits(profit),tax:fromUnits(((profit+5000000n)/10000000n)*1000000n),calculated:summary.estimated};
+}
