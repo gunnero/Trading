@@ -22,7 +22,7 @@
 .settings-intro h2{font-size:28px;letter-spacing:-.8px;margin:8px 0}
 .settings-intro p{font-size:13px;color:var(--muted);line-height:1.7;margin:0}
 .settings-layout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:28px;align-items:start}
-.settings-nav{display:grid;gap:6px;position:sticky;top:20px}
+.settings-nav{display:grid;gap:6px;position:static;top:auto}
 .settings-nav a{display:flex;align-items:center;gap:11px;min-height:46px;padding:11px 13px;color:var(--muted);font-size:13px;text-decoration:none;border:1px solid transparent;border-radius:5px}
 .settings-nav a>svg:last-child{margin-left:auto;opacity:0}
 .settings-nav a:hover{color:var(--text);background:var(--panel-hover)}
