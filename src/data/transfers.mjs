@@ -36,13 +36,16 @@ export function suggestion(row){const text=`${row.recipient||''} ${row.descripti
 // Match the merchant wording in Opis, not variable reference prefixes or account IDs.
 export function descriptionPlatform(row){
  const text=(row.description||'').normalize('NFKC').replace(/\s+/g,' ').trim();
+ if(/\bINTERACTIVE BROKERS(?: LLC)?\b|\bIBKR\b/i.test(text+' '+(row.recipient||'')))return 'IBKR';
+ // Generic wire receipts with a broker-style reference are candidates only.
+ if(row.kind==='account'&&row.description==='Девизен прилив'&&['USD','EUR'].includes(row.currency)&&row.amount&&!row.amount.startsWith('-')&&/\bU\d{5,12}\b/.test(row.recipient||''))return 'IBKR';
  if(/\bVANQUISH TRADER\b/i.test(text))return 'Vanquish';
  if(/\bLONDON TRADING 212\b/i.test(text))return 'Trading212';
  return '';
 }
 export function automaticDescriptionReview(row){
- if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||!['Vanquish','Trading212'].includes(descriptionPlatform(row))||!row.amount?.startsWith('-'))return null;
- try{const platform=descriptionPlatform(row);if(platform==='Trading212'&&row.kind!=='card')return null;return {...validateReview(row,{platform,activity:platform==='Trading212'?'deposit':'cost'}),automatic:true};}catch{return null;}
+ if(row.review||row.possibleDuplicate||row.possibleChange||!['card','account'].includes(row.kind)||!['Vanquish','Trading212','IBKR'].includes(descriptionPlatform(row))||!row.amount?.startsWith('-'))return null;
+ try{const platform=descriptionPlatform(row);if(platform==='Trading212'&&row.kind!=='card')return null;if(platform==='IBKR'){if(row.kind!=='account')return null;const activity=row.description==='Провизија за девизен налог за плаќање'?'cost':row.description==='Девизен налог за плаќање'?'deposit':null;if(!activity)return null;return {...validateReview(row,{platform,activity}),automatic:true};}return {...validateReview(row,{platform,activity:platform==='Trading212'?'deposit':'cost'}),automatic:true};}catch{return null;}
 }
 // Account credits identify the sender; card credits carry the original currency.
 // Pair only unique exact MKD amounts within three booking days. Never pair by

@@ -99,7 +99,7 @@ test('Vanquish Opis matches changing prefixes across three cards and ignores unr
   const selected=tradingRows(store.read().data.rows);assert.equal(selected.length,3);assert.ok(selected.every(row=>row.review?.activity==='cost'&&row.review.automatic));assert.equal(transferSummary(selected)[0].netCosts,'147');
   const excluded=selected[0];store.review(excluded.id,{platform:'Vanquish',activity:'exclude'},false,store.read().revision);
   assert.equal(tradingRows(store.read().data.rows).find(row=>row.id===excluded.id).review.activity,'exclude');
-  assert.equal(descriptionPlatform({description:'VANQUISH TRADERX'}),'');assert.equal(descriptionPlatform({recipient:'VANQUISH TRADER',description:'Unrelated'}),'');assert.equal(descriptionPlatform({description:'Interactive Brokers'}),'');
+  assert.equal(descriptionPlatform({description:'VANQUISH TRADERX'}),'');assert.equal(descriptionPlatform({recipient:'VANQUISH TRADER',description:'Unrelated'}),'');assert.equal(descriptionPlatform({description:'Interactive Brokers'}),'IBKR');
   store.ingest([{source:cards[0],rows:[{date:'2026-10-21',description:'REF-REFUND VANQUISH TRADER',amount:'49',currency:'USD'}]}]);assert.equal(tradingRows(store.read().data.rows).find(row=>row.amount==='49').review,null);
   assert.equal(tradingRows([{kind:'card',date:'2026-10-20',amount:'-49',currency:'USD',description:'OLD-REF VANQUISH TRADER',review:null}])[0].review.activity,'cost');
  }finally{store.close();temp.remove();}
