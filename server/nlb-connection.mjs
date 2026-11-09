@@ -1,3 +1,4 @@
+import {createNbrmRates} from './nbrm-rates.mjs';
 import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {createRequire} from 'node:module';
@@ -21,6 +22,7 @@ export function runNlb(args,{signal}={}){
  }));
 }
 export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),removeSession}={}){
+ const fx=createNbrmRates(directory);
  const store=openTransfersStore(directory),profile='opening-bell-'+createHash('sha256').update(resolve(directory)).digest('hex').slice(0,20);
  const sessionPath=join(process.env.HOME||'~','.nlbcli','profiles',profile,'session.json');
  const erase=removeSession||(()=>rm(sessionPath,{force:true}));
@@ -100,6 +102,7 @@ export function createNlbConnection(directory,{run=runNlb,now=()=>new Date(),rem
     const net=totals.reduce((sum,total)=>addMoney(sum,subtractMoney(addMoney(total.withdrawal,total.refund),addMoney(total.cost,total.deposit))),'0');
     res.end(JSON.stringify({currency:'USD',net,entries:totals.reduce((count,total)=>count+total.count,0)}));return;
    }
+   if(req.method==='GET'&&path==='/api/transfers/fx'){res.end(JSON.stringify(await fx.read()));return;}
    if(req.method==='GET'&&path==='/api/transfers'){res.end(JSON.stringify(store.read()));return;}
    if(req.method!=='POST')throw fail('Use POST for ledger actions.',405);
    if(req.headers['content-type']?.split(';')[0]!=='application/json'||req.headers['x-opening-bell-client']!=='web')throw fail('A JSON app request is required.',415);

@@ -100,11 +100,17 @@ export function validateReview(row,review){
 }
 // Fees remain MKD. A unique same-day bank wire identifies the currency section,
 // not an exchange rate; incomplete conversion evidence never becomes zero.
-export function ibkrBankBreakdown(rows){
+export function convertMoney(amount,fromRate,toRate='1'){
+ const a=units(amount),from=units(fromRate),to=units(toRate);if(from<=0n||to<=0n)throw Error('Invalid exchange rate');
+ const n=a*from*100n,d=to*100000000n,negative=n<0n,abs=negative?-n:n,cents=(abs+d/2n)/d;
+ return decimal(`${negative&&cents?'-':''}${cents/100n}.${String(cents%100n).padStart(2,'0')}`);
+}
+export function ibkrBankBreakdown(rows,fx=null){
+ const rates=fx?.rates&&['USD','EUR'].every(c=>typeof fx.rates[c]==='string'&&/^\d+(\.\d{1,8})?$/.test(fx.rates[c])&&Number(fx.rates[c])>0)?fx.rates:null;
  const included=rows.filter(r=>!r.settlementOnly&&r.review?.platform==='IBKR'&&r.review.activity!=='exclude');
  const wires=included.filter(r=>r.kind==='account'&&['USD','EUR'].includes(r.currency)&&['deposit','withdrawal'].includes(r.review.activity));
  const fees=included.filter(r=>r.kind==='account'&&r.currency==='MKD'&&r.review.activity==='cost'&&r.description==='Провизија за девизен налог за плаќање');
- const groups=Object.fromEntries(['USD','EUR'].map(c=>[c,{fee:'0',mkdNet:null,missingConversions:0,count:0}]));
+ const groups=Object.fromEntries(['USD','EUR'].map(c=>[c,{fee:'0',mkdNet:null,missingConversions:0,estimatedConversions:0,count:0}]));
  let unmatchedFees='0';
  for(const fee of fees){
   const candidates=wires.filter(w=>w.review.activity==='deposit'&&w.description==='Девизен налог за плаќање'&&w.date===fee.date&&validDay(w.date)&&w.recipient===fee.recipient&&!w.possibleChange&&(!w.possibleDuplicate||w.review&&!w.review.automatic));
@@ -115,10 +121,14 @@ export function ibkrBankBreakdown(rows){
   const group=groups[currency],items=wires.filter(w=>w.currency===currency);group.count=items.length;
   const known=items.filter(w=>w.settlementAmount&&w.settlementAmount!=='0'&&w.settlementAmount.startsWith('-')===w.amount.startsWith('-'));
   group.missingConversions=items.length-known.length;
-  if(!group.missingConversions)group.mkdNet=subtractMoney(known.reduce((sum,w)=>addMoney(sum,w.settlementAmount),'0'),group.fee);
+  if(!group.missingConversions||rates){
+   group.estimatedConversions=group.missingConversions;
+   group.mkdNet=subtractMoney(items.reduce((sum,w)=>addMoney(sum,known.includes(w)?w.settlementAmount:convertMoney(w.amount,rates[currency])),'0'),group.fee);
+  }
  }
  const nativeNet=included.filter(r=>r.currency==='MKD'&&!fees.includes(r)).reduce((sum,r)=>addMoney(sum,r.amount),'0');
- return {groups,unmatchedFees,totalFees:fees.reduce((sum,r)=>addMoney(sum,magnitude(r.amount)),'0'),mkdNet:Object.values(groups).every(g=>g.mkdNet!==null)?addMoney(nativeNet,subtractMoney(addMoney(groups.USD.mkdNet,groups.EUR.mkdNet),unmatchedFees)):null};
+ const mkdNet=Object.values(groups).every(g=>g.mkdNet!==null)?addMoney(nativeNet,subtractMoney(addMoney(groups.USD.mkdNet,groups.EUR.mkdNet),unmatchedFees)):null;
+ return {groups,unmatchedFees,totalFees:fees.reduce((sum,r)=>addMoney(sum,magnitude(r.amount)),'0'),mkdNet,usdNet:mkdNet!==null&&rates?convertMoney(mkdNet,'1',rates.USD):null,eurNet:mkdNet!==null&&rates?convertMoney(mkdNet,'1',rates.EUR):null,estimated:Object.values(groups).some(g=>g.estimatedConversions>0)};
 }
 
 export function transferSummary(rows,platform=''){

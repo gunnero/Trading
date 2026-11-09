@@ -177,6 +177,7 @@ test('Transfers requires a short-lived authenticator grant bound to the current 
  const code=()=>new TOTP({secret}).generate({timestamp:a.now()});
  const read=(path,token,cookie=a.cookie)=>fetch(a.url+path,{headers:{Cookie:cookie,...(token?{'X-Transfers-Token':token}:{})}});
  assert.equal((await read('/api/transfers')).status,423);
+ assert.equal((await read('/api/transfers/fx')).status,423);
  assert.equal((await read('/api/transfers/summary')).status,200);
  assert.equal((await a.post('transfers-unlock',{code:'invalid'})).response.status,403);
  assert.equal((await a.post('transfers-unlock',{code:code()},{'X-CSRF-Token':'bad'})).response.status,403);
