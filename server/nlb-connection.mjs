@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
@@ -15,7 +16,7 @@ const sourceSignature=sources=>JSON.stringify(sources.map(s=>[s.key,s.id,s.kind,
 const fail=(message,status=400)=>Object.assign(Error(message),{status});
 export function runNlb(args,{signal}={}){
  // No shell and no caller-controlled command names. Raw CLI output/errors never go to logs.
- return new Promise((resolve,reject)=>execFile(process.execPath,[cli,...args],{timeout:args.includes('login')?155000:60000,maxBuffer:3_000_000,signal,env:{...process.env,NO_COLOR:'1',FORCE_COLOR:'0'}},(error,stdout)=>{
+ return new Promise((resolve,reject)=>execFile(process.execPath,['--import',fileURLToPath(new URL('./nlb-loader.mjs',import.meta.url)),cli,...args],{timeout:args.includes('login')?155000:60000,maxBuffer:3_000_000,signal,env:{...process.env,NO_COLOR:'1',FORCE_COLOR:'0'}},(error,stdout)=>{
   if(error){const auth=error.code===3,timeout=error.killed&&error.signal==='SIGTERM';reject(Object.assign(Error(auth?'NLB approval is required. Reconnect and approve on your phone.':timeout?'NLB did not respond before the read timed out. Retry to resume saved progress.':'NLB could not complete the read. Retry to resume saved progress.'),{auth}));}else resolve(stdout);
  }));
 }
