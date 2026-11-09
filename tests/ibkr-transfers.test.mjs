@@ -14,3 +14,11 @@ test('unique bank/card fee representation counts once; uncertain fee groups stay
  for(const extra of [{...fee,id:'b'},{...card,id:'d'}])assert.ok(tradingRows([fee,card,extra]).every(r=>!r.review));
  assert.equal(tradingRows([{...fee,possibleChange:true},card])[0].review,null);
 });
+test('identical fee snapshots with a single card charge count once, preserving originals',()=>{
+ const fee={...base,id:'a',sourceKey:'account:fixture',currency:'MKD',amount:'-1500',balance:'10000',description:'Провизија за девизен налог за плаќање',possibleDuplicate:true,review:{platform:'IBKR',activity:'cost'}};
+ const second={...fee,id:'b'},card={...fee,id:'c',kind:'card',review:null,recipient:null,description:'1980 - 1980 - Девизен налог за плаќање'};
+ const raw=[fee,second,card],before=JSON.stringify(raw);const rows=tradingRows(raw);
+ assert.equal(transferSummary(rows,'IBKR')[0].cost,'1500');assert.equal(rows.find(r=>r.id==='b').duplicateOf,'a');assert.equal(JSON.stringify(raw),before);
+ for(const changed of [{balance:'8500'},{sourceKey:'account:other'},{possibleChange:true},{review:{platform:'',activity:'exclude'}}])assert.equal(tradingRows([fee,{...second,...changed},card]).some(r=>r.duplicateOf),false);
+ assert.equal(tradingRows([fee,second,card,{...card,id:'d'}]).some(r=>r.duplicateOf),false);
+});

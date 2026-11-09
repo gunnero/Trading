@@ -55,9 +55,22 @@ export function tradingRows(rows){
  // account fee with a unique exact card representation; retain raw records.
  const feeAccount=row=>row.kind==='account'&&row.currency==='MKD'&&row.amount?.startsWith('-')&&row.description==='Провизија за девизен налог за плаќање'&&descriptionPlatform(row)==='IBKR';
  const sameFee=(a,b)=>a.date===b.date&&a.currency===b.currency&&a.amount===b.amount;
- const resolvedFees=new Set(rows.filter(row=>feeAccount(row)&&!row.possibleChange&&validDay(row.date)&&rows.filter(other=>feeAccount(other)&&sameFee(row,other)).length===1&&rows.filter(other=>other.kind==='card'&&sameFee(row,other)&&other.description==='1980 - 1980 - Девизен налог за плаќање'&&!other.possibleChange&&!other.review).length===1));
- rows=rows.map(row=>resolvedFees.has(row)?{...row,possibleDuplicate:false,reconciledBankFee:true}:row);
-
+ const resolvedFees=new Set(),duplicateFees=new Map();
+ const identicalFee=(a,b)=>['sourceKey','date','description','recipient','currency','amount','balance','fee','status'].every(key=>a[key]===b[key]);
+ for(const row of rows.filter(feeAccount)){
+  if(row.possibleChange||!validDay(row.date))continue;
+  const accounts=rows.filter(other=>feeAccount(other)&&sameFee(row,other));
+  const cards=rows.filter(other=>other.kind==='card'&&sameFee(row,other)&&other.description==='1980 - 1980 - Девизен налог за плаќање'&&!other.possibleChange&&!other.review);
+  if(cards.length!==1)continue;
+  if(accounts.length===1){resolvedFees.add(row);continue;}
+  // User-approved correction: identical account snapshots with the same balance
+  // and one card charge represent one fee. Conflicting evidence stays untouched.
+  if(row.balance==null||!row.sourceKey||accounts.some(other=>!other.id||other.possibleChange||!identicalFee(row,other)||other.review&&(other.review.platform!=='IBKR'||other.review.activity!=='cost')))continue;
+  if(new Set(accounts.map(other=>other.id)).size!==accounts.length)continue;
+  const canonical=[...accounts].sort((a,b)=>a.id.localeCompare(b.id))[0];resolvedFees.add(canonical);
+  for(const other of accounts)if(other!==canonical)duplicateFees.set(other,canonical.id);
+ }
+ rows=rows.map(row=>duplicateFees.has(row)?{...row,settlementOnly:true,duplicateOf:duplicateFees.get(row)}:resolvedFees.has(row)?{...row,possibleDuplicate:false,reconciledBankFee:true}:row);
  const named=row=>/\bLONDON TRADING 212\b/i.test((row.recipient||'').normalize('NFKC').replace(/\s+/g,' '));
  const positive=value=>typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value)&&Number(value)>0;
  const safe=row=>!row.possibleDuplicate&&!row.possibleChange&&row.review?.activity!=='exclude';
