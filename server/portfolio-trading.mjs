@@ -133,6 +133,23 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     return result;
   }
   async function pending(id){return exclusive(id,()=>track(id,true));}
+  async function chartOrders(id,ticker){return exclusive(id,async()=>{
+    // Chart annotations are an authenticated read, independent of permission to
+    // place an order. Reuse the existing tracker and its account-wide backoff.
+    const ctx=context(id,false);
+    if(typeof ticker!=='string'||!/^[A-Za-z0-9._-]{1,80}$/.test(ticker))throw fail(400,'Choose a valid broker instrument.');
+    const matches=(await catalog(id,ctx)).filter(item=>item.ticker===ticker);
+    if(matches.length!==1)throw fail(400,'Choose an exact stock or ETF from the broker instrument list.');
+    const instrument=matches[0],result=await track(id,false);current(id,ctx);
+    // Order currency can describe the account wallet. Price coordinates must
+    // instead use the exact instrument catalog's currency, without conversion.
+    const matching=result.orders.filter(order=>order.ticker===ticker&&order.type==='LIMIT'&&[...activeStatuses,'CANCELLING'].includes(order.status));
+    const complete=order=>numeric(order.limitPrice)&&order.limitPrice>0&&numeric(order.quantity)&&order.quantity>0&&(order.filledQuantity===null||numeric(order.filledQuantity)&&order.filledQuantity>=0&&order.filledQuantity<=order.quantity);
+    const selected=matching.filter(order=>complete(order)&&(order.filledQuantity===null||order.filledQuantity<order.quantity));
+    const historyPending=selected.some(order=>order.awaitingHistory);
+    const error=result.error||(matching.some(order=>!complete(order))?'Some pending limit orders have incomplete price or share data and cannot be drawn.':null);
+    return {ticker,priceCurrency:instrument.currency,orders:selected.slice(0,1000).map(order=>({id:order.id,ticker,side:order.side,type:'LIMIT',status:order.status,quantity:order.quantity,filledQuantity:order.filledQuantity,limitPrice:order.limitPrice,priceCurrency:instrument.currency,awaitingHistory:order.awaitingHistory===true,observedAt:order.observedAt??null})),checkedAt:result.checkedAt,error,historyError:historyPending?result.historyError:null,historyPending,truncated:selected.length>1000};
+  });}
   async function monitor(id){
     if(isClosed()||locks.has(id))return;
     const record=credential(id);if(!record)return;
@@ -269,5 +286,5 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
   function acknowledge(id,input){context(id,false);const row=saved(input.token);if(!row||row.account_id!==id||row.state!=='UNKNOWN'||input.checkedBroker!==true)throw fail(400,'Confirm you checked this attempt in Trading 212.');update(row.token,'REVIEWED',{...row.detail,message:'Marked reviewed after checking Trading 212. This does not assert an execution outcome.'});return read(id);}
   function assertIdle(id){if(locks.has(id))throw fail(409,'Wait for the current order operation before changing this account.');}
   function remove(id){assertIdle(id);catalogs.delete(id);balances.remove(id);tracker.remove(id);db.prepare('DELETE FROM portfolio_trading_settings WHERE account_id=?').run(id);db.prepare('DELETE FROM portfolio_order_attempts WHERE account_id=?').run(id);}
-  return {read,attempt,configure,search,pending,monitor,tracking,position,preview,submit,acknowledge,assertIdle,remove};
+  return {read,attempt,configure,search,pending,chartOrders,monitor,tracking,position,preview,submit,acknowledge,assertIdle,remove};
 }

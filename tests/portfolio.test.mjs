@@ -71,6 +71,21 @@ function fixture(t,fetcher=async url=>json(url.endsWith('/summary')?summary:posi
   service.account({personId,platform:'Trading 212',label:'Invest'},1);const id=service.read().data.accounts[0].id;
   return {get service(){return service;},auth,directory,id,personId,advance:(ms=61000)=>time+=ms,revision:()=>service.read().revision,restart(){service.close();service=createPortfolioService(auth,directory,options);}};
 }
+test('chart order GET is an authenticated read route independent of trading execution settings',async t=>{
+ const methods=[],f=fixture(t,async(url,options)=>{
+  methods.push(options.method);
+  if(url.endsWith('/instruments'))return json([{ticker:'TEST_US_EQ',name:'Fixture company',type:'STOCK',currencyCode:'USD'}]);
+  if(url.endsWith('/orders'))return json([{id:75,ticker:'TEST_US_EQ',side:'SELL',type:'LIMIT',quantity:2,filledQuantity:0,limitPrice:175,status:'NEW',currency:'EUR'}]);
+  return json(url.endsWith('/summary')?summary:positions);
+ });
+ await f.service.connect(f.id,credentials,f.revision());assert.equal(f.service.trading.read(f.id).enabled,false);
+ const headers={};let body;const res={setHeader:(key,value)=>headers[key]=value,end:value=>body=JSON.parse(value)};
+ await f.service.middleware({method:'GET',url:`/api/portfolio/accounts/${f.id}/trading/chart-orders?ticker=TEST_US_EQ`,headers:{}},res,()=>assert.fail('Unexpected fallthrough'));
+ assert.equal(res.statusCode,undefined);assert.equal(headers['Cache-Control'],'no-store');assert.equal(body.orders[0].priceCurrency,'USD');assert.equal(body.orders[0].side,'SELL');
+ assert.ok(methods.every(method=>method==='GET'));assert.equal(f.service.trading.read(f.id).enabled,false);
+ for(const secret of [credentials.apiKey,credentials.apiSecret,f.id,summary.id])assert.ok(!JSON.stringify(body).includes(String(secret)));
+ await f.service.middleware({method:'GET',url:`/api/portfolio/accounts/${f.id}/trading/chart-orders?ticker=WRONG_US_EQ`,headers:{}},res,()=>assert.fail('Unexpected fallthrough'));assert.equal(res.statusCode,400);
+});
 test('failed holding reads retain JSON errors and correlate safe diagnostics without exposing account data',async t=>{
  let broken=false;
  const f=fixture(t,async url=>{

@@ -28,6 +28,58 @@ test('trading defaults disabled; explicit authorization is separate per account 
  const f=fixture(t);assert.equal(f.service.read('a').enabled,false);await assert.rejects(()=>f.service.preview('a',input),/Enable trading/);assert.equal(f.calls.length,0);
  assert.throws(()=>f.service.configure('a',{enabled:true}),/authorizes/);f.enable();assert.equal(f.service.read('a').enabled,true);assert.equal(f.service.read('b').enabled,false);f.connect();assert.equal(f.service.read('a').enabled,false);assert.equal(f.writes().length,0);
 });
+test('chart limit orders are readable with execution disabled and use exact instrument price currency',async t=>{
+ const f=fixture(t);f.a.snapshot.currency='EUR';
+ f.source.read=path=>path==='/equity/orders'?json([{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,filledQuantity:0,limitPrice:100,currency:'EUR',status:'NEW'}]):null;
+ const data=await f.service.chartOrders('a','AMD_US_EQ');
+ assert.equal(data.ticker,'AMD_US_EQ');assert.equal(data.priceCurrency,'USD');assert.equal(data.checkedAt,1000000);assert.equal(data.error,null);assert.equal(data.truncated,false);
+ assert.deepEqual(data.orders,[{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',status:'NEW',quantity:2.5,filledQuantity:0,limitPrice:100,priceCurrency:'USD',awaitingHistory:false,observedAt:1000000}]);
+ assert.equal(f.service.read('a').enabled,false);await assert.rejects(()=>f.service.preview('a',input),/Enable trading/);await assert.rejects(()=>f.service.pending('a'),/Enable trading/);
+ assert.deepEqual(f.calls.map(call=>call.path),['/equity/metadata/instruments','/equity/orders']);assert.equal(f.writes().length,0);
+ for(const secret of ['fake-key','fake-secret','brokerId','apiKey','apiSecret'])assert.ok(!JSON.stringify(data).includes(secret));
+});
+test('chart orders include only active exact-ticker limit prices with remaining shares',async t=>{
+ const f=fixture(t),base={ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,filledQuantity:0,limitPrice:100,status:'NEW'};
+ const active=['LOCAL','UNCONFIRMED','CONFIRMED','NEW','PARTIALLY_FILLED','REPLACING','CANCELLING'];
+ const rows=active.map((status,i)=>({...base,id:i+1,status,filledQuantity:status==='PARTIALLY_FILLED'?1:0,side:i%2?'SELL':'BUY'}));
+ for(const patch of [{ticker:'AMDL_US_EQ'},{type:'MARKET'},{status:'FILLED'},{status:'CANCELLED'},{status:'REJECTED'},{status:'REPLACED'},{limitPrice:0},{limitPrice:-100},{limitPrice:null},{quantity:0},{filledQuantity:2.5}])rows.push({...base,id:rows.length+1,...patch});
+ f.source.read=path=>path==='/equity/orders'?json(rows):null;
+ const data=await f.service.chartOrders('a','AMD_US_EQ');assert.deepEqual(data.orders.map(order=>order.id).sort((a,b)=>a-b),active.map((_,i)=>i+1));
+ assert.equal(data.orders.find(order=>order.status==='PARTIALLY_FILLED').filledQuantity,1);assert.match(data.error,/incomplete price or share data/);assert.equal(f.writes().length,0);
+});
+test('chart instrument lookup rejects invalid, unknown and ambiguous broker tickers before reading orders',async t=>{
+ for(const ticker of [null,'https://bad.invalid/AMD','AMD','AMD_US_EQ']){
+  const f=fixture(t);
+  if(ticker==='AMD_US_EQ')f.source.read=path=>path.endsWith('/instruments')?json([{ticker,name:'One',type:'STOCK',currencyCode:'USD'},{ticker,name:'Two',type:'STOCK',currencyCode:'EUR'}]):null;
+  await assert.rejects(()=>f.service.chartOrders('a',ticker),error=>error.status===400);
+  assert.equal(f.calls.filter(call=>call.path==='/equity/orders').length,0);assert.equal(f.writes().length,0);
+ }
+ const f=fixture(t);f.source.currency='EUR';f.source.read=path=>path==='/equity/orders'?json([{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:1,limitPrice:100,currency:'USD',status:'NEW'}]):null;
+ assert.equal((await f.service.chartOrders('a','AMD_US_EQ')).orders[0].priceCurrency,'EUR');
+});
+test('chart, trading and background reads share order polling and persisted rate-limit backoff',async t=>{
+ const f=fixture(t);let blocked=false;
+ f.source.read=path=>path==='/equity/orders'?blocked?new Response('{}',{status:429,headers:{'content-type':'application/json','retry-after':'300'}}):json([{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:1,limitPrice:100,status:'NEW'}]):null;
+ await f.service.chartOrders('a','AMD_US_EQ');f.enable();await f.service.pending('a');await f.service.monitor('a');await f.service.chartOrders('a','AMD_US_EQ');
+ const count=()=>f.calls.filter(call=>call.path==='/equity/orders').length;assert.equal(count(),1);
+ f.advance(15000);blocked=true;let data=await f.service.chartOrders('a','AMD_US_EQ');assert.equal(count(),2);assert.match(data.error,/rate limiting/);assert.equal(data.checkedAt,1000000);assert.equal(data.orders[0].id,75);
+ await f.service.pending('a');f.restart();f.advance(15000);data=await f.service.chartOrders('a','AMD_US_EQ');assert.equal(count(),2);assert.match(data.error,/rate limiting/);assert.equal(f.writes().length,0);
+});
+test('chart orders retain missing orders as unconfirmed references until terminal history removes them',async t=>{
+ const f=fixture(t),order={id:75,ticker:'AMD_US_EQ',side:'SELL',type:'LIMIT',quantity:2.5,filledQuantity:0,limitPrice:100,status:'NEW'};let stage=0;
+ f.source.read=path=>path==='/equity/orders'?json(stage===0?[order]:[]):path==='/equity/history/orders'?stage===1?json({},403):json({items:[{order:{...order,status:'FILLED',filledQuantity:2.5}}],nextPagePath:null}):null;
+ assert.equal((await f.service.chartOrders('a','AMD_US_EQ')).orders[0].awaitingHistory,false);
+ stage=1;f.advance();const uncertain=await f.service.chartOrders('a','AMD_US_EQ');assert.equal(uncertain.orders[0].awaitingHistory,true);assert.equal(uncertain.historyPending,true);assert.match(uncertain.historyError,/History: Orders/);
+ stage=2;f.advance();assert.deepEqual((await f.service.chartOrders('a','AMD_US_EQ')).orders,[]);assert.equal(f.writes().length,0);
+});
+test('chart reads cannot overlap order operations or return a previous connection after reconnect',async t=>{
+ const f=fixture(t);let release;const delay=new Promise(resolve=>release=resolve);
+ f.source.read=path=>path==='/equity/orders'?delay.then(()=>json([{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:1,limitPrice:100,status:'NEW'}])):null;
+ const first=f.service.chartOrders('a','AMD_US_EQ');await new Promise(resolve=>setImmediate(resolve));
+ await assert.rejects(()=>f.service.chartOrders('a','AMD_US_EQ'),error=>error.status===409);assert.equal(f.calls.filter(call=>call.path==='/equity/orders').length,1);
+ f.connect();release();await assert.rejects(()=>first,error=>error.status===409);f.advance();f.source.read=path=>path==='/equity/orders'?json([]):null;
+ assert.deepEqual((await f.service.chartOrders('a','AMD_US_EQ')).orders,[]);assert.equal(f.writes().length,0);
+});
 test('review is immutable, confirm sends one exact order, repeated token never resends across restart',async t=>{
  const f=fixture(t);f.enable();const review=await f.service.preview('a',input);assert.equal(f.writes().length,0);assert.equal(review.estimate,250);
  await assert.rejects(()=>f.service.submit('a',{token:review.token}),/confirm/);await assert.rejects(()=>f.service.submit('b',{token:review.token,confirmed:true}),/Enable trading/);

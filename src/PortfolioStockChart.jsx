@@ -7,7 +7,7 @@ import {portfolioAverageLine} from './data/portfolio-listings.mjs';
 import {PortfolioValueChart} from './PortfolioValueChart';
 const periods=['1D','1W','1M','3M','1Y','MAX'];
 const money=(v,c)=>Number.isFinite(v)&&c?new Intl.NumberFormat('en-US',{style:'currency',currency:c,maximumFractionDigits:2}).format(v):'—';
-export function PortfolioStockChart({entry,position,instrument,sheetDate}){
+export function PortfolioStockChart({entry,position,instrument,sheetDate,orderLines=[]}){
   const {hideBalances}=usePortfolioPrivacy();
   const symbol=quoteKey(entry),[range,setRange]=useState('1D'),[state,setState]=useState(null),[levels,setLevels]=useState(false),[average,setAverage]=useState(true),key=symbol+'|'+range;
   const {clockStamp,displayDay,zoneLabel}=useDisplayTime();
@@ -21,11 +21,12 @@ export function PortfolioStockChart({entry,position,instrument,sheetDate}){
     load();const timer=setInterval(load,60000);document.addEventListener('visibilitychange',load);return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',load);};
   },[key]);
   const data=state?.key===key?state:null,q=data?.quote,line=portfolioAverageLine(position.holding,q,entry),change=data?.change;
+  const matchingOrders=!hideBalances&&Array.isArray(orderLines)&&q?.providerSymbol===entry.symbol.replaceAll('.','-')?orderLines.filter(order=>order?.currency===q.currency):[];
   return <section className="pm-stock-chart" aria-label={`${entry.symbol} price history`}>
     <span className="pm-eyebrow">{entry.exchange} · {entry.symbol} · SHARE PRICE</span>
     <div className="pm-account-value">{money(q?.price,q?.currency)} <small>{q?.currency}</small></div>
     <p className={`pm-stock-change ${change>0?'green':change<0?'red':''}`}>{money(change,q?.currency)}{Number.isFinite(data?.changePercent)?` (${change>0?'+':''}${data.changePercent.toFixed(2)}%)`:''} <small>{range==='1D'?'last regular session':range==='MAX'?'since first available price':`over available ${range} history`}</small></p>
-    {data?.points?.length?<PortfolioValueChart key={key} points={data.points} currency={q.currency} title={`${entry.symbol} share price history`} reference={average&&!hideBalances?line:null} levels={levels&&line?instrument?.zones:[]}/>:<div className="pm-chart-empty" role="status">{data?.message||'Loading stock price chart…'}</div>}
+    {data?.points?.length?<PortfolioValueChart key={key} points={data.points} currency={q.currency} title={`${entry.symbol} share price history`} reference={average&&!hideBalances?line:null} levels={levels&&line?instrument?.zones:[]} orderLines={matchingOrders}/>:<div className="pm-chart-empty" role="status">{data?.message||'Loading stock price chart…'}</div>}
     <div className="pm-periods" aria-label="Stock chart period">{periods.map(p=><button key={p} aria-pressed={range===p} className={range===p?'selected':''} onClick={()=>setRange(p)}>{p}</button>)}</div>
     <div className="pm-stock-overlays"><label><input type="checkbox" checked={average&&!hideBalances} disabled={!line||hideBalances} onChange={e=>setAverage(e.target.checked)}/>Average price</label><label><input type="checkbox" checked={levels} disabled={!instrument||!line} onChange={e=>setLevels(e.target.checked)}/>Your levels</label></div>
     <p className="pm-history-state">{data?.status==='stale'?'Cached / old · ':''}Yahoo Finance · regular-session prices · may be delayed{data?.to?` · ${clockStamp(data.to)} ${zoneLabel}`:''}{data?.from?` · history from ${displayDay(data.from)}`:''}. This is the stock’s price change.</p>

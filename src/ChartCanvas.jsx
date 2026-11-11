@@ -13,6 +13,7 @@ import {usePriceScale} from './PriceScale';
 import {TouchChart} from './TouchChart';
 import {DrawingChart} from './ChartDrawings';
 import {useSavedChart} from './ChartSettings';
+import {chartLimitOrders,limitOrderLabel,limitOrderDescription,layoutLimitOrders} from './data/chart-limit-orders.mjs';
 
 echarts.use([LineChart, CandlestickChart, BarChart, CustomChart, GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, DataZoomComponent, CanvasRenderer]);
 const colors = { green: '#087a4b', red: '#bb304a', amber: '#8f5900', muted: '#6f6483' };
@@ -31,7 +32,7 @@ function useChart(option,onZoom) {
   useEffect(()=>{instance.current?.setOption(option,{replaceMerge:['series']});if(option.tooltip?.showContent===false)instance.current?.dispatchAction({type:'hideTip'});},[option]);
   return {ref,chart:ready};
 }
-export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, candles, price, percent = false, indicators, referenceLine }) {
+export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, candles, price, percent = false, indicators, referenceLine, orderLines=[] }) {
   const {clockStamp,zoneLabel}=useDisplayTime();
   const scope=`${drawingKey}|${timeframe}`,settings=useSavedChart(scope),{config}=settings;
   const {enabled,fitIndicators,fitLevels}=config;
@@ -46,7 +47,8 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
   const fittedZones=config.showLevels&&fitLevels&&instrument?instrument.zones:[];
   const indicatorValues=fitIndicators?plotted.flatMap(item=>item.values.slice(first,last).filter(validIndicator)):[];
   const referenceValues=Number.isFinite(referenceLine?.value)?[referenceLine.value]:[];
-  const low = Math.min(...referenceValues,...visibleData.map(row=>row.ohlc[2]),...fittedZones.map(z=>z.low),...indicatorValues), high = Math.max(...referenceValues,...visibleData.map(row=>row.ohlc[3]),...fittedZones.map(z=>z.high),...indicatorValues);
+  const orderReferences=chartLimitOrders(orderLines),orderValues=orderReferences.map(line=>line.value);
+  const low = Math.min(...referenceValues,...orderValues,...visibleData.map(row=>row.ohlc[2]),...fittedZones.map(z=>z.low),...indicatorValues), high = Math.max(...referenceValues,...orderValues,...visibleData.map(row=>row.ohlc[3]),...fittedZones.map(z=>z.high),...indicatorValues);
   const padding = Math.max(percent ? 0.005 : 1.8, (high-low)*.12);
   const scale=percent?1000:1;
   const priceScale=usePriceScale(scope,{min:Math.floor((low-padding)*scale)/scale,max:Math.ceil((high+padding)*scale)/scale},{persist:{range:config.priceRange,onChange:priceRange=>settings.set({priceRange})}});
@@ -105,10 +107,22 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
         return {type:'polygon',shape:{points:segment.points.map(([x,y])=>{const point=api.coord([Math.floor(x),y]);return [point[0]+(x-Math.floor(x))*api.size([1,0])[0],point[1]];})},style:{fill:segment.bull?'#08998138':'#f2364538'}};
       }},
       ...overlaySeries,
+      {type:'custom',id:'limit-orders',name:'Pending limit orders',silent:true,clip:true,z:7,tooltip:{show:false},data:orderReferences.length?[0]:[],renderItem:params=>{
+        const grid=params.coordSys,bottom=grid.y+grid.height;
+        const reserved=referenceValues.filter(value=>value>=min&&value<=max).map(value=>{const y=bottom-(value-min)/(max-min)*grid.height;return {top:y-28,bottom:y+4};});
+        const layout=layoutLimitOrders(orderReferences,{min,max,top:grid.y,bottom,reserved});
+        return {type:'group',children:layout.flatMap(line=>[
+          {type:'line',shape:{x1:grid.x,y1:line.y,x2:grid.x+grid.width,y2:line.y},style:{stroke:line.color,lineWidth:1.5,lineDash:[6,6],lineDashOffset:line.side==='SELL'?6:0,opacity:line.stale ? .65 : 1}},
+          ...(line.labelY===null?[]:[
+            ...(Math.abs(line.y-line.labelY)>4?[{type:'line',shape:{x1:grid.x+4,y1:line.y,x2:grid.x+4,y2:line.labelY},style:{stroke:line.color,lineWidth:1,opacity:.7}}]:[]),
+            {type:'text',style:{text:limitOrderLabel(line),x:grid.x+8,y:line.labelY,verticalAlign:'middle',font:'500 10px Inter, sans-serif',lineHeight:13,width:Math.max(0,Math.min(260,grid.width-28)),overflow:'truncate',fill:line.color,backgroundColor:'rgba(250,248,255,0.96)',padding:[3,5],borderRadius:3}},
+          ]),
+        ])};
+      }},
     ]
   };
   const {ref,chart:instance} = useChart(option,navigation.setView);
-  return <>{referenceValues.length>0&&(referenceLine.value<min||referenceLine.value>max)&&<p className="pm-chart-range-note">Average paid is outside your saved price range. <button className="text-button" onClick={()=>settings.set({priceRange:null})}>Fit average price</button></p>}{config.panel==='indicators'&&<IndicatorControls indicators={indicators} enabled={enabled} setEnabled={setEnabled} fit={fitIndicators} setFit={setFitIndicators} formatValue={formatValue}/>} {config.panel==='navigation'&&<ChartNavigation navigation={navigation} count={visibleData.length} priceScale={priceScale} onReset={settings.reset} compact/>}<TouchChart scope={scope} panel={config.panel}><DrawingChart scope={`${drawingKey}|${timeframe}`} symbol={symbol} timeframe={timeframe} times={data.map(row=>row.timestamp)} instance={instance} formatValue={formatValue}><div ref={ref} className="price-chart" role="img" tabIndex={0} {...priceScale.handlers} {...priceScale.attributes} onKeyDown={event=>{if(event.key==='Home'||event.key==='0'){event.preventDefault();settings.reset();}else if(!priceScale.onKeyDown(event))navigation.onKeyDown(event);}} data-view-start={navigation.view.start.toFixed(2)} data-view-end={navigation.view.end.toFixed(2)} aria-label={`${symbol} Yahoo Finance ${timeframe} candlestick chart. ${data.length} actual candles. Last chart quote ${price}${percent?' percent':''}.${referenceValues.length?` Average paid reference ${referenceLine.value} ${referenceLine.currency}.`:''}${instrument?` ${visibleZones.length} of ${instrument.zones.length} imported reference levels in view.`:''} Indicators: ${plotted.map(item=>item.name).join(', ')||'unavailable or hidden'}. Drag the price axis to scale; double-click it to restore auto. Use plus/minus to zoom time, Shift plus/minus to scale price, arrows to pan, Home to reset.`} /></DrawingChart></TouchChart></>;
+  return <>{referenceValues.length>0&&(referenceLine.value<min||referenceLine.value>max)&&<p className="pm-chart-range-note">Average paid is outside your saved price range. <button className="text-button" onClick={()=>settings.set({priceRange:null})}>Fit average price</button></p>}{orderValues.some(value=>value<min||value>max)&&<p className="pm-chart-range-note">Some limit orders are outside your saved price range. <button className="text-button" onClick={()=>settings.set({priceRange:null})}>Fit limit orders</button></p>}{config.panel==='indicators'&&<IndicatorControls indicators={indicators} enabled={enabled} setEnabled={setEnabled} fit={fitIndicators} setFit={setFitIndicators} formatValue={formatValue}/>} {config.panel==='navigation'&&<ChartNavigation navigation={navigation} count={visibleData.length} priceScale={priceScale} onReset={settings.reset} compact/>}<TouchChart scope={scope} panel={config.panel}><DrawingChart scope={`${drawingKey}|${timeframe}`} symbol={symbol} timeframe={timeframe} times={data.map(row=>row.timestamp)} instance={instance} formatValue={formatValue}><div ref={ref} className="price-chart" role="img" tabIndex={0} {...priceScale.handlers} {...priceScale.attributes} onKeyDown={event=>{if(event.key==='Home'||event.key==='0'){event.preventDefault();settings.reset();}else if(!priceScale.onKeyDown(event))navigation.onKeyDown(event);}} data-view-start={navigation.view.start.toFixed(2)} data-view-end={navigation.view.end.toFixed(2)} data-limit-order-count={orderReferences.length} data-visible-limit-order-count={orderValues.filter(value=>value>=min&&value<=max).length} aria-label={`${symbol} Yahoo Finance ${timeframe} candlestick chart. ${data.length} actual candles. Last chart quote ${price}${percent?' percent':''}.${referenceValues.length?` Average paid reference ${referenceLine.value} ${referenceLine.currency}.`:''}${orderReferences.length?` Limit orders: ${orderReferences.map(limitOrderDescription).join('; ')}. Read-only price references; crowded labels are detailed in the order list.`:''}${instrument?` ${visibleZones.length} of ${instrument.zones.length} imported reference levels in view.`:''} Indicators: ${plotted.map(item=>item.name).join(', ')||'unavailable or hidden'}. Drag the price axis to scale; double-click it to restore auto. Use plus/minus to zoom time, Shift plus/minus to scale price, arrows to pan, Home to reset.`} /></DrawingChart></TouchChart></>;
 }
 
 export function TreasuryHistoryChart({points}) {

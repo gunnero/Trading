@@ -81,3 +81,11 @@
 @media(min-width:600px){.company-detail .company-chart .drawing-chart-frame>.price-chart{height:220px;min-height:220px}.company-detail .company-overview-bottom p{font-size:10px;line-height:1.5}.company-detail .company-profile-facts>div{padding:2px 0}.company-detail .chart-footnote{height:auto;min-height:0;padding:5px 0}.company-detail .pm-chart-position{min-height:0;padding:5px 0}}
 .company-detail .company-chart .drawing-chart-frame{min-height:320px}
 @media(min-width:600px){.company-detail .company-chart .drawing-chart-frame{min-height:220px}}
+
+.pm-chart-orders{border-top:1px solid var(--border);padding:12px 0 4px;font-size:12px;color:var(--muted)}
+.pm-chart-orders-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pm-chart-orders-heading label{display:flex;align-items:center;gap:8px;color:var(--text);font-weight:600}
+.pm-chart-orders ul{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:0;list-style:none}
+.pm-chart-orders li{display:flex;flex-direction:column;gap:3px;border:1px solid var(--border);border-radius:6px;padding:8px 12px;min-width:0;overflow-wrap:anywhere}
+.pm-chart-orders p{margin:8px 0;line-height:1.5}.pm-chart-orders>small{display:block;margin:6px 0}
+@media(max-width:600px){.pm-chart-orders li{flex:1 1 100%}}
