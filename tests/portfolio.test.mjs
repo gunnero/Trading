@@ -65,11 +65,11 @@ test('Netflix and QQQ select their own chart identities, and exact watchlist tic
 });
 function fixture(t,fetcher=async url=>json(url.endsWith('/summary')?summary:positions)){
   const directory=mkdtempSync(join(tmpdir(),'opening-bell-portfolio-')),auth=openAuthStore({directory});let time=Date.parse('2026-11-03T15:00:00Z');
-  let service=createPortfolioService(auth,directory,{fetcher,now:()=>time});
+  const options={fetcher,now:()=>time,balanceWait:async ms=>{time+=ms;}};let service=createPortfolioService(auth,directory,options);
   t.after(()=>{service.close();auth.close();rmSync(directory,{recursive:true,force:true});});
   service.person({name:'Fixture Person'},0);const personId=service.read().data.people[0].id;
   service.account({personId,platform:'Trading 212',label:'Invest'},1);const id=service.read().data.accounts[0].id;
-  return {get service(){return service;},auth,directory,id,personId,advance:(ms=61000)=>time+=ms,revision:()=>service.read().revision,restart(){service.close();service=createPortfolioService(auth,directory,{fetcher,now:()=>time});}};
+  return {get service(){return service;},auth,directory,id,personId,advance:(ms=61000)=>time+=ms,revision:()=>service.read().revision,restart(){service.close();service=createPortfolioService(auth,directory,options);}};
 }
 test('failed holding reads retain JSON errors and correlate safe diagnostics without exposing account data',async t=>{
  let broken=false;
@@ -78,14 +78,14 @@ test('failed holding reads retain JSON errors and correlate safe diagnostics wit
    if(broken&&url.endsWith('/summary'))return new Response('private upstream body',{status:429,headers:{'retry-after':'90'}});
    return json(url.endsWith('/summary')?summary:positions);
  });
- await f.service.connect(f.id,credentials,f.revision());f.service.trading.configure(f.id,{enabled:true,authorized:true});broken=true;
+ await f.service.connect(f.id,credentials,f.revision());f.service.trading.configure(f.id,{enabled:true,authorized:true});f.advance(6000);broken=true;
  const logs=[];t.mock.method(console,'warn',value=>logs.push(JSON.parse(value)));
  const req={method:'GET',url:`/api/portfolio/accounts/${f.id}/trading/position?ticker=TEST_US_EQ`,headers:{'cf-ray':'abc123-TEST'}},headers={};let body;
  const res={setHeader:(key,value)=>headers[key]=value,end:value=>body=JSON.parse(value)};
  await f.service.middleware(req,res,()=>assert.fail('Unexpected fallthrough'));
- assert.equal(res.statusCode,502);assert.match(headers['Content-Type'],/application\/json/);assert.match(headers['X-Opening-Bell-Request-Id'],/^[a-f0-9-]{36}$/);
- assert.match(body.message,/rate limiting/);assert.equal(body.retryAfterMs,90000);
- assert.deepEqual(logs,[{event:'holding_refresh_failed',requestId:headers['X-Opening-Bell-Request-Id'],status:502,upstreamStatus:429,stage:'balances',ray:'abc123-TEST'}]);
+ assert.equal(res.statusCode,429);assert.match(headers['Content-Type'],/application\/json/);assert.match(headers['X-Opening-Bell-Request-Id'],/^[a-f0-9-]{36}$/);assert.equal(headers['Retry-After'],'90');
+ assert.match(body.message,/request limit/);assert.equal(body.retryAfterMs,90000);
+ assert.deepEqual(logs,[{event:'holding_refresh_failed',requestId:headers['X-Opening-Bell-Request-Id'],status:429,upstreamStatus:429,stage:'balances',retryAfterMs:90000,ray:'abc123-TEST'}]);
  for(const secret of [credentials.apiKey,credentials.apiSecret,f.id,'TEST_US_EQ','private upstream body'])assert.ok(!JSON.stringify({body,logs}).includes(secret));
 });
 test('snapshots preserve fractional shares, negative returns, missing values and zero without inventing dates',()=>{
@@ -177,4 +177,20 @@ test('confirmed execution refreshes the persisted account snapshot and survives 
  filled=true;f.advance(15000);const tracked=await f.service.trading.pending(f.id);assert.equal(tracked.orders[0].status,'FILLED');assert.equal(tracked.balanceError,null);
  const refreshed=f.service.read();assert.ok(refreshed.revision>before.revision);assert.equal(refreshed.data.accounts[0].snapshot.holdings.length,0);assert.equal(refreshed.data.accounts[0].snapshot.cash,50);
  f.restart();assert.deepEqual(f.service.read(),refreshed);assert.equal((await f.service.trading.pending(f.id)).orders[0].status,'FILLED');
+});
+
+test('account snapshots and trading holdings share cache, concurrent reads and broker backoff',async t=>{
+ let summaryCalls=0,positionCalls=0,blocked=false,release,failRead=false;
+ const f=fixture(t,async url=>{
+  if(url.endsWith('/instruments'))return json([{ticker:'TEST_US_EQ',name:'Fixture company',type:'STOCK',currencyCode:'USD'}]);
+  if(url.endsWith('/summary')){summaryCalls++;if(blocked)await new Promise(r=>release=r);if(failRead)return new Response('',{status:429,headers:{'retry-after':'300'}});return json(summary);}
+  if(url.endsWith('/positions')){positionCalls++;return json(positions);}
+  throw Error('Unexpected endpoint');
+ });
+ await f.service.connect(f.id,credentials,f.revision());f.service.trading.configure(f.id,{enabled:true,authorized:true});
+ await f.service.trading.position(f.id,'TEST_US_EQ');assert.equal(summaryCalls,1);assert.equal(positionCalls,1);
+ f.advance();blocked=true;const sync=f.service.sync(f.id);await new Promise(r=>setImmediate(r));const holding=f.service.trading.position(f.id,'TEST_US_EQ');await new Promise(r=>setImmediate(r));release();blocked=false;
+ await Promise.all([sync,holding]);assert.equal(summaryCalls,2);assert.equal(positionCalls,2);
+ f.advance();failRead=true;await f.service.sync(f.id);assert.equal(summaryCalls,3);
+ await assert.rejects(()=>f.service.trading.position(f.id,'TEST_US_EQ'),e=>e.status===429&&e.retryMs===300000);assert.equal(summaryCalls,3);assert.equal(positionCalls,2);
 });

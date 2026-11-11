@@ -7,7 +7,7 @@ import {cashOrderQuantity,cashPercentage,orderPercentage,roundedOrderQuantity,or
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
 import {portfolioOrderLevels} from '../src/data/portfolio-order-levels.mjs';
 const input={side:'BUY',type:'LIMIT',ticker:'AMD_US_EQ',quantity:2.5,limitPrice:100,timeValidity:'DAY'};
-function fixture(t){
+function fixture(t,overrides={}){
  const db=new DatabaseSync(':memory:');t.after(()=>db.close());let at=1000000,generation='first',closed=false;
  const a={platform:'Trading 212',environment:'demo',snapshot:{source:'api',brokerId:'123',currency:'USD'}},calls=[];
  const source={cash:1000,available:3,currency:'USD',max:50,extendedHours:true,write:null,read:null,delay:null};
@@ -20,7 +20,7 @@ function fixture(t){
   const order={id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,status:'NEW'};
   if(path==='/equity/orders')return json([order]);if(path==='/equity/orders/75')return json(order);throw Error('Unexpected endpoint '+path);
  };
- const options={marketPrice:createTradePrice({now:()=>at,workspace:()=>({watchText:source.watchText||''}),quote:async key=>source.quote?.(key,at)}),now:()=>at,credential:()=>({generation}),decode:()=>({environment:a.environment,apiKey:'fake-key',apiSecret:'fake-secret'}),account:id=>{if(id!=='a'&&id!=='b')throw Error('unknown account');return a;},isClosed:()=>closed,fetcher};
+ const options={marketPrice:createTradePrice({now:()=>at,workspace:()=>({watchText:source.watchText||''}),quote:async key=>source.quote?.(key,at)}),now:()=>at,balanceWait:async ms=>{at+=ms;},credential:()=>({generation}),decode:()=>({environment:a.environment,apiKey:'fake-key',apiSecret:'fake-secret'}),account:id=>{if(id!=='a'&&id!=='b')throw Error('unknown account');return a;},isClosed:()=>closed,fetcher,...overrides};
  let service=createPortfolioTrading(db,options);
  return {get service(){return service;},source,calls,db,a,advance:(ms=61000)=>at+=ms,connect:()=>generation='second',enable:()=>service.configure('a',{enabled:true,authorized:true}),writes:()=>calls.filter(c=>c.method!=='GET'),restart:()=>service=createPortfolioTrading(db,options),close:()=>closed=true};
 }
@@ -376,7 +376,8 @@ test('tracking follows safe resumable history cursors and retains a failed balan
  const f=fixture(t);f.enable();await f.service.pending('a');f.advance();let historyCalls=0,broken=true;
  f.source.read=path=>path==='/equity/orders'?json([]):path==='/equity/history/orders'?(++historyCalls===1?json({items:[],nextPagePath:'/api/v0/equity/history/orders?cursor=12&limit=50'}):json({items:[{order:trackedOrder('FILLED',2.5)}],nextPagePath:null})):path.endsWith('/positions')&&broken?json({},502):null;
  await f.service.pending('a');f.restart();f.advance(20000);let data=await f.service.pending('a');assert.equal(data.orders[0].status,'FILLED');assert.equal(data.syncedRevision,0);assert.match(data.balanceError,/waiting/);assert.ok(f.calls.some(c=>c.url.endsWith('?limit=50&cursor=12')));
- broken=false;f.advance(15000);data=await f.service.pending('a');assert.equal(data.syncedRevision,data.revision);assert.equal(data.balanceError,null);assert.equal(f.writes().length,0);
+ broken=false;const reads=f.calls.filter(c=>c.path.endsWith('/summary')).length;f.advance(15000);data=await f.service.pending('a');assert.equal(data.syncedRevision,0);assert.equal(f.calls.filter(c=>c.path.endsWith('/summary')).length,reads);
+ f.advance(45000);data=await f.service.pending('a');assert.equal(data.syncedRevision,data.revision);assert.equal(data.balanceError,null);assert.equal(f.writes().length,0);
 });
 test('tracking backoff persists and old connection orders cannot leak into a reconnected account',async t=>{
  const f=fixture(t);f.enable();await f.service.pending('a');f.advance();f.source.read=path=>path==='/equity/orders'?json({},429):null;
@@ -518,4 +519,58 @@ test('a pending broker write remains in flight after review expiry; startup unce
  release();await sending;assert.equal(f.service.attempt('a',review.token).attempt.state,'ACCEPTED');assert.equal(f.writes().length,1);
  f.db.prepare("UPDATE portfolio_order_attempts SET state='SENDING' WHERE token=?").run(review.token);f.restart();
  assert.equal(f.service.attempt('a',review.token).attempt.state,'UNKNOWN');assert.equal(f.service.attempt('a',review.token).notSubmitted,false);assert.equal(f.service.read('a').blocked,true);assert.equal(f.writes().length,1);
+});
+
+test('accepted Market and Limit orders refresh within broker read limits and preserve the receipt during throttling',async t=>{
+ for(const type of ['MARKET','LIMIT']){
+  const f=fixture(t);f.enable();await f.service.position('a','AMD_US_EQ');const review=await f.service.preview('a',{...input,type});
+  const result=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(result.state,'ACCEPTED');f.source.cash=750;
+  const fresh=await f.service.position('a','AMD_US_EQ');assert.equal(fresh.availableCash,750);assert.equal(f.calls.filter(c=>c.path.endsWith('/summary')).length,2);
+  f.advance(6000);f.source.read=path=>path.endsWith('/summary')?new Response('{}',{status:429,headers:{'content-type':'application/json','retry-after':'300'}}):null;
+  await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),e=>e.status===429&&e.upstreamStatus===429&&e.retryMs===300000);
+  const count=f.calls.filter(c=>c.path.endsWith('/summary')).length;
+  for(let i=0;i<3;i++){f.advance(1000);await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),e=>e.status===429);}
+  assert.equal(f.calls.filter(c=>c.path.endsWith('/summary')).length,count);assert.equal(f.service.attempt('a',review.token).attempt.state,'ACCEPTED');assert.equal(f.writes().length,1);
+ }
+});
+test('accepted receipts and terminal statuses survive failed activity callbacks and recover without another write',async t=>{
+ let broken=true;const observed=[];
+ const f=fixture(t,{onObserve:(id,g,order)=>{if(broken)throw Error('synthetic activity failure');observed.push(order.status);}});f.enable();
+ // Restore has already completed before this order: later attempts must still
+ // recover missing tracking observations rather than relying on startup only.
+ f.source.read=path=>path==='/equity/orders'?json([]):null;await f.service.pending('a');
+ const review=await f.service.preview('a',input);const receipt=await f.service.submit('a',{token:review.token,confirmed:true});
+ assert.equal(receipt.state,'ACCEPTED');assert.equal(receipt.order.id,75);assert.equal(f.service.read('a').blocked,false);
+ f.source.read=path=>path==='/equity/orders'?json([trackedOrder('FILLED',2.5)]):null;
+ const tracked=await f.service.pending('a');assert.equal(tracked.orders[0].status,'FILLED');assert.ok(tracked.activityError);assert.equal(f.service.attempt('a',review.token).attempt.order.id,75);
+ broken=false;f.restart();f.advance(15000);const recovered=await f.service.pending('a');assert.equal(recovered.orders[0].status,'FILLED');assert.equal(recovered.activityError,null);assert.ok(observed.includes('FILLED'));
+ assert.equal((await f.service.submit('a',{token:review.token,confirmed:true})).state,'ACCEPTED');assert.equal(f.writes().length,1);
+});
+test('a local tracker write failure cannot overwrite an accepted broker receipt and restores later',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path==='/equity/orders'?json([]):null;await f.service.pending('a');
+ f.db.exec("CREATE TRIGGER fail_tracking BEFORE INSERT ON portfolio_tracked_orders BEGIN SELECT RAISE(FAIL, 'synthetic tracking storage failure'); END;");
+ const review=await f.service.preview('a',input),receipt=await f.service.submit('a',{token:review.token,confirmed:true});
+ assert.equal(receipt.state,'ACCEPTED');assert.equal(receipt.order.id,75);assert.match(receipt.trackingMessage,/retry/);assert.equal(f.service.attempt('a',review.token).attempt.state,'ACCEPTED');assert.equal(f.service.read('a').blocked,false);
+ f.service.configure('a',{enabled:false});f.db.exec('DROP TRIGGER fail_tracking');f.restart();f.advance(15000);f.source.read=path=>path==='/equity/orders'?json([trackedOrder()]):null;
+ await f.service.monitor('a');assert.equal(f.service.tracking('a').orders[0].id,75);assert.equal(f.writes().length,1);
+});
+test('balance refresh persistence failure leaves a filled order and accepted receipt intact',async t=>{
+ let broken=true;const f=fixture(t,{onBalances(){if(broken)throw Error('synthetic account save failure');}});f.enable();
+ const review=await f.service.preview('a',input);await f.service.submit('a',{token:review.token,confirmed:true});
+ f.source.read=path=>path==='/equity/orders'?json([trackedOrder('FILLED',2.5)]):null;
+ let tracked=await f.service.pending('a');assert.equal(tracked.orders[0].status,'FILLED');assert.match(tracked.balanceError,/waiting/);assert.equal(f.service.attempt('a',review.token).attempt.state,'ACCEPTED');
+ broken=false;f.advance(15000);tracked=await f.service.pending('a');assert.equal(tracked.balanceError,null);assert.equal(tracked.syncedRevision,tracked.revision);assert.equal(f.writes().length,1);
+});
+test('balance throttling does not prevent reviewing and confirming one cancellation',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/summary')?new Response('{}',{status:429,headers:{'content-type':'application/json','retry-after':'300'}}):null;
+ await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),e=>e.status===429);const before=f.calls.filter(c=>c.path.endsWith('/summary')).length;
+ const review=await f.service.preview('a',{action:'CANCEL',orderId:75});assert.equal(review.orderId,75);
+ const receipt=await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(receipt.state,'ACCEPTED');assert.equal(receipt.action,'CANCEL');
+ await f.service.submit('a',{token:review.token,confirmed:true});assert.equal(f.calls.filter(c=>c.path.endsWith('/summary')).length,before);assert.equal(f.writes().length,1);assert.equal(f.writes()[0].method,'DELETE');
+});
+
+test('holding throttling respects the later absolute reset instead of a shorter Retry-After',async t=>{
+ const f=fixture(t);f.enable();f.source.read=path=>path.endsWith('/summary')?new Response('{}',{status:429,headers:{'content-type':'application/json','retry-after':'5','x-ratelimit-reset':'1300'}}):null;
+ await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),e=>e.status===429&&e.retryMs===300000);
+ f.advance(60000);await assert.rejects(()=>f.service.position('a','AMD_US_EQ'),e=>e.status===429&&e.retryMs===240000);assert.equal(f.calls.filter(c=>c.path.endsWith('/summary')).length,1);assert.equal(f.writes().length,0);
 });

@@ -23,8 +23,10 @@ export function createOrderTracker(db,{now,broker,current,orderView,refreshBalan
     // recording a fill and refreshing balances cannot lose that work.
     save(id,g,s);
     const detail={...order,filledQuantity:order.filledQuantity??old?.filledQuantity??null,firstSeen:old?.firstSeen??now(),observedAt:now(),awaitingHistory:false};
-    onObserve?.(id,g,detail,old,alert);
     db.prepare('INSERT INTO portfolio_tracked_orders VALUES(?,?,?,?) ON CONFLICT(account_id,generation,order_id) DO UPDATE SET detail=excluded.detail').run(id,g,order.id,JSON.stringify(detail));
+    try{onObserve?.(id,g,detail,old,alert);s.activityError=null;}
+    catch{s.activityError='Order status is saved; activity updates are waiting to catch up.';}
+    save(id,g,s);
   }
   function record(id,ctx,order,alert=true){
     const g=ctx.record.generation,s=state(id,g);observe(id,g,order,s,alert);
@@ -33,13 +35,13 @@ export function createOrderTracker(db,{now,broker,current,orderView,refreshBalan
   }
   function restore(id,ctx,attempts){
     const g=ctx.record.generation;
-    if(state(id,g).restoredAttempts)return;
-    for(const order of attempts)if(!db.prepare('SELECT 1 FROM portfolio_tracked_orders WHERE account_id=? AND generation=? AND order_id=?').get(id,g,order.id))record(id,ctx,order,false);
-    const s=state(id,g);s.restoredAttempts=true;save(id,g,s);
+    let restored=true;
+    for(const order of attempts)if(!db.prepare('SELECT 1 FROM portfolio_tracked_orders WHERE account_id=? AND generation=? AND order_id=?').get(id,g,order.id))try{record(id,ctx,order,false);}catch{restored=false;}
+    const s=state(id,g);s.restoredAttempts=restored;if(!restored)s.error='Order status is saved; local tracking is waiting to catch up.';save(id,g,s);
   }
   function result(id,g,s){
     const all=orders(id,g).sort((a,b)=>b.firstSeen-a.firstSeen||b.id-a.id);
-    return {orders:[...all.filter(o=>!terminal.has(o.status)),...all.filter(o=>terminal.has(o.status)).slice(0,50)],checkedAt:s.checkedAt,error:s.error||null,historyError:s.historyError||null,balanceError:s.balanceError||null,revision:s.revision,syncedRevision:s.syncedRevision,historyPending:all.some(o=>o.awaitingHistory)};
+    return {orders:[...all.filter(o=>!terminal.has(o.status)),...all.filter(o=>terminal.has(o.status)).slice(0,50)],checkedAt:s.checkedAt,error:s.error||null,historyError:s.historyError||null,balanceError:s.balanceError||null,activityError:s.activityError||null,revision:s.revision,syncedRevision:s.syncedRevision,historyPending:all.some(o=>o.awaitingHistory)};
   }
   async function poll(id,ctx){
     const g=ctx.record.generation,s=state(id,g);
@@ -87,6 +89,7 @@ export function createOrderTracker(db,{now,broker,current,orderView,refreshBalan
     return result(id,g,s);
   }
   function remove(id){for(const table of ['portfolio_tracked_orders','portfolio_order_tracking'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
+  function deferRestore(id,ctx){const g=ctx.record.generation,s=state(id,g);s.restoredAttempts=false;s.nextCheckAt=0;save(id,g,s);}
   function needsMonitoring(id,g,hasAttempts){const s=state(id,g);return hasAttempts&&!s.restoredAttempts||s.syncedRevision<s.revision||orders(id,g).some(o=>!terminal.has(o.status));}
-  return {record,restore,poll,remove,needsMonitoring,read:(id,g)=>result(id,g,state(id,g))};
+  return {record,restore,poll,remove,deferRestore,needsMonitoring,read:(id,g)=>result(id,g,state(id,g))};
 }

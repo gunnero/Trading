@@ -8,6 +8,7 @@ import {createPortfolioFunding,fundingHistoryPath} from './portfolio-funding.mjs
 import {createPortfolioActivity} from './portfolio-activity.mjs';
 import {createTradePrice} from './portfolio-trade-price.mjs';
 import {createPortfolioTrading,orderView} from './portfolio-trading.mjs';
+import {createBalanceReader} from './portfolio-balance-reads.mjs';
 import {createPortfolioRebuild,dividendHistoryPath} from './portfolio-rebuild.mjs';
 import {createPortfolioMetadata} from './portfolio-metadata.mjs';
 import {createPortfolioReports} from './portfolio-reports.mjs';
@@ -44,7 +45,7 @@ export function normalizeTrading212(summary,positions,checkedAt) {
     note:'Account summary and positions are separate broker reads. Values can move between them. Prices use instrument currency; holding values and returns use the primary account currency. The API does not supply a quote observation timestamp.'};
 }
 
-export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.now,timeoutMs=6000,background=false,workspace=()=>({}),quote=(key)=>defaultMarketService().quote(key),prices=(...args)=>defaultMarketService().portfolioPrices(...args),benchmarkPrices=(...args)=>defaultMarketService().benchmarkPrices(...args),company=key=>defaultCompanyService().get(key)}={}) {
+export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.now,timeoutMs=6000,background=false,balanceWait,workspace=()=>({}),quote=(key)=>defaultMarketService().quote(key),prices=(...args)=>defaultMarketService().portfolioPrices(...args),benchmarkPrices=(...args)=>defaultMarketService().benchmarkPrices(...args),company=key=>defaultCompanyService().get(key)}={}) {
   mkdirSync(directory,{recursive:true,mode:0o700});
   const filename=join(directory,'portfolio.sqlite'),db=new DatabaseSync(filename);chmodSync(filename,0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
@@ -53,6 +54,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     CREATE TABLE IF NOT EXISTS portfolio_retry(id TEXT PRIMARY KEY,retry_at INTEGER NOT NULL);`);
   db.prepare('INSERT OR IGNORE INTO portfolio_document VALUES(1,0,?)').run(JSON.stringify({version:1,people:[],accounts:[]}));
   const pending=new Map();let closed=false;
+  const balanceReader=createBalanceReader({now,request,wait:balanceWait});
   const credential=id=>db.prepare('SELECT * FROM portfolio_credentials WHERE id=?').get(id);
   const retry=id=>db.prepare('SELECT retry_at FROM portfolio_retry WHERE id=?').get(id)?.retry_at||0;
   const backoff=(id,until)=>db.prepare('INSERT INTO portfolio_retry VALUES(?,?) ON CONFLICT(id) DO UPDATE SET retry_at=max(retry_at,excluded.retry_at)').run(id,until);
@@ -88,16 +90,17 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   function removePerson(id,revision){return change(data=>{if(data.accounts.some(a=>a.personId===id))throw fail(400,'Remove this person’s accounts first.');if(!data.people.some(p=>p.id===id))throw fail(404,'Person not found.');data.people=data.people.filter(p=>p.id!==id);},revision);}
   function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);activity.remove(id);rebuild.remove(id);metadata.remove(id);reports.remove(id);alerts.remove(id);planning.remove(id);return result;}
   function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
-  async function request(path,secret){
+  async function request(path,secret,{onReadResponse}={}){
     const validator=path.startsWith('/equity/history/orders?')?orderHistoryPath:path.startsWith('/equity/history/transactions?')?fundingHistoryPath:path.startsWith('/equity/history/dividends?')?dividendHistoryPath:null,historical=!!validator;
     if((!PATHS.includes(path)&&(!validator||validator(path)!==path))||!BASES[secret.environment])throw Error('Invalid broker endpoint.');
     try{
       const response=await fetcher(BASES[secret.environment]+path,{method:'GET',headers:{Accept:'application/json',Authorization:'Basic '+Buffer.from(secret.apiKey+':'+secret.apiSecret).toString('base64')},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
+      onReadResponse?.(response);
       if(!response.ok){
         const after=response.headers.get('retry-after'),reset=Number(response.headers.get('x-ratelimit-reset'))*1000;
         const wait=after?(/^\d+$/.test(after)?Number(after)*1000:Date.parse(after)-now()):0;
         const delay=Math.max(60000,Number.isFinite(wait)?wait:0,Number.isFinite(reset)?reset-now():0);
-        throw Object.assign(fail(502,[401,403].includes(response.status)?'Trading 212 rejected access. Check the key, secret, account-data permissions and any IP restrictions.':response.status===429?'Trading 212’s request limit was reached. Waiting before retrying.':'Trading 212 is unavailable. Keeping the last successful snapshot.',Math.min(86400000,delay)),{historyPermission:historical&&[401,403].includes(response.status)});
+        throw Object.assign(fail(502,[401,403].includes(response.status)?'Trading 212 rejected access. Check the key, secret, account-data permissions and any IP restrictions.':response.status===429?'Trading 212’s request limit was reached. Waiting before retrying.':'Trading 212 is unavailable. Keeping the last successful snapshot.',Math.min(86400000,delay)),{upstreamStatus:response.status,historyPermission:historical&&[401,403].includes(response.status)});
       }
       if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Invalid response.');
       const reader=response.body.getReader(),chunks=[];let size=0;
@@ -105,9 +108,9 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       return JSON.parse(Buffer.concat(chunks).toString('utf8'));
     }catch(error){if(error.status)throw error;throw fail(502,'Trading 212 did not return a complete account snapshot. Keeping the last successful data.',300000);}
   }
-  async function fetchSnapshot(secret){
-    const summary=await request(PATHS[0],secret),positions=await request(PATHS[1],secret);
-    try{return normalizeTrading212(summary,positions,new Date(now()).toISOString());}
+  async function fetchSnapshot(id,generation,secret){
+    const {summary,positions,at}=await balanceReader.read(id,generation,secret);
+    try{return normalizeTrading212(summary,positions,new Date(at).toISOString());}
     catch{throw fail(502,'Trading 212 returned incomplete or unsupported account data. Keeping the last successful snapshot.',300000);}
   }
   function checkIdentity(id,snapshot,environment){
@@ -125,9 +128,9 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     if(pending.has(id))throw fail(409,'An account read is already running.');
     if(retry(id)>now())throw fail(429,'Wait for this account’s retry window before connecting again.');
     const token={};pending.set(id,token);backoff(id,now()+TTL);
-    const secret={apiKey:input.apiKey,apiSecret:input.apiSecret,environment};
+    const secret={apiKey:input.apiKey,apiSecret:input.apiSecret,environment},generation=randomUUID();
     try{
-      const snapshot=await fetchSnapshot(secret);if(closed)throw Error('Closed');
+      const snapshot=await fetchSnapshot(id,generation,secret);if(closed)throw Error('Closed');
       if(pending.get(id)!==token)throw fail(409,'The connection changed. Retry when ready.');
       checkIdentity(id,snapshot,environment);
       // A concurrent metadata edit or deletion must not be overwritten by a slow connection.
@@ -135,7 +138,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       const encrypted=auth.encrypt(JSON.stringify(secret),'portfolio:'+id);
       db.exec('BEGIN IMMEDIATE');
       try{
-        db.prepare('INSERT INTO portfolio_credentials VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET credential=excluded.credential,generation=excluded.generation').run(id,encrypted,randomUUID());
+        db.prepare('INSERT INTO portfolio_credentials VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET credential=excluded.credential,generation=excluded.generation').run(id,encrypted,generation);
         change(data=>{Object.assign(data.accounts.find(a=>a.id===id),{snapshot,environment,lastSuccess:snapshot.fetchedAt,lastAttempt:snapshot.fetchedAt,error:null});},revision);
         history.record(id,snapshot);
         db.exec('COMMIT');
@@ -149,7 +152,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     if(pending.has(id)||retry(id)>now())return read();
     const token={};pending.set(id,token);backoff(id,now()+TTL);
     try{
-      const secret=JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),snapshot=await fetchSnapshot(secret);
+      const secret=JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),snapshot=await fetchSnapshot(id,record.generation,secret);
       if(closed||credential(id)?.generation!==record.generation)return closed?null:read();
       checkIdentity(id,snapshot,secret.environment);
       change(data=>Object.assign(data.accounts.find(a=>a.id===id),{snapshot,lastSuccess:snapshot.fetchedAt,lastAttempt:new Date(now()).toISOString(),error:null}));history.record(id,snapshot);backoff(id,now()+TTL);
@@ -228,19 +231,20 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));
     }catch(error){
       res.statusCode=error.status||500;
-      if(holdingRead&&res.statusCode>=500){
+      if(Number.isFinite(error.retryMs))res.setHeader('Retry-After',String(Math.max(1,Math.ceil(error.retryMs/1000))));
+      if(holdingRead&&(res.statusCode===429||res.statusCode>=500)){
         const ray=req.headers['cf-ray'];
         // Correlate a failed read without logging accounts, holdings, credentials,
         // response bodies or query strings. A gateway-only failure has no app ID.
-        console.warn(JSON.stringify({event:'holding_refresh_failed',requestId,status:res.statusCode,upstreamStatus:Number.isInteger(error.upstreamStatus)?error.upstreamStatus:null,stage:['instruments','balances','price'].includes(error.readStage)?error.readStage:null,ray:typeof ray==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(ray)?ray:null}));
+        console.warn(JSON.stringify({event:'holding_refresh_failed',requestId,status:res.statusCode,upstreamStatus:Number.isInteger(error.upstreamStatus)?error.upstreamStatus:null,stage:['instruments','balances','price'].includes(error.readStage)?error.readStage:null,retryAfterMs:Number.isFinite(error.retryMs)?error.retryMs:null,ray:typeof ray==='string'&&/^[a-zA-Z0-9-]{1,80}$/.test(ray)?ray:null}));
       }
-      res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.',...(holdingRead&&Number.isFinite(error.retryMs)?{retryAfterMs:error.retryMs}:{})}));
+      res.end(JSON.stringify({message:error.status?error.message:'Portfolio Manager could not complete this request.',...(Number.isFinite(error.retryMs)?{retryAfterMs:error.retryMs}:{})}));
     }
   }
   const historyOptions={now,request,credential,decode:(record,id)=>JSON.parse(auth.decrypt(record.credential,'portfolio:'+id)),account:find,isClosed:()=>closed};
   const metadata=createPortfolioMetadata(db,historyOptions);
   const activity=createPortfolioActivity(db,{...historyOptions,orderView,accounts:()=>read().data,tracking:id=>trading.tracking(id)});
-  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,marketPrice:createTradePrice({now,quote,workspace}),readCatalog:metadata.instruments,orderLimit:(...args)=>planning.orderLimit(...args),getOrderLimit:id=>planning.settings(id).maxOrderValue,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
+  const trading=createPortfolioTrading(db,{...historyOptions,fetcher,timeoutMs,balanceReader,marketPrice:createTradePrice({now,quote,workspace}),readCatalog:metadata.instruments,orderLimit:(...args)=>planning.orderLimit(...args),getOrderLimit:id=>planning.settings(id).maxOrderValue,onObserve:activity.observe,onRejected:activity.rejected,onBalances(id,fresh,generation){
     if(closed||credential(id)?.generation!==generation)throw fail(409,'The account connection changed.');
     if(pending.has(id))throw fail(409,'An account refresh is already running.');
     const snapshot=normalizeTrading212(fresh.summary,fresh.positions,new Date(fresh.at).toISOString());

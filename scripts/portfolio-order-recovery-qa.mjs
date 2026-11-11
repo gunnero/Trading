@@ -55,7 +55,7 @@ try{
   else{await page.getByLabel('Order shares').fill('1');await expect(page.getByRole('button',{name:'Review order',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Review order',exact:true}).click();}
   await page.getByRole('checkbox',{name:/I confirm this demo/}).check();await page.getByRole('button',{name:mode==='cancel'?'Confirm cancellation':'Confirm demo buy',exact:true}).click();
   if(mode==='known-response'){
-   await expect(page.locator('.pm-order-result')).toContainText('Order received by Trading 212.');await expect(page.getByText(/The saved status could not be refreshed/)).toBeVisible();expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBeNull();expect(posts).toBe(1);mark('A failed follow-up refresh preserves the already accepted receipt');await context.close();continue;
+   await expect(page.locator('.pm-order-result')).toContainText('Order received by Trading 212.');await expect(page.getByText(/The saved status could not be refreshed/)).toBeVisible();await expect(page.getByLabel('Order shares')).toHaveValue('');expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBeNull();expect(posts).toBe(1);mark('A failed follow-up refresh preserves the already accepted receipt');await context.close();continue;
   }
   const recovery=page.getByRole('status').filter({has:page.getByRole('heading',{name:'Checking submitted order'})});
   await expect(recovery).toBeVisible();await expect(recovery).toContainText(mode==='missing'?'unavailable for the current connection':'saved result is temporarily unavailable');await expect(page.getByRole('button',{name:'Review order',exact:true})).toBeDisabled();expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBe(review.token);expect(posts).toBe(1);
@@ -64,12 +64,14 @@ try{
    await second.goto(runtime.url+`/#portfolio/trade/${id}?ticker=AMD_US_EQ`);await expect(second.locator('.pm-order-recovery')).toBeVisible();await expect(second.getByRole('button',{name:'Review order',exact:true})).toBeDisabled();
    await page.reload();await expect(page.locator('.pm-order-recovery')).toBeVisible();await expect(page.getByRole('button',{name:'Review order',exact:true})).toBeDisabled();
    await page.setViewportSize({width:320,height:1000});expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await page.locator('.pm-order-recovery').screenshot({path:dir+'/lost-response-320.png'});
-   lookupReady=true;await page.getByRole('button',{name:'Check saved result'}).click();await expect(page.locator('.pm-order-result')).toContainText('Order received by Trading 212.');await expect(page.getByText(/An earlier order has an uncertain result/)).toHaveCount(0);await expect(second.locator('.pm-order-recovery')).toHaveCount(0);await second.close();
+   await page.getByLabel('Order shares').fill('2');lookupReady=true;await page.getByRole('button',{name:'Check saved result'}).click();await expect(page.locator('.pm-order-result')).toContainText('Order received by Trading 212.');await expect(page.getByLabel('Order shares')).toHaveValue('2');await expect(page.getByText(/An earlier order has an uncertain result/)).toHaveCount(0);await expect(second.locator('.pm-order-recovery')).toHaveCount(0);await second.close();
   }else if(mode==='missing'){
    await expect(page.getByRole('button',{name:'Clear checked confirmation'})).toBeDisabled();await page.getByRole('checkbox',{name:/I checked this confirmation/}).check();settingsFail=false;await page.getByRole('button',{name:'Clear checked confirmation'}).click();await expect(page.locator('.pm-order-result')).toContainText('No order was resent.');
   }else{
    settingsFail=false;lookupReady=true;await page.getByRole('button',{name:'Check saved result'}).click();await expect(page.locator('.pm-order-result')).toContainText(mode==='unknown'?'Result uncertain':mode==='not-sent'?'Order not submitted':mode==='cancel'?'Cancellation requested':mode==='rejected'?'Order rejected':'Order received by Trading 212.');
    if(mode==='unknown')await expect(page.getByRole('button',{name:'Review order',exact:true})).toBeDisabled();
+   if(['malformed','wrong-token','network'].includes(mode))await expect(page.getByLabel('Order shares')).toHaveValue('');
+   if(mode==='rejected')await expect(page.getByLabel('Order shares')).toHaveValue('1');
   }
   await expect(page.locator('.pm-order-recovery')).toHaveCount(0);expect(await page.evaluate(key=>localStorage.getItem(key),key)).toBeNull();expect(posts).toBe(1);expect(lookups).toBeGreaterThan(0);mark(`${mode}: confirmation recovered or checked without a repeated POST, including failed follow-up reads`);await context.close();
  }
