@@ -28,6 +28,27 @@ test('trading defaults disabled; explicit authorization is separate per account 
  const f=fixture(t);assert.equal(f.service.read('a').enabled,false);await assert.rejects(()=>f.service.preview('a',input),/Enable trading/);assert.equal(f.calls.length,0);
  assert.throws(()=>f.service.configure('a',{enabled:true}),/authorizes/);f.enable();assert.equal(f.service.read('a').enabled,true);assert.equal(f.service.read('b').enabled,false);f.connect();assert.equal(f.service.read('a').enabled,false);assert.equal(f.writes().length,0);
 });
+test('stock search scopes, ranks and limits the broker catalog while holding links resolve exactly',async t=>{
+ const stock=(ticker,name,options={})=>({ticker,name,type:'STOCK',currencyCode:'USD',...options});
+ const catalog=[
+  stock('CAAP_US_EQ','Corp America Airports'),stock('AAP1l_EQ','Apple London'),
+  stock('AAPLx_US_EQ','Apple fund',{type:'ETF'}),stock('AAPf_EQ','Apple EUR',{currencyCode:'EUR'}),
+  stock('AAP_US_EQ','Advance Auto Parts'),stock('AAPL_US_EQ','Apple Inc.',{isin:'US0378331005'}),
+  stock('FB_US_EQ','Meta Platforms',{shortName:'META'}),stock('V_US_EQ','Visa'),
+  ...Array.from({length:20},(_,n)=>stock('TEST'+n+'_US_EQ','Apple supplier '+n)),
+ ];
+ const f=fixture(t,{readCatalog:async()=>catalog});f.enable();
+ const tickers=async q=>(await f.service.search('a',q)).items.map(i=>i.ticker);
+ assert.deepEqual(await tickers(' aap '),['AAP_US_EQ','AAPL_US_EQ']);
+ const byName=await tickers('Apple');assert.equal(byName.length,12);assert.equal(byName[0],'AAPL_US_EQ');
+ assert.deepEqual(await tickers('V'),['V_US_EQ']);assert.deepEqual(await tickers('meta'),['FB_US_EQ']);
+ assert.deepEqual(await tickers('US0378331005'),['AAPL_US_EQ']);assert.deepEqual(await tickers('AAP1l_EQ'),[]);
+ assert.deepEqual((await f.service.search('a',null,'AAP1l_EQ')).items.map(i=>i.ticker),['AAP1l_EQ']);
+ assert.deepEqual(await tickers('AAPLx_US_EQ'),[]);
+ assert.deepEqual((await f.service.search('a',null,'AAPLx_US_EQ')).items.map(i=>i.ticker),['AAPLx_US_EQ']);
+ assert.deepEqual((await f.service.search('a',null,'AAP1')).items,[]);
+ assert.equal(f.writes().length,0);
+});
 test('chart limit orders are readable with execution disabled and use exact instrument price currency',async t=>{
  const f=fixture(t);f.a.snapshot.currency='EUR';
  f.source.read=path=>path==='/equity/orders'?json([{id:75,ticker:'AMD_US_EQ',side:'BUY',type:'LIMIT',quantity:2.5,filledQuantity:0,limitPrice:100,currency:'EUR',status:'NEW'}]):null;

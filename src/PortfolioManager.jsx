@@ -97,7 +97,7 @@ export default function PortfolioManager({route='portfolio',onNavigate,sheet,wat
     onNavigate(destination);
   }
   function openTrade(a,holding,side){setHoldingView(null);onNavigate(portfolioTradeRoute(a.id,holding,side));}
-  if(isTradePage)return <PortfolioTradePage route={route} state={state} error={error} onReload={load} onBack={a=>{if(a)privacy.update({account:a.id,filter:filter==='all'?'all':a.personId});onNavigate('portfolio');}} sheet={sheet} watchlist={watchlist}/>;
+  if(isTradePage)return <PortfolioTradePage onAccountChange={openTrade} route={route} state={state} error={error} onReload={load} onBack={a=>{if(a)privacy.update({account:a.id,filter:filter==='all'?'all':a.personId});onNavigate('portfolio');}} sheet={sheet} watchlist={watchlist}/>;
   return <div className={`pm-page${isAccountPage?' pm-account-page':''}`}>
     <PageHeader title="Portfolio Manager" description={isAccountPage?undefined:'People, accounts and holdings in one place.'} actions={isAccountPage?undefined:<>{onInsights&&<button className="button outline" onClick={onInsights}>Portfolio insights</button>}{onActivity&&<button className="button outline" onClick={onActivity}>Activity & alerts</button>}<button className="button outline" disabled={refreshing||!!dialog} onClick={refresh}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
     {isAccountPage?<button className="text-button pm-account-back" onClick={()=>onNavigate('portfolio')}><ArrowLeft size={17}/>Back to accounts</button>:<PortfolioPrivacyControls accountPreviews={accounts.length>0}/>}

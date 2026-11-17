@@ -183,7 +183,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       const tradeMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/trading(?:\/(instruments|orders|chart-orders|position|attempt|settings|preview|submit|acknowledge))?$/);
       if(tradeMatch&&req.method==='GET'){
         const [,id,action]=tradeMatch;
-        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q')||''):action==='orders'?await trading.pending(id):action==='chart-orders'?await trading.chartOrders(id,url.searchParams.get('ticker')):action==='position'?await trading.position(id,url.searchParams.get('ticker')):action==='attempt'?trading.attempt(id,url.searchParams.get('token')):null;
+        const result=!action?trading.read(id):action==='instruments'?await trading.search(id,url.searchParams.get('q'),url.searchParams.get('ticker')):action==='orders'?await trading.pending(id):action==='chart-orders'?await trading.chartOrders(id,url.searchParams.get('ticker')):action==='position'?await trading.position(id,url.searchParams.get('ticker')):action==='attempt'?trading.attempt(id,url.searchParams.get('token')):null;
         if(!result)throw fail(405,'Method not supported.');res.end(JSON.stringify(result));return;
       }
       const historyMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/history(?:\/(sync|rebuild|rebuild\/sync))?$/);

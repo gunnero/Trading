@@ -117,12 +117,37 @@ export function createPortfolioTrading(db,{now,credential,decode,account,isClose
     const key=id+':catalog';if((readBackoff.get(key)||0)>now())throw fail(429,'Wait a minute before refreshing the instrument list.');readBackoff.set(key,now()+60000);
     const raw=readCatalog?await readCatalog(id):await broker('/equity/metadata/instruments',ctx.secret);current(id,ctx);
     if(!Array.isArray(raw)||raw.length>40000)throw fail(502,'The broker instrument list is unavailable.');
-    const items=raw.filter(r=>['STOCK','ETF'].includes(r.type)&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,name:r.name.slice(0,160),currency:r.currencyCode,type:r.type,isin:r.isin||'',maxOpenQuantity:numeric(r.maxOpenQuantity)?r.maxOpenQuantity:null,extendedHours:r.extendedHours===true}));
+    const items=raw.filter(r=>['STOCK','ETF'].includes(r.type)&&typeof r.ticker==='string'&&/^[A-Za-z0-9._-]{1,80}$/.test(r.ticker)&&typeof r.name==='string'&&/^[A-Z]{3}$/.test(r.currencyCode)).map(r=>({ticker:r.ticker,shortName:typeof r.shortName==='string'&&/^[A-Z][A-Z0-9.-]{0,15}$/.test(r.shortName)?r.shortName:'',name:r.name.slice(0,160),currency:r.currencyCode,type:r.type,isin:typeof r.isin==='string'?r.isin:'',maxOpenQuantity:numeric(r.maxOpenQuantity)?r.maxOpenQuantity:null,extendedHours:r.extendedHours===true}));
     catalogs.delete(id);catalogs.set(id,{generation:ctx.record.generation,until:now()+600000,items});
     while(catalogs.size>4)catalogs.delete(catalogs.keys().next().value);
     return items;
   }
-  async function search(id,q){const ctx=context(id);if(typeof q!=='string'||q.length<2||q.length>80)return {items:[]};const query=q.toLowerCase();return {items:(await catalog(id,ctx)).filter(r=>(r.name+' '+r.ticker+' '+r.isin).toLowerCase().includes(query)).slice(0,40)};}
+  async function search(id,q,holdingTicker=null){
+    const ctx=context(id);
+    // Holding links resolve one exact broker instrument, including previously held ETFs.
+    if(holdingTicker!==null){
+      if(!/^[A-Za-z0-9._-]{1,80}$/.test(holdingTicker))return {items:[]};
+      const items=(await catalog(id,ctx)).filter(item=>item.ticker===holdingTicker);
+      return {items:items.length===1?items:[]};
+    }
+    const query=typeof q==='string'?q.trim().toLowerCase():'';
+    if(!query||query.length>80)return {items:[]};
+    const ranked=[];
+    for(const item of await catalog(id,ctx)){
+      if(item.type!=='STOCK'||item.currency!=='USD'||!item.ticker.endsWith('_US_EQ'))continue;
+      const brokerSymbol=item.ticker.slice(0,-6).toLowerCase(),symbol=item.shortName.toLowerCase();
+      const name=item.name.toLowerCase();
+      let rank;
+      if([brokerSymbol,symbol,item.ticker.toLowerCase(),item.isin.toLowerCase()].includes(query))rank=0;
+      else if(brokerSymbol.startsWith(query)||symbol.startsWith(query))rank=1;
+      else if(query.length>1&&name.startsWith(query))rank=2;
+      else if(query.length>1&&name.includes(' '+query))rank=3;
+      else continue;
+      ranked.push({item,rank});
+    }
+    ranked.sort((a,b)=>a.rank-b.rank||a.item.ticker.localeCompare(b.item.ticker));
+    return {items:ranked.slice(0,12).map(match=>match.item)};
+  }
   async function track(id,requireEnabled){
     const ctx=context(id,requireEnabled);
     // Continue accepted attempts after a restart without replaying old alerts.

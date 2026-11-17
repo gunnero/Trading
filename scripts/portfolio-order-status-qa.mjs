@@ -48,16 +48,16 @@ try{
     await page.goto(runtime.url+`/#portfolio/trade/${id}?ticker=AMD_US_EQ`);
     const holding=page.getByRole('region',{name:'Current holding'}),result=page.getByRole('status',{name:'Latest order status'});
     await expect(holding).toContainText('$1,000.00');
-    await page.getByLabel('Order type').selectOption(type);
+    await page.getByRole('group',{name:'Order type'}).getByRole('button',{name:type==='LIMIT'?'Limit':'Market',exact:true}).click();
     if(type==='MARKET'){await page.getByRole('button',{name:'Cash amount',exact:true}).click();await page.getByLabel('Order cash amount').fill('200');}
     else{await page.getByLabel('Order limit price').fill('100');await page.getByLabel('Order shares').fill('2');}
-    await page.getByRole('button',{name:'Review order',exact:true}).click();await page.getByRole('checkbox',{name:/I confirm this demo buy/}).check();await page.getByRole('button',{name:'Confirm demo buy'}).click();
+    await page.getByRole('button',{name:/^Review (buy|sell) order$/}).click();await page.getByRole('checkbox',{name:/I confirm this demo buy/}).check();await page.getByRole('button',{name:'Confirm demo buy'}).click();
     await expect(result).toContainText('Order accepted');await expect(result).toContainText('Order #76 · Pending');await expect(result).toContainText('waiting for execution');
     await expect(type==='MARKET'?page.getByLabel('Order cash amount'):page.getByLabel('Order shares')).toHaveValue('');
     await expect(holding).toContainText('HTTP 502');await expect(holding).toContainText('$1,000.00');await expect(holding).toContainText('Last confirmed holding');await expect(holding).toContainText('For reference only');
     await expect(page.getByRole('button',{name:'100%',exact:true})).toBeDisabled();
     if(type==='MARKET')await page.getByRole('button',{name:'Shares',exact:true}).click();
-    await page.getByLabel('Order shares').fill('1');await expect(page.getByRole('button',{name:'Review order',exact:true})).toBeDisabled();expect(posts).toBe(1);
+    await page.getByLabel('Order shares').fill('1');await expect(page.getByRole('button',{name:/^Review (buy|sell) order$/})).toBeDisabled();expect(posts).toBe(1);
     expect(await result.evaluate(element=>!!(element.compareDocumentPosition(document.querySelector('.pm-order-form'))&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     for(const width of [320,1488]){await page.setViewportSize({width,height:1100});await page.getByRole('region',{name:'Account trading',exact:true}).screenshot({path:`${dir}/${type.toLowerCase()}-accepted-${width}.png`});}
     mark(`${type}: acceptance is prominent, submitted size clears, and failed holdings retain reference values without enabling another review`);
