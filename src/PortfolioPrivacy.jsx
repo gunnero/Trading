@@ -25,12 +25,13 @@ function alias(value,prefix){
   let hash=2166136261;for(const c of String(value||''))hash=Math.imul(hash^c.charCodeAt(0),16777619);
   return `${prefix} ${(hash>>>0).toString(36).toUpperCase().padStart(7,'0').slice(-5)}`;
 }
-const AccountScope=createContext(false);
-export function PortfolioAccountPrivacy({revealed,children}){
-  return <AccountScope.Provider value={revealed}>{children}</AccountScope.Provider>;
+const AccountScope=createContext(null);
+export function PortfolioAccountPrivacy({revealed,balancesVisible,children}){
+  return <AccountScope.Provider value={{revealed,balancesVisible}}>{children}</AccountScope.Provider>;
 }
-function presentation(prefs,revealed){
-  const hideNames=prefs.hideNames&&!revealed,hideBalances=prefs.hideBalances&&!revealed;
+function presentation(prefs,revealed,balancesVisible){
+  const hideNames=prefs.hideNames&&!revealed;
+  const hideBalances=balancesVisible===undefined?prefs.hideBalances&&!revealed:!balancesVisible;
   return {...prefs,hideNames,hideBalances,privateMode:hideNames||hideBalances,
     person:name=>hideNames?alias(name,'Person'):name,
     label:(label,id)=>hideNames?alias(id||label,'Account'):label,
@@ -39,8 +40,8 @@ function presentation(prefs,revealed){
   };
 }
 export function usePortfolioPrivacy(){
-  const prefs=useSyncExternalStore(subscribe,snapshot,snapshot),revealed=useContext(AccountScope);
-  return {...presentation(prefs,revealed),preferences:prefs,storageFailed,update,forView:show=>presentation(prefs,show)};
+  const prefs=useSyncExternalStore(subscribe,snapshot,snapshot),scope=useContext(AccountScope);
+  return {...presentation(prefs,scope?.revealed,scope?.balancesVisible),preferences:prefs,storageFailed,update,forView:(show,balancesVisible)=>presentation(prefs,show,balancesVisible)};
 }
 export function PortfolioPrivacyControls({accountPreviews=false}){
   const p=usePortfolioPrivacy();
@@ -51,7 +52,7 @@ export function PortfolioPrivacyControls({accountPreviews=false}){
       <button className="button outline" onClick={()=>p.update({hideNames:true,hideBalances:true})}>Hide both</button>
     </div>
     <p>{p.storageFailed?'This browser could not save your preferences. They apply until the page closes.':'Privacy settings are remembered on this browser.'}
-      {p.privateMode&&accountPreviews&&' Select an account to reveal its hidden details here. Select it again to hide them.'}
+      {p.privateMode&&accountPreviews&&' Select an account row to reveal its hidden details here. Select it again to hide them, or use its arrow to open the account.'}
       {p.privateMode&&' Show names and balances to trade, edit private details or export.'}
     </p>
   </div>;

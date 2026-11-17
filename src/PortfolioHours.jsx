@@ -17,9 +17,9 @@ export function usePortfolioHours(accountId,connected,ticker=''){
   return {data:connected&&saved?.key===key?saved.data:null,now,connected};
 }
 export function StockHours({accountId,connected,ticker,name}){const hours=usePortfolioHours(accountId,connected,ticker);return <HoursButton hours={hours} ticker={ticker} name={name}/>;}
-export function HoursButton({hours,ticker,name}){
+export function HoursButton({hours,ticker,name,compact=false}){
   const [open,setOpen]=useState(false),item=hours.data?.items.find(i=>i.ticker===ticker),session=instrumentSession(item,hours.data?.fetchedAt,hours.now);
-  return <><button type="button" className={`pi-hours pi-session-${session.phase}`} onClick={()=>setOpen(true)} aria-label={`${name}: ${session.label}. View trading hours`}><i aria-hidden="true"/>{session.label}</button>{open&&<HoursDialog item={item} hours={hours} session={session} name={name} onClose={()=>setOpen(false)}/>}</>;
+  return <><button type="button" className={`pi-hours pi-session-${session.phase}${compact?' pi-hours-compact':''}`} onClick={()=>setOpen(true)} aria-label={`${name}: ${session.label}. View trading hours`} title={compact?session.label:undefined}><i aria-hidden="true"/>{!compact&&session.label}</button>{open&&<HoursDialog item={item} hours={hours} session={session} name={name} onClose={()=>setOpen(false)}/>}</>;
 }
 function HoursDialog({item,hours,session,name,onClose}){
   const ref=useRef(),id=useId(),{journalStamp,zoneLabel}=useDisplayTime();

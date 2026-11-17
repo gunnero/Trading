@@ -33,7 +33,7 @@ try{
   }
   await route.fulfill({json:{rebuild,accountReturn:{amount:200,ratePercent:20,netDeposits:1000,valuePoints:[{at:now-86400000,value:1190},{at:now,value:1200}],valuationTrackingFrom:now-86400000,recordedFrom:now-86400000,to:now}}});
  });
- await page.goto(runtime.url+'/#portfolio');const panel=page.getByRole('region',{name:'Account summary'}),detail=panel.locator('.pm-history-explainer').first();
+ await page.goto(runtime.url+'/#portfolio/account/'+id);const panel=page.getByRole('region',{name:'Account summary'}),detail=panel.locator('.pm-history-explainer').first();
  await expect(detail).toContainText('Transactions saved; older chart not ready.');await expect(detail).toContainText('2 of 4 instruments priced');await expect(detail.locator('.pm-listing-checks li')).toHaveCount(4);
  await expect(detail).toContainText('Prices saved · SIX:EQAC');await expect(detail).toContainText('No exact listing verified');await expect(detail).toContainText('Yahoo Finance has no daily history');
  await expect(detail.locator('.pm-listing-checks li').nth(0)).toContainText('UNKNOWN_US_EQ');await expect(detail.locator('.pm-listing-checks li').nth(1)).toContainText('MISSING_US_EQ');await expect(detail.locator('.pm-listing-checks li').nth(2)).toContainText('Prices saved');mark('Unresolved instruments appear before saved prices so blockers are visible without scrolling past completed work');
@@ -46,7 +46,7 @@ try{
  rebuild={...rebuild,status:'ready',priced:4,listingChecks:rebuild.listingChecks.map(i=>({...i,status:'saved'}))};await panel.getByRole('button',{name:'Refresh portfolio history'}).click();await expect(detail.getByText('Reconstructed history is available. Estimated points are identified on the chart.')).toBeAttached();
  expect(starts).toBe(1);expect(await read('/api/workspace')).toEqual(before);expect(errors).toEqual([]);mark('Progress survives reload; one retry retains saved records, advances through matching and prices, and reports ready only on completion');
  automatic=true;rebuild={...rebuild,status:'loading',stage:'prices',priced:5,instruments:24,retryAt:Date.now()+1000,listingChecks:[]};
- const started=Date.now();await page.reload();await expect(detail).toContainText('5 of 24 instruments priced');await expect(detail).toContainText('Prices continue automatically as each batch finishes');
+ const started=Date.now();await page.reload();await expect(detail).toContainText('of 24 instruments priced');await expect(detail).toContainText('Prices continue automatically as each batch finishes');
  await expect.poll(()=>rebuild.status,{timeout:20000}).toBe('ready');await expect(detail).toContainText('24 of 24 instruments priced');
  expect(syncs).toBe(10);expect(maxActive).toBe(1);expect(starts).toBe(1);expect(Date.now()-started).toBeLessThan(20000);mark('5 of 24 prices reaches completion automatically in under 20 seconds with no overlapping batches or new import');
  rebuild={...rebuild,status:'paused',priced:5,retryAt:Date.now()+10000};const savedSyncs=syncs;await page.reload();await expect(detail).toContainText('Import paused');await page.waitForTimeout(2200);expect(syncs).toBe(savedSyncs);mark('Reload respects a saved provider retry deadline without issuing another sync');

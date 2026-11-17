@@ -1,0 +1,191 @@
+@layer base {
+.pm-account-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+.pm-account-list-row:last-child { border-bottom: 0; }
+.pm-account-open {
+  align-self: center;
+  color: var(--primary);
+  width: 38px;
+  height: 44px;
+}
+.pm-account-page .section-tabs { margin-bottom: 0; }
+.pm-account-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 4px;
+  color: var(--primary);
+  font-size: 13px;
+}
+.pm-account-page .pm-detail {
+  overflow: visible;
+  border-radius: 0;
+}
+.pm-account-page .pm-detail-header { padding: 4px 0 14px; }
+.pm-account-page .pm-detail-header h2 {
+  font-size: clamp(20px, 2vw, 27px);
+  line-height: 1.22;
+  letter-spacing: -.025em;
+}
+.pm-account-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pm-account-page .pm-actions .button { min-height: 35px; }
+.pm-account-page .pm-detail > .pm-alert { margin: 0 0 10px; }
+.pm-account-page .pm-history { padding: 0; border: 0; }
+.pm-account-metrics {
+  display: grid;
+  grid-template-columns: .95fr 1.1fr .95fr;
+  border-block: 1px solid var(--border);
+  padding: 12px 0;
+}
+.pm-account-metrics > * {
+  min-width: 0;
+  border-inline-end: 1px solid var(--border);
+  padding-inline: clamp(14px, 2.3vw, 38px);
+}
+.pm-account-metrics > :first-child { padding-inline-start: 0; }
+.pm-account-metrics > :last-child { border: 0; padding-inline-end: 0; }
+.pm-account-metrics span, .pm-account-chart-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pm-account-metrics span, .pm-account-metrics dt {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+  color: var(--text);
+}
+.pm-account-metrics svg, .pm-account-chart-head h3 svg { color: var(--muted); flex: none; }
+.pm-account-metrics strong, .pm-account-metrics dd {
+  font-size: clamp(18px, 2vw, 27px);
+  line-height: 1.22;
+  letter-spacing: -.024em;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.pm-account-metrics strong small { font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: normal; }
+.pm-account-metrics .pm-return-pair { display: flex; align-items: flex-end; margin: 0; gap: 3px 8px; }
+.pm-account-metrics .pm-return-pair > div { max-width: 100%; }
+.pm-account-metrics .pm-return-pair > div + div dd { font-size: clamp(14px, 1.65vw, 21px); }
+.pm-account-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0;
+}
+.pm-account-chart-head h3 { font-size: 19px; font-weight: 660; }
+.pm-chart-actions { display: flex; align-items: center; min-width: 0; gap: 6px; }
+.pm-account-chart-head .pm-periods { margin: 0; gap: 3px; }
+.pm-account-chart-head .pm-periods button { min-height: 30px; padding: 4px 10px; }
+.pm-account-chart-head .pm-periods button.selected { background: var(--selection); font-weight: 650; }
+.pm-chart-actions .icon-button { width: 32px; min-height: 34px; flex: none; color: var(--muted); }
+.pm-account-summary .pm-account-area-chart { margin-top: 0; position: relative; }
+.pm-account-summary .pm-account-area-chart > svg { width: 100%; height: auto; min-height: 0; max-height: none; }
+.pm-account-area-chart .pm-history-readout {
+  position: absolute;
+  top: 14px;
+  left: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  min-height: 0;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  opacity: 0;
+  pointer-events: none;
+}
+.pm-account-area-chart:hover .pm-history-readout, .pm-account-area-chart:focus-within .pm-history-readout { opacity: 1; }
+.pm-account-area-chart input:not(:focus-visible) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+.pm-chart-source { margin: 5px 0 9px; }
+.pm-account-page .pm-holdings { padding: 10px 0 0; }
+.pm-account-page .pm-holdings .pm-section-heading { margin: 0 0 4px; align-items: center; }
+.pm-account-page .pm-holdings h3 { font-size: 23px; letter-spacing: -.024em; }
+.pm-holdings-tools { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.pm-holdings-sort { display: none; }
+.pm-account-page .pm-search { max-width: none; width: min(310px, 33vw); min-height: 34px; padding-block: 6px; }
+.pm-account-page .pm-search svg { flex: none; }
+.pm-values-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; font-size: 12px; }
+.pm-values-toggle > span { width: 34px; height: 18px; position: relative; background: var(--muted); border-radius: 12px; }
+.pm-values-toggle > span::after {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 12px;
+  position: absolute;
+  inset: 3px auto 3px 3px;
+  border-radius: 50%;
+  background: white;
+}
+.pm-values-toggle[aria-checked=true] > span { background: var(--primary); }
+.pm-values-toggle[aria-checked=true] > span::after { left: 19px; }
+.pm-account-page .pm-table th {
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 1px 8px 1px 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+.pm-account-page .pm-table { font-size: 13px; }
+.pm-table th button { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; }
+.pm-table th[aria-sort] { color: var(--primary); }
+.pm-table th[aria-sort] > span { color: var(--muted); }
+.pm-account-page .pm-table td { padding: 6px 8px 6px 0; border-color: var(--border); }
+.pm-account-page .pm-table td:not(:first-child) small { display: inline; font-size: 11px; }
+.pm-instrument-cell { display: flex; align-items: center; gap: 4px; }
+.pm-instrument-cell .pi-hours-compact { display: grid; place-items: center; width: 24px; height: 32px; margin: 0 0 0 -7px; flex: 0 0 24px; }
+.pm-instrument-cell .pi-hours-compact i { width: 8px; height: 8px; }
+.pm-account-page .pm-holding-button { min-height: 32px; width: auto; flex: 1; padding: 2px 5px 2px 0; }
+.pm-account-page .pm-instrument strong { font-size: 13px; font-weight: 650; }
+.pm-account-page .pm-instrument small { font-size: 11px; margin-top: 0; }
+.pm-account-page .pm-older-history { border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; margin-top: 14px; }
+.pm-older-history > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; width: 100%; min-height: 26px; list-style: none; }
+.pm-older-history > summary::-webkit-details-marker { display: none; }
+.pm-older-history > summary strong { color: var(--text); font-size: 13px; }
+.pm-older-history > summary > svg, .pm-older-history > summary > span { color: var(--primary); }
+.pm-older-history > summary > span { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
+.pm-older-history[open] > summary > span svg { transform: rotate(180deg); }
+.pm-account-page .pm-net-deposits { margin-top: 8px; }
+.pm-account-page .pm-snapshot-footer, .pm-account-page .pm-import-row { padding-inline: 0; }
+.pm-account-page .pm-snapshot-footer { padding-block: 12px; }
+@media (max-width: 760px) {
+  .pm-account-list-row { grid-template-columns: minmax(0, 1fr) 34px; }
+  .pm-account-open { width: 34px; }
+  .pm-account-page .pm-actions .button { min-height: 42px; }
+  .pm-account-metrics > * { padding-inline: 8px; }
+  .pm-account-metrics span, .pm-account-metrics dt { font-size: 12px; }
+  .pm-account-chart-head { align-items: flex-start; }
+  .pm-chart-actions { width: 100%; }
+  .pm-account-chart-head .pm-periods { flex: 1; }
+  .pm-account-chart-head .pm-periods button { min-height: 42px; padding-inline: 2px; }
+  .pm-account-page .pm-search { width: min(100%,330px); min-height: 42px; }
+  .pm-holdings-tools { width: 100%; }
+  .pm-holdings-sort { display: block; min-height: 40px; max-width: 150px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 5px; color: var(--text); background: var(--bg); }
+  .pm-instrument-cell .pi-hours-compact { min-height: 40px; }
+  .pm-account-page .pm-table td { padding: 0; }
+}
+}

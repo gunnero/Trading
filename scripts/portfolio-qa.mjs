@@ -15,31 +15,35 @@ try{
  const read=async()=>await(await testFetch(runtime.url+'/api/portfolio')).json(),workspace=async()=>await(await testFetch(runtime.url+'/api/workspace')).json(),before=await workspace();
  await page.goto(runtime.url+'/#portfolio');await expect(page.getByRole('heading',{name:'Portfolio Manager',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Start with a person'})).toBeVisible();
  expect(paths.some(p=>p.startsWith('/api/market/'))).toBe(false);expect((await workspace()).revision).toBe(before.revision);
+ const backToAccounts=()=>page.getByRole('button',{name:'Back to accounts',exact:true}).click();
  const addPerson=async name=>{await page.getByRole('button',{name:'Add person',exact:true}).click();await page.getByLabel('Full name').fill(name);await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);};
  await addPerson('Alex Fixture');await addPerson('Sam Fixture');
  await page.getByRole('button',{name:'Add account',exact:true}).click();await page.getByLabel('Account label',{exact:true}).fill('Main account');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('heading',{name:'Ready to connect'})).toBeVisible();
  await page.getByRole('button',{name:'Import snapshot',exact:true}).click();await page.getByLabel('Snapshot file').setInputFiles({name:'fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(snapshot))});await expect(page.locator('.pm-import-preview')).toContainText('$1,100.00 · 1 holdings');
- expect((await read()).data.accounts[0].snapshot).toBe(null);await page.getByRole('button',{name:'Save snapshot',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.pm-table')).toContainText('2.12345678');await expect(page.locator('.pm-source')).toContainText('Source date unknown');
+ expect((await read()).data.accounts[0].snapshot).toBe(null);await page.getByRole('button',{name:'Save snapshot',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.pm-table')).toContainText('2.12345678');await expect(page.locator('.pm-account-meta')).toContainText('Source date unknown');
+ await backToAccounts();
  mark('Direct route has no market polling or workspace writes; people/accounts save and import requires review, preserving fractional shares and unknown dates');
- await page.getByRole('button',{name:'Add account',exact:true}).click();await page.getByLabel('Person',{exact:true}).selectOption({label:'Sam Fixture'});await page.getByLabel('Account label',{exact:true}).fill('Unconnected');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.pm-overview')).toContainText('1 account without a value');await expect(page.locator('.pm-overview-value')).toContainText('$1,100.00');
+ await page.getByRole('button',{name:'Add account',exact:true}).click();await page.getByLabel('Person',{exact:true}).selectOption({label:'Sam Fixture'});await page.getByLabel('Account label',{exact:true}).fill('Unconnected');await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await backToAccounts();await expect(page.locator('.pm-overview')).toContainText('1 account without a value');await expect(page.locator('.pm-overview-value')).toContainText('$1,100.00');
  // The second account must survive both full reload and leaving this route.
- await page.getByRole('button',{name:/Sam Fixture Trading 212/}).click();await page.reload();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');
+ await page.locator('.pm-account-card').filter({hasText:/Sam Fixture.*Trading 212/}).click();await page.reload();await expect(page.getByRole('region',{name:'Selected portfolio'})).toContainText('Sam Fixture');await backToAccounts();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');
  await page.locator('.pm-people').getByRole('button',{name:'Sam Fixture'}).click();await page.reload();await expect(page.locator('.pm-people button[aria-pressed=true]')).toContainText('Sam Fixture');await expect(page.locator('.pm-account-card')).toHaveCount(1);
  await page.getByRole('button',{name:'Activity & alerts',exact:true}).last().click();await page.getByRole('navigation',{name:'Portfolio sections'}).getByRole('button',{name:'Accounts',exact:true}).click();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');await expect(page.locator('.pm-account-card')).toHaveCount(1);
  await page.locator('.pm-people').getByRole('button',{name:/Everyone/}).click();await expect(page.locator('.pm-account-card.selected')).toContainText('Sam Fixture');
  mark('Last selected account and person filter survive reload and navigation; Everyone preserves the current account');
- await page.getByRole('button',{name:/Alex Fixture Trading 212/}).click();await page.getByLabel('Search holdings').fill('missing');await expect(page.getByText('No matching holdings.')).toBeVisible();await page.getByLabel('Search holdings').fill('');
+ await page.locator('.pm-account-card').filter({hasText:/Alex Fixture.*Trading 212/}).click();await page.getByLabel('Search holdings').fill('missing');await expect(page.getByText('No matching holdings.')).toBeVisible();await page.getByLabel('Search holdings').fill('');
  const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Export snapshot',exact:true}).click();const downloaded=await downloading;const exported=JSON.parse(readFileSync(await downloaded.path(),'utf8'));expect(exported.holdings[0].quantity).toBe(2.12345678);expect(exported.apiKey).toBeUndefined();
  await page.reload();await expect(page.locator('.pm-table')).toContainText('Fixture Company');const saved=await read();await runtime.stop();await runtime.start();await page.reload();await expect(page.locator('.pm-table')).toContainText('Fixture Company');expect(await read()).toEqual(saved);
  mark('Separate people/accounts, missing-data totals, holdings search, credential-free snapshot export and actual server-restart persistence pass');
+ await backToAccounts();
  // Give the other account a distinct balance so scope leaks are observable.
  await page.locator('.pm-account-card').filter({hasText:'Sam Fixture'}).click();
- await page.getByRole('button',{name:'Import snapshot',exact:true}).click();await page.getByLabel('Snapshot file').setInputFiles({name:'sam.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...snapshot,accountValue:2200,investmentsValue:2100,holdings:[{...snapshot.holdings[0],quantity:4.12345678,value:2100}]}))});await page.getByRole('button',{name:'Save snapshot',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await page.locator('.pm-account-card').filter({hasText:'Alex Fixture'}).click();
+ await page.getByRole('button',{name:'Import snapshot',exact:true}).click();await page.getByLabel('Snapshot file').setInputFiles({name:'sam.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...snapshot,accountValue:2200,investmentsValue:2100,holdings:[{...snapshot.holdings[0],quantity:4.12345678,value:2100}]}))});await page.getByRole('button',{name:'Save snapshot',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await backToAccounts();await page.locator('.pm-account-card').filter({hasText:'Alex Fixture'}).click();await backToAccounts();
  const beforePrivacy=await read(),cards=page.locator('.pm-account-card');
  const portfolio=page.locator('.pm-page');
  const hideNames=page.getByRole('button',{name:'Hide names',exact:true});
  const hideBalances=page.getByRole('button',{name:'Hide balances',exact:true});
  const hideBoth=page.getByRole('button',{name:'Hide both',exact:true});
+ const openDetails=index=>page.locator('.pm-account-open').nth(index).click();
  const holding=page.getByRole('button',{name:'View Fixture Company holding details'});
  const holdingPrivacy=page.getByRole('region',{name:'Account holding'});
  const secondId=beforePrivacy.data.accounts[1].id;
@@ -58,42 +62,44 @@ try{
  await expect(portfolio).not.toContainText(/Alex Fixture|Sam Fixture/);
  await expect(cards.first()).toHaveAttribute('aria-current','true');
  await expect(cards.first()).toHaveAttribute('aria-pressed','false');
+ await openDetails(0);
  await expect(page.getByRole('button',{name:'Export snapshot'})).toBeDisabled();
  await expect(page.getByRole('button',{name:'Edit account',exact:true})).toBeDisabled();
- await holding.click();await expect(holdingPrivacy).not.toContainText(/Alex Fixture|\$1,000\.00|2\.12345678/);await closeHolding();
+ await holding.click();await expect(holdingPrivacy).not.toContainText(/Alex Fixture|\$1,000\.00|2\.12345678/);await closeHolding();await backToAccounts();
  await cards.first().focus();await page.keyboard.press('Enter');
  await expect(cards.first()).toContainText('Alex Fixture');await expect(cards.first()).toContainText('$1,100.00');
  await expect(cards.first()).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('.pm-overview-value')).toContainText('••••');
  await expect(page.locator('.pm-people')).not.toContainText('Alex Fixture');
- await holding.click();await expect(holdingPrivacy).toContainText('Alex Fixture');await expect(holdingPrivacy).toContainText('$1,000.00');await closeHolding();
  await cards.first().click();await expect(cards.first()).not.toContainText('Alex Fixture');
  await cards.first().click();await hideBoth.click();await expect(cards.first()).not.toContainText('Alex Fixture');
  await cards.first().click();await cards.nth(1).click();await expect(cards.nth(1)).toContainText('Sam Fixture');await expect(cards.nth(1)).toContainText('$2,200.00');
- await expect(portfolio).not.toContainText(/Alex Fixture|\$1,100\.00/);await expect(page.locator('.pm-table')).toContainText('4.12345678');
+ await expect(portfolio).not.toContainText(/Alex Fixture|\$1,100\.00/);
  await page.reload();await expect(hideNames).toHaveAttribute('aria-pressed','true');await expect(hideBalances).toHaveAttribute('aria-pressed','true');
  await expect(cards.nth(1)).toHaveClass(/selected/);await expect(portfolio).not.toContainText(/Alex Fixture|Sam Fixture|\$2,200\.00/);
  await page.locator('.pm-people button').nth(2).click();await expect(cards).toHaveCount(1);
  await cards.first().click();await expect(cards.first()).toContainText('$2,200.00');await expect(page.locator('.pm-overview-value')).toContainText('••••');
  await page.locator('.pm-people').getByRole('button',{name:/Everyone/}).click();await expect(cards.nth(1)).not.toContainText('Sam Fixture');
  for(const width of [320,1488]){await page.setViewportSize({width,height:1000});expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/privacy-${width}.png`,fullPage:true});}
- await cards.nth(1).click();await holding.click();await expect(holdingPrivacy).toContainText('Sam Fixture');
+ await cards.nth(1).click();await openDetails(1);await expect(page.locator('.pm-table')).toContainText('4.12345678');
+ const values=page.getByRole('switch',{name:'Show values'});await expect(values).toHaveAttribute('aria-checked','true');await values.click();await expect(page.locator('.pm-table')).not.toContainText('4.12345678');await values.click();
+ await holding.click();await expect(holdingPrivacy).toContainText('Sam Fixture');
  const other=await page.context().newPage();await mockMarket(other);await mockBriefing(other);await other.goto(runtime.url+'/#portfolio');
  await expect(other.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(other.locator('.pm-account-card.selected')).not.toContainText('Sam Fixture');
  await other.locator('.pm-account-card').first().click();
- await expect(cards.first()).toHaveClass(/selected/);
+ await expect(holdingPrivacy).not.toContainText('Sam Fixture');
  const synced=await page.evaluate(()=>JSON.parse(localStorage.getItem('opening-bell.portfolio-view.v1')).account);
  expect(synced).not.toBe(secondId);
  await expect(portfolio).not.toContainText(/Alex Fixture|Sam Fixture|\$2,200\.00/);
- await expect(holdingPrivacy).not.toContainText(/Sam Fixture|4\.12345678/);await closeHolding();
+ await expect(holdingPrivacy).not.toContainText(/Sam Fixture|4\.12345678/);await closeHolding();await backToAccounts();
  await other.getByRole('button',{name:'Hide names',exact:true}).click();await expect(hideNames).toHaveAttribute('aria-pressed','false');
  await expect(portfolio).toContainText('Sam Fixture');await expect(portfolio).not.toContainText('$2,200.00');await other.close();
  await hideBalances.click();await expect(cards.nth(1)).toContainText('$2,200.00');expect(await read()).toEqual(beforePrivacy);
  const prefs=await page.evaluate(()=>JSON.parse(localStorage.getItem('opening-bell.portfolio-view.v1')));expect(Object.keys(prefs).sort()).toEqual(['account','filter','hideBalances','hideNames']);expect(JSON.stringify(prefs)).not.toContain('Fixture');
  mark('Privacy toggles independently, masks all accounts with Hide both, and reveals or remasks only the clicked account. Reload, filters and other-tab changes clear the preview.');
 
- await page.getByRole('button',{name:'Connect account',exact:true}).click();await expect(page.getByText(/account owner authorized this connection/)).toBeVisible();await page.getByLabel('API key',{exact:true}).fill('fixture-unsaved-key');await page.getByLabel('API secret',{exact:true}).fill('fixture-unsaved-secret');await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Connect account',exact:true}).click();await expect(page.getByLabel('API key',{exact:true})).toHaveValue('');
+ await cards.first().click();await page.getByRole('button',{name:'Connect account',exact:true}).click();await expect(page.getByText(/account owner authorized this connection/)).toBeVisible();await page.getByLabel('API key',{exact:true}).fill('fixture-unsaved-key');await page.getByLabel('API secret',{exact:true}).fill('fixture-unsaved-secret');await page.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Connect account',exact:true}).click();await expect(page.getByLabel('API key',{exact:true})).toHaveValue('');
  let submitted;await page.route('**/api/portfolio/accounts/*/connect',async route=>{submitted=route.request().postDataJSON();await route.fulfill({status:502,json:{message:'Isolated broker unavailable'}});});
  await page.getByLabel('API key',{exact:true}).fill('fixture-key-12345');await page.getByLabel('API secret',{exact:true}).fill('fixture-secret-67890');await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Connect & read account'}).click();await expect(page.getByRole('alert')).toContainText('Isolated broker unavailable');expect(submitted.authorized).toBe(true);expect(submitted.environment).toBe('live');await page.getByRole('button',{name:'Cancel',exact:true}).click();expect((await read()).data.accounts[0].snapshot.accountValue).toBe(1100);
  mark('Connection form requires owner permission, clears unsaved secrets on close, and preserves snapshots when connection fails');
@@ -105,10 +111,10 @@ try{
   await page.setViewportSize({width,height:1000});await expect(page.locator('.pm-detail')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:`${dir}/portfolio-${width}.png`,fullPage:true});
   await page.getByRole('button',{name:'Connect account',exact:true}).click();expect(await page.getByRole('dialog').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await page.getByRole('button',{name:'Cancel',exact:true}).click();
-  if(width===390){await page.getByRole('button',{name:'Open navigation'}).click();const nav=page.getByRole('navigation',{name:'Main navigation'});await expect(nav.getByRole('button',{name:'Portfolio Manager'})).toBeVisible();await nav.getByRole('button',{name:'Portfolio Manager'}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}
+  if(width===390){await page.getByRole('button',{name:'Open navigation'}).click();const nav=page.getByRole('navigation',{name:'Main navigation'});await expect(nav.getByRole('button',{name:'Portfolio Manager'})).toBeVisible();await nav.getByRole('button',{name:'Portfolio Manager'}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await cards.first().click();}
  }
  mark('Portfolio page and connection dialog fit 320/390/820/1024/1488px; mobile navigation opens Portfolio Manager');
- await page.getByRole('button',{name:/Sam Fixture Trading 212/}).click();await page.getByRole('button',{name:'Edit account',exact:true}).click();await page.getByRole('button',{name:'Remove account',exact:true}).click();expect((await read()).data.accounts.length).toBe(2);await page.getByRole('button',{name:'Confirm remove'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect((await read()).data.accounts.length).toBe(1);
+ await backToAccounts();await page.locator('.pm-account-card').filter({hasText:/Sam Fixture.*Trading 212/}).click();await page.getByRole('button',{name:'Edit account',exact:true}).click();await page.getByRole('button',{name:'Remove account',exact:true}).click();expect((await read()).data.accounts.length).toBe(2);await page.getByRole('button',{name:'Confirm remove'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect((await read()).data.accounts.length).toBe(1);
  const personFilter=page.locator('.pm-people').getByRole('button',{name:'Sam Fixture'});await personFilter.click();await page.getByRole('button',{name:'Edit person',exact:true}).click();await page.getByRole('button',{name:'Remove person',exact:true}).click();await page.getByRole('button',{name:'Confirm remove'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect((await read()).data.people.some(p=>p.name==='Sam Fixture')).toBe(false);
  mark('Account and person removal require explicit confirmation and preserve unrelated accounts');
  await page.reload();await expect(page.locator('.pm-account-card.selected')).toContainText('Alex Fixture');await expect(page.locator('.pm-people button[aria-pressed=true]')).toContainText('Everyone');
