@@ -102,3 +102,6 @@
 @container(min-width:1050px){.earnings-page table th{font-size:11px}}
 @container(max-width:650px){.earnings-comparison{height:170px}.earnings-page table th{font-size:10px}}
 @media(max-width:760px){.earnings-date-picker{min-height:36px}}
+.earnings-revenue-value{overflow-wrap:normal;font-variant-numeric:tabular-nums}
+.earnings-revenue-value small{display:block;color:var(--muted);font-size:.85em}
+.earnings-preview-metrics .earnings-revenue-amount{font-size:clamp(14px, 1.35vw, 22px);line-height:1.3;overflow-wrap:anywhere}

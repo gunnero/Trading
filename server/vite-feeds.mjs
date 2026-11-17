@@ -1,5 +1,5 @@
 import { createMarketService, marketDataMiddleware } from './market-data.mjs';
-import {createCompanyService,companyMiddleware} from './company-data.mjs';
+import {defaultCompanyService,companyMiddleware} from './company-data.mjs';
 import {createEarningsService,earningsMiddleware} from './earnings.mjs';
 import { feedMiddleware } from './feeds.mjs';
 import { cachedFeedService } from './briefing-cache.mjs';
@@ -29,7 +29,7 @@ export function marketFeeds() {
     server.middlewares.use(journalDraftsMiddleware(dirname(store.filename)));
     const marketKey=Symbol.for('opening-bell.market-service');
     server.middlewares.use(marketDataMiddleware(globalThis[marketKey] ||= createMarketService()));
-    server.middlewares.use(companyMiddleware(globalThis[Symbol.for('opening-bell.company-service')] ||= createCompanyService()));
+    server.middlewares.use(companyMiddleware(defaultCompanyService()));
     server.middlewares.use(earningsMiddleware(globalThis[Symbol.for('opening-bell.earnings-service')] ||= createEarningsService({cachePath:new URL('../.cache/earnings.json',import.meta.url).pathname})));
     server.middlewares.use(feedMiddleware(service));
   }

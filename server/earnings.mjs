@@ -2,6 +2,9 @@ import {readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {EARNINGS_SOURCE,earningsRange,earningsDays,earningsNumber} from '../src/data/earnings.mjs';
 import {validDay} from '../src/data/calendar.mjs';
+import {earningsFiscalMonth,earningsReportIdentity} from '../src/data/earnings-revenue.mjs';
+import {defaultCompanyService} from './company-data.mjs';
+import {createEarningsRevenueService} from './earnings-revenue.mjs';
 const clean=(value,max=180)=>typeof value==='string'||typeof value==='number'?String(value).trim().slice(0,max):'';
 const supplied=value=>{const s=clean(value,60);return !s||['N/A','--','—','-'].includes(s)?null:s;};
 function sourceDay(value){
@@ -61,13 +64,36 @@ export function createEarningsService({fetcher=fetch,now=()=>Date.now(),cachePat
     const incomplete=missingDates.length>0,status=!available.length?'unavailable':incomplete||cachedDates.length?'stale':'ok';
     return {status,source:EARNINGS_SOURCE,checkedAt:new Date(now()).toISOString(),fetchedAt:available.length?new Date(Math.min(...available.map(r=>r.at))).toISOString():null,message:incomplete?`${missingDates.length} reporting date${missingDates.length===1?' is':'s are'} unavailable. Coverage is incomplete; retrying automatically.`:cachedDates.length?'Showing cached schedules while the source is unavailable.':null,data:available.length?{...range,events:available.flatMap(r=>r.events).sort((a,b)=>a.date.localeCompare(b.date)||a.symbol.localeCompare(b.symbol)),missingDates,cachedDates,incomplete}:null};
   }
-  return {get};
+  async function report({date,symbol}) {
+    const result=await daily(date);
+    return result.events?.find(event=>event.symbol===symbol) || null;
+  }
+  return {get,report};
 }
-export function earningsMiddleware(service=createEarningsService({cachePath:new URL('../.cache/earnings.json',import.meta.url).pathname,onError:(error,date)=>console.warn(`Earnings ${date}: ${error.message}`)})){
+export function earningsMiddleware(
+  service=createEarningsService({cachePath:new URL('../.cache/earnings.json',import.meta.url).pathname,onError:(error,date)=>console.warn(`Earnings ${date}: ${error.message}`)}),
+  revenue=createEarningsRevenueService({companies:defaultCompanyService(),cachePath:new URL('../.cache/earnings-revenue.json',import.meta.url).pathname})
+){
   return async(req,res,next)=>{
-    const url=new URL(req.url,'http://localhost');if(url.pathname!=='/api/earnings')return next();
+    const url=new URL(req.url,'http://localhost'),isRevenue=url.pathname==='/api/earnings/revenue';
+    if(url.pathname!=='/api/earnings'&&!isRevenue)return next();
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
     if(req.method!=='GET'){res.statusCode=405;res.setHeader('Allow','GET');res.end(JSON.stringify({message:'Use GET.'}));return;}
+    if(isRevenue){
+      const id=url.searchParams.get('report'),identity=earningsReportIdentity(id);
+      const period=url.searchParams.get('period'),state=url.searchParams.get('state');
+      if(!identity||!/^\d{4}-(0[1-9]|1[0-2])$/.test(period||'')||!['expected','reported'].includes(state)){res.statusCode=400;res.end(JSON.stringify({status:'unavailable',message:'Choose a valid earnings report.'}));return;}
+      try{
+        const event=await service.report(identity);
+        const matches=event&&earningsFiscalMonth(event.fiscalQuarter)===period&&event.status===state;
+        const data=matches?await revenue.get(event):{status:'unavailable',reason:'The Nasdaq report changed or could not be verified.'};
+        const {status}=data;
+        res.end(JSON.stringify({status:status==='missing'?'ok':status,fetchedAt:data.actual?.fetchedAt||data.estimate?.fetchedAt||null,data:{...data,id}}));
+      }catch{
+        res.statusCode=502;res.end(JSON.stringify({status:'unavailable',message:'Revenue is temporarily unavailable.'}));
+      }
+      return;
+    }
     try{res.end(JSON.stringify(await service.get({from:url.searchParams.get('from'),to:url.searchParams.get('to')})));}catch(error){res.statusCode=400;res.end(JSON.stringify({status:'unavailable',message:error.message}));}
   };
 }

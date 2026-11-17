@@ -30,7 +30,7 @@
     "test:chart-settings": "node --test tests/chart-settings.test.mjs && node scripts/qa-runner.mjs chart-settings",
     "test:news": "node scripts/news-page-qa.mjs",
     "test:sentiment": "node --test tests/sentiment.test.mjs tests/sentiment-connection.test.mjs tests/sentiment-details.test.mjs tests/feed-cache.test.mjs && node scripts/sentiment-qa.mjs && node scripts/sentiment-page-qa.mjs",
-    "test:earnings": "node --test tests/earnings.test.mjs && node scripts/earnings-qa.mjs",
+    "test:earnings": "node --test tests/earnings.test.mjs tests/earnings-revenue.test.mjs && node scripts/earnings-qa.mjs",
     "test:responsive": "node --test tests/feed-cache.test.mjs && node scripts/responsive-qa.mjs",
     "auth:setup": "node scripts/owner-access.mjs",
     "auth:recover": "node scripts/owner-access.mjs --recover",
