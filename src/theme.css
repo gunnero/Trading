@@ -75,6 +75,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
 .sidebar .nav-item.active { background: #60429b; color: #fff; box-shadow: inset 3px 0 #c5a4ff; }
 .sidebar .nav-item:hover { background: #3d2e5d; color: #fff; }
 .sidebar .nav-item svg { width: 20px; height: 20px; color: inherit; }
+.sidebar .nav-subitem { width: calc(100% - 24px); margin: 0 0 4px 24px; padding: 8px 12px; gap: 9px; font-size: 13px; }
+.sidebar .nav-subitem svg { width: 17px; height: 17px; flex: none; }
 .sidebar .sidebar-account-area { padding: 14px 18px; }
 .sidebar-account-area .sidebar-sentiment, .sidebar-account-area .sidebar-sentiment[data-tone] { background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 16px 0; margin: 0; }
 .sidebar .sidebar-sentiment-label, .sidebar .sidebar-sentiment-score strong { color: var(--text); }

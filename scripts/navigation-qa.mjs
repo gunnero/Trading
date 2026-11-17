@@ -15,7 +15,7 @@ try{
  let tradeWrites=0;page.on('request',r=>{if(r.method()==='POST'&&/\/trading\/(preview|submit)/.test(r.url()))tradeWrites++;});
  const before=await read();await page.goto(runtime.url+'/#overview');
  const main=page.getByRole('navigation',{name:'Main navigation'});
- await expect(main.getByRole('button')).toHaveText(['Overview','Markets','Portfolio Manager16','Journal']);
+ await expect(main.getByRole('button')).toHaveText(['Overview','Markets','News','Portfolio Manager16','Journal']);
  await expect(page.getByRole('button',{name:'Account and security',exact:true})).toBeHidden();
  await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();await expect(page).toHaveURL(/#levels$/);await expect(main.getByRole('button',{name:'Overview',exact:true})).toHaveAttribute('aria-current','page');
  await page.getByRole('button',{name:'Back to Overview',exact:true}).click();await expect(page).toHaveURL(/#overview$/);

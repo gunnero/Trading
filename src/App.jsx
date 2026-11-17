@@ -173,7 +173,13 @@ function SessionDesk({workspace}) {
   return <div className="app-shell" data-section={section}>
     <aside ref={sidebarRef} id="desk-navigation" role={menuOpen?'dialog':undefined} aria-modal={menuOpen||undefined} aria-label="Navigation" className={`sidebar ${menuOpen ? 'is-open' : ''}`}>
       <button className="icon-button drawer-close" aria-label="Close navigation menu" onClick={()=>setMenuOpen(false)}><X size={22}/></button><div className="desk-brand"><ChartBar size={30} weight="fill"/><span>Trading Desk</span></div><MarketClock onOpen={()=>{setMenuOpen(false);setDialog('market-hours');}}/>
-      <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => <button key={id} aria-label={title} title={title} className={`nav-item ${group === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={group === id ? 'page' : undefined}><Icon size={22} weight={group === id ? 'regular' : 'light'}/><span>{title}</span>{id==='portfolio'&&notifications.feed?.unread>0&&<span className="pa-badge" aria-label={`${notifications.feed.unread} unread alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</span>}</button>)}</nav>
+      <nav aria-label="Main navigation">{sections.filter(item=>!['settings','sentiment'].includes(item.id)).map(({ id, title, icon: Icon }) => {
+        const active = group === id && section !== 'news';
+        return <React.Fragment key={id}>
+          <button aria-label={title} title={title} className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(id)} aria-current={active ? 'page' : undefined}><Icon size={22} weight={active ? 'regular' : 'light'}/><span>{title}</span>{id==='portfolio'&&notifications.feed?.unread>0&&<span className="pa-badge" aria-label={`${notifications.feed.unread} unread alerts`}>{notifications.feed.unread>99?'99+':notifications.feed.unread}</span>}</button>
+          {id === 'markets' && <button className={`nav-item nav-subitem ${section === 'news' ? 'active' : ''}`} aria-current={section === 'news' ? 'page' : undefined} onClick={() => navigate('markets/news')}><Newspaper size={17}/><span>News</span></button>}
+        </React.Fragment>;
+      })}</nav>
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">

@@ -19,11 +19,12 @@ function NewsQuotes({quotes,onOpen}){
 function Article({article,lead=false}){
   const {marketTime,zoneLabel}=useDisplayTime();
   return <a className={`news-article ${lead?'news-lead':''}`} href={article.url} target="_blank" rel="noopener noreferrer">
-    <NewsImage image={article.image} priority={lead}/><div className="news-article-copy">
+    <div className="news-article-copy">
       {lead&&<span className="news-lead-label">Latest headline</span>}<h3>{article.title}</h3>
       <div className="news-article-meta"><span className="news-meta">{article.publisher}<span>·</span>{article.publishedAt?<time dateTime={article.publishedAt}>{marketTime(article.publishedAt)} {zoneLabel}</time>:<span>Time not supplied</span>}</span>{lead&&<span className="news-read-original">Read original article<CaretRight size={14}/></span>}</div>
-      {lead&&<p className="news-image-note">Publisher images appear when available.</p>}
-    </div>{!lead&&<CaretRight size={15}/>}</a>;
+    </div>
+    <NewsImage image={article.image} priority={lead}/>
+    {!lead&&<CaretRight size={15}/>}</a>;
 }
 function articleGroups(articles,now,displayDay,marketTime){
   const groups=new Map(),today=displayDay(now);
