@@ -16,6 +16,7 @@ function update(patch){
   saved={...saved,...patch};
   try{localStorage.setItem(key,JSON.stringify(saved));storageFailed=false;}catch{storageFailed=true;}
   emit();
+  return saved;
 }
 const subscribe=listener=>{listeners.add(listener);return()=>listeners.delete(listener);};
 const snapshot=()=>saved;
@@ -24,12 +25,11 @@ function alias(value,prefix){
   let hash=2166136261;for(const c of String(value||''))hash=Math.imul(hash^c.charCodeAt(0),16777619);
   return `${prefix} ${(hash>>>0).toString(36).toUpperCase().padStart(7,'0').slice(-5)}`;
 }
-const AccountScope=createContext(null);
-export function PortfolioAccountPrivacy({accountId,children}){
-  return <AccountScope.Provider value={accountId}>{children}</AccountScope.Provider>;
+const AccountScope=createContext(false);
+export function PortfolioAccountPrivacy({revealed,children}){
+  return <AccountScope.Provider value={revealed}>{children}</AccountScope.Provider>;
 }
-function presentation(prefs,accountId){
-  const revealed=!!accountId&&accountId===prefs.account;
+function presentation(prefs,revealed){
   const hideNames=prefs.hideNames&&!revealed,hideBalances=prefs.hideBalances&&!revealed;
   return {...prefs,hideNames,hideBalances,privateMode:hideNames||hideBalances,
     person:name=>hideNames?alias(name,'Person'):name,
@@ -39,10 +39,20 @@ function presentation(prefs,accountId){
   };
 }
 export function usePortfolioPrivacy(){
-  const prefs=useSyncExternalStore(subscribe,snapshot,snapshot),accountId=useContext(AccountScope);
-  return {...presentation(prefs,accountId),storageFailed,update,forAccount:id=>presentation(prefs,id)};
+  const prefs=useSyncExternalStore(subscribe,snapshot,snapshot),revealed=useContext(AccountScope);
+  return {...presentation(prefs,revealed),preferences:prefs,storageFailed,update,forView:show=>presentation(prefs,show)};
 }
-export function PortfolioPrivacyControls(){
+export function PortfolioPrivacyControls({accountPreviews=false}){
   const p=usePortfolioPrivacy();
-  return <div className="portfolio-privacy" aria-label="Portfolio privacy"><div><EyeSlash size={18}/><strong>Privacy</strong><button className="button outline" aria-pressed={p.hideNames} onClick={()=>p.update({hideNames:!p.hideNames})}>Hide names</button><button className="button outline" aria-pressed={p.hideBalances} onClick={()=>p.update({hideBalances:!p.hideBalances})}>Hide balances</button></div><p>{p.storageFailed?'This browser could not save your preferences. They apply until the page closes.':'Remembered on this browser.'}{p.privateMode?' The selected account stays visible in Portfolio Manager. These controls hide other accounts; Hide balances also hides combined totals. Show names and balances to trade, edit private details or export.':''}</p></div>;
+  return <div className="portfolio-privacy" role="group" aria-label="Portfolio privacy">
+    <div><EyeSlash size={18}/><strong>Privacy</strong>
+      <button className="button outline" aria-pressed={p.hideNames} onClick={()=>p.update({hideNames:!p.hideNames})}>Hide names</button>
+      <button className="button outline" aria-pressed={p.hideBalances} onClick={()=>p.update({hideBalances:!p.hideBalances})}>Hide balances</button>
+      <button className="button outline" onClick={()=>p.update({hideNames:true,hideBalances:true})}>Hide both</button>
+    </div>
+    <p>{p.storageFailed?'This browser could not save your preferences. They apply until the page closes.':'Privacy settings are remembered on this browser.'}
+      {p.privateMode&&accountPreviews&&' Select an account to reveal its hidden details here. Select it again to hide them.'}
+      {p.privateMode&&' Show names and balances to trade, edit private details or export.'}
+    </p>
+  </div>;
 }

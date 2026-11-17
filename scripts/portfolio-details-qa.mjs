@@ -42,14 +42,17 @@ try{
  await dialog.getByRole('button',{name:'Levels',exact:true}).click();await expect(dialog.getByRole('region',{name:'Chart levels settings'})).toContainText('Your levels');await expect(chart).toHaveAttribute('aria-label',/imported reference levels/);
  await dialog.locator('.company-chart').screenshot({path:dir+'/average-levels-desktop.png'});
  await page.evaluate(()=>{const key='opening-bell.portfolio-view.v1',p=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...p,hideNames:true,hideBalances:true}));dispatchEvent(new StorageEvent('storage',{key}));});
- await expect(dialog.locator('.pm-position')).toContainText('Alex Fixture');await expect(dialog.locator('.pm-position')).toContainText('$2,000.00');await expect(chart).toHaveAttribute('aria-label',/Average paid reference 450 USD/);await expect(dialog.getByRole('img',{name:'AMD share price history'})).toHaveCount(0);
+ await expect(dialog.locator('.pm-position')).not.toContainText('Alex Fixture');await expect(dialog.locator('.pm-position')).not.toContainText('$2,000.00');await expect(chart).not.toHaveAttribute('aria-label',/Average paid reference/);
+ await page.keyboard.press('Escape');await page.locator('.pm-account-card.selected').click();await open.click();await chooseChart('Candles & levels');
+ await expect(dialog.locator('.company-position-strip')).toContainText('4 shares');await expect(chart).toHaveAttribute('aria-label',/Average paid reference 450 USD/);
+ await expect(page.locator('.pm-account-card').nth(1)).not.toContainText('Alex Fixture');
  // Switching selection from another tab must mask this now-inactive account,
  // including references in both visible SVGs and accessible chart descriptions.
  await page.evaluate(account=>{const key='opening-bell.portfolio-view.v1',p=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...p,account}));dispatchEvent(new StorageEvent('storage',{key}));},second.id);
  await expect(dialog.locator('.pm-position')).not.toContainText('First account');await expect(dialog.locator('.pm-position')).not.toContainText('$2,000.00');await expect(dialog.locator('[data-average-line]')).toHaveCount(0);await expect(chart).not.toHaveAttribute('aria-label',/Average paid reference/);await expect(dialog.getByRole('checkbox',{name:/Average paid/})).toBeDisabled();await expect(dialog.getByRole('img',{name:'AMD share price history'})).toHaveCount(0);
  await page.evaluate(account=>{const key='opening-bell.portfolio-view.v1',p=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...p,account,hideNames:false,hideBalances:false}));dispatchEvent(new StorageEvent('storage',{key}));},first.id);
  await expect(chart).toHaveAttribute('aria-label',/Average paid reference 450 USD/);
- mark('Privacy keeps the selected holding and average-price overlays visible, and masks an inactive holding in an already-open dialog after selection changes');
+ mark('Masking applies immediately to an open holding and its average-price overlay. The explicit account preview restores them until another tab changes selection.');
  // Reopen from the current holdings row after the cross-tab selection replaced it.
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await open.click();await chooseChart('Candles & levels');await expect(chart).toBeVisible();
 
