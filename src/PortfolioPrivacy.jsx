@@ -45,11 +45,12 @@ export function usePortfolioPrivacy(){
 }
 export function PortfolioPrivacyControls({accountPreviews=false}){
   const p=usePortfolioPrivacy();
+  const bothHidden=p.preferences.hideNames&&p.preferences.hideBalances;
   return <div className="portfolio-privacy" role="group" aria-label="Portfolio privacy">
     <div><EyeSlash size={18}/><strong>Privacy</strong>
       <button className="button outline" aria-pressed={p.hideNames} onClick={()=>p.update({hideNames:!p.hideNames})}>Hide names</button>
       <button className="button outline" aria-pressed={p.hideBalances} onClick={()=>p.update({hideBalances:!p.hideBalances})}>Hide balances</button>
-      <button className="button outline" onClick={()=>p.update({hideNames:true,hideBalances:true})}>Hide both</button>
+      <button className="button outline" onClick={()=>p.update({hideNames:!bothHidden,hideBalances:!bothHidden})}>{bothHidden?'Show both':'Hide both'}</button>
     </div>
     <p>{p.storageFailed?'This browser could not save your preferences. They apply until the page closes.':'Privacy settings are remembered on this browser.'}
       {p.privateMode&&accountPreviews&&' Select an account row to reveal its hidden details here. Select it again to hide them, or use its arrow to open the account.'}

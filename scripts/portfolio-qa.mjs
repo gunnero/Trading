@@ -43,6 +43,7 @@ try{
  const hideNames=page.getByRole('button',{name:'Hide names',exact:true});
  const hideBalances=page.getByRole('button',{name:'Hide balances',exact:true});
  const hideBoth=page.getByRole('button',{name:'Hide both',exact:true});
+ const showBoth=page.getByRole('button',{name:'Show both',exact:true});
  const openDetails=index=>page.locator('.pm-account-open').nth(index).click();
  const holding=page.getByRole('button',{name:'View Fixture Company holding details'});
  const holdingPrivacy=page.getByRole('region',{name:'Account holding'});
@@ -72,10 +73,15 @@ try{
  await expect(page.locator('.pm-overview-value')).toContainText('••••');
  await expect(page.locator('.pm-people')).not.toContainText('Alex Fixture');
  await cards.first().click();await expect(cards.first()).not.toContainText('Alex Fixture');
- await cards.first().click();await hideBoth.click();await expect(cards.first()).not.toContainText('Alex Fixture');
+ await cards.first().click();await showBoth.click();
+ await expect(hideNames).toHaveAttribute('aria-pressed','false');await expect(hideBalances).toHaveAttribute('aria-pressed','false');
+ await expect(cards.first()).toContainText('Alex Fixture');await expect(cards.nth(1)).toContainText('Sam Fixture');
+ await expect(page.locator('.pm-overview-value')).toContainText('$3,300.00');
+ await hideBoth.click();await expect(cards.first()).not.toContainText('Alex Fixture');
  await cards.first().click();await cards.nth(1).click();await expect(cards.nth(1)).toContainText('Sam Fixture');await expect(cards.nth(1)).toContainText('$2,200.00');
  await expect(portfolio).not.toContainText(/Alex Fixture|\$1,100\.00/);
  await page.reload();await expect(hideNames).toHaveAttribute('aria-pressed','true');await expect(hideBalances).toHaveAttribute('aria-pressed','true');
+ await expect(showBoth).toBeVisible();
  await expect(cards.nth(1)).toHaveClass(/selected/);await expect(portfolio).not.toContainText(/Alex Fixture|Sam Fixture|\$2,200\.00/);
  await page.locator('.pm-people button').nth(2).click();await expect(cards).toHaveCount(1);
  await cards.first().click();await expect(cards.first()).toContainText('$2,200.00');await expect(page.locator('.pm-overview-value')).toContainText('••••');
@@ -94,6 +100,7 @@ try{
  await expect(portfolio).not.toContainText(/Alex Fixture|Sam Fixture|\$2,200\.00/);
  await expect(holdingPrivacy).not.toContainText(/Sam Fixture|4\.12345678/);await closeHolding();await backToAccounts();
  await other.getByRole('button',{name:'Hide names',exact:true}).click();await expect(hideNames).toHaveAttribute('aria-pressed','false');
+ await expect(hideBoth).toBeVisible();
  await expect(portfolio).toContainText('Sam Fixture');await expect(portfolio).not.toContainText('$2,200.00');await other.close();
  await hideBalances.click();await expect(cards.nth(1)).toContainText('$2,200.00');expect(await read()).toEqual(beforePrivacy);
  const prefs=await page.evaluate(()=>JSON.parse(localStorage.getItem('opening-bell.portfolio-view.v1')));expect(Object.keys(prefs).sort()).toEqual(['account','filter','hideBalances','hideNames']);expect(JSON.stringify(prefs)).not.toContain('Fixture');
