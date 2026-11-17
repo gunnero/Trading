@@ -114,13 +114,16 @@
   pointer-events: none;
 }
 .pm-account-area-chart:hover .pm-history-readout, .pm-account-area-chart:focus-within .pm-history-readout { opacity: 1; }
-.pm-account-area-chart input:not(:focus-visible) {
+.pm-account-area-chart input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  clip-path: inset(50%);
-  overflow: hidden;
+  bottom: 25px;
+  left: 0;
+  width: calc(100% - 66px);
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
 }
+.pm-account-area-chart input:focus-visible { opacity: 1; pointer-events: auto; }
 .pm-chart-source { margin: 5px 0 9px; }
 .pm-account-page .pm-holdings { padding: 10px 0 0; }
 .pm-account-page .pm-holdings .pm-section-heading { margin: 0 0 4px; align-items: center; }

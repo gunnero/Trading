@@ -16,6 +16,7 @@ async function request(accountId,range,signal,action='',body={}){
 export function PortfolioHistory({account,watchlist=[],children}){
   const {money,hideBalances}=usePortfolioPrivacy();
   const [range,setRange]=useState('MAX'),[state,setState]=useState(null),[error,setError]=useState(''),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
   const {clockStamp,displayDay,zoneLabel}=useDisplayTime(),key=account.id+'|'+range,snap=account.snapshot;
   useEffect(()=>{
     const controller=new AbortController();let pending=false,timer;
@@ -42,6 +43,8 @@ export function PortfolioHistory({account,watchlist=[],children}){
     return()=>{controller.abort();clearTimeout(timer);document.removeEventListener('visibilitychange',load);};
   },[key,account.connected,refresh]);
   const data=state?.key===key?state:null,rebuildState=data?.rebuild,r=data?.accountReturn,reported=snap?.source!=='api'&&range==='MAX';
+  const needsHistoryAttention=['loading','paused','blocked','unavailable'].includes(rebuildState?.status);
+  useEffect(()=>{if(!hideBalances&&needsHistoryAttention)setHistoryOpen(true);},[hideBalances,needsHistoryAttention]);
   async function rebuild(){setBusy(true);setError('');try{const result=await request(account.id,range,new AbortController().signal,'rebuild',{listings:watchlist});setState({...result,key});setRefresh(n=>n+1);}catch(e){setError(e.message);}finally{setBusy(false);}}
   const amount=reported?snap.totalReturn:r?.amount,rate=reported?snap.returnPercent:r?.ratePercent,net=reported?snap.netDeposits:r?.netDeposits;
   const points=r?.valuePoints||[],partial=['partial','insufficient'].includes(r?.coverage),tone=amount>0?'green':amount<0?'red':'';
@@ -70,7 +73,7 @@ export function PortfolioHistory({account,watchlist=[],children}){
     {!hideBalances&&partial&&<p className="pm-history-state pm-period-coverage" role="status">{partialReturn?`Partial ${range} · Return and rate cover ${clockStamp(r.baselineAt)} to ${clockStamp(r.to)} ${zoneLabel}. Full ${range} history is not available yet.`:'Waiting for two recorded balances in this period and complete funding history to calculate return.'}</p>}
     {!hideBalances&&r?.estimated&&<p className="pm-history-state" role="status">Estimated return · Uses a reconstructed balance at {clockStamp(r.baselineAt)} {zoneLabel}.</p>}
     {children}
-    {account.connected&&!hideBalances&&<details className="pm-history-explainer pm-older-history" open={['loading','paused','blocked','unavailable'].includes(rebuildState?.status)}><summary><DownloadSimple size={17}/><strong>Older account history</strong>{rebuildState?.pages>0&&<small>{rebuildState.pages} pages saved</small>}{rebuildState?.status==='ready'&&<small className="pm-status green">Available</small>}<span>Details <CaretDown size={14}/></span></summary>
+    {account.connected&&!hideBalances&&<details className="pm-history-explainer pm-older-history" open={historyOpen} onToggle={event=>{if(event.target===event.currentTarget)setHistoryOpen(event.currentTarget.open);}}><summary><DownloadSimple size={17}/><strong>Older account history</strong>{rebuildState?.pages>0&&<small>{rebuildState.pages} pages saved</small>}{rebuildState?.status==='ready'&&<small className="pm-status green">Available</small>}<span>Details <CaretDown size={14}/></span></summary>
       <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
       <p>Uses historical daily stock prices from Yahoo Finance. Supports matching account and stock currencies, verified listings, ordinary trades and paired stock splits verified against the price history. Transfers, other corporate actions or missing prices may prevent a reliable rebuild.</p>
       {rebuildState?.pages>0&&<p role="status">{rebuildState.pages} pages saved{Number.isFinite(rebuildState.records)?` · ${rebuildState.records} records`:''} · {rebuildState.priced}{rebuildState.instruments?` of ${rebuildState.instruments}`:''} instruments priced. Progress is saved on the server and survives refreshes.</p>}
