@@ -1,10 +1,10 @@
 import {PageHeader} from './PageHeader';
 import {useMemo,useState} from 'react';
-import {UploadSimple,Info,MagnifyingGlass,CaretRight,CaretDown,ArrowRight,ArrowSquareOut,Clock} from '@phosphor-icons/react';
+import {UploadSimple,Info,MagnifyingGlass,CaretRight,CaretDown,ArrowRight,ArrowSquareOut,Clock,FileText,Square} from '@phosphor-icons/react';
 import {formatDate,formatPrice,parseLevels,zoneText,zoneName} from './data/market';
 import {levelDestination} from './data/level-listings.mjs';
 import {levelSnapshots,compareLevelInstruments,LEVEL_HISTORY_DAYS} from './data/level-history.mjs';
-import {FOCUS_SYMBOLS,CONTEXT_SYMBOLS,levelChartKey,nearestLevelZones,zoneDistance} from './data/level-focus.mjs';
+import {FOCUS_SYMBOLS,CONTEXT_SYMBOLS,levelChartKey,nearestLevelZones,zoneDistance,levelRoleRows} from './data/level-focus.mjs';
 import {quotePrice,quoteDelay,entryState,isExtendedQuote} from './data/quotes.mjs';
 import {useDisplayTime} from './DisplayTime';
 import {useMarketChart} from './useMarketData';
@@ -18,12 +18,24 @@ function ZoneRow({zone,change}){
   return <div className={`level-row ${change==='Removed'?'level-zone-removed':''}`}><span className={zone.type==='S'?'red':zone.type==='D'?'green':'amber'}>{zoneName(zone.type)}</span><div>{change&&<small className="level-zone-change">{change}</small>}<strong>{zoneText(zone)}</strong></div></div>;
 }
 function NearZones({instrument,type,price}){
-  const zones=nearestLevelZones(instrument.zones,type,price);
-  return <section className="level-nearest-group" aria-label={`${zoneName(type)} zones`}>
-    <div className="level-nearest-heading"><h3>{Number.isFinite(price)?'Nearest ':''}{zoneName(type).toLowerCase()} levels</h3><span>Price range</span><span>Distance</span></div>
-    {zones.map((zone,index)=><div className={`level-nearest-row ${type==='S'?'supply':'demand'}`} key={index}><span className={type==='S'?'red':'green'}>{zoneName(type)}</span><strong>{zoneText(zone)}</strong><span>{Number.isFinite(price)?zoneDistance(zone,price)===0?'Inside':formatPrice(zoneDistance(zone,price)):'—'}</span></div>)}
+  const zones=nearestLevelZones(instrument.zones,type,price),tone=type==='S'?'supply':type==='D'?'demand':'gap';
+  return <section className={`level-nearest-group ${tone}`} aria-label={`${zoneName(type)} zones`}>
+    <h3><Square size={10} weight="fill"/>{type==='G'?'Gap':`${Number.isFinite(price)?'Nearest ':''}${zoneName(type).toLowerCase()}`}</h3>
+    {zones.map((zone,index)=><div className="level-nearest-chip" key={index} title={Number.isFinite(price)?`Distance to nearest edge: ${zoneDistance(zone,price)===0?'Inside zone':formatPrice(zoneDistance(zone,price))+' price points'}`:'Imported reference zone'}>{zoneText(zone)}</div>)}
     {!zones.length&&<p className="level-nearest-empty">No {zoneName(type).toLowerCase()} zones supplied.</p>}
   </section>;
+}
+function RoleTable({imported,roles,reference}){
+  const {marketTime,zoneLabel}=useDisplayTime(),rows=levelRoleRows(imported,roles,reference);
+  return <><p className="level-role-scroll-hint">Scroll for confirmation details<ArrowRight size={14}/></p><div className="level-role-table-wrap" role="region" aria-label="Zone role confirmations" tabIndex={0}><table className="level-role-table">
+    <caption className="sr-only">{imported.symbol} original zones and confirmation on the {imported.timeframe} source timeframe</caption>
+    <thead><tr><th>Zone</th><th>Original role</th><th>Current role</th><th>Confirmed close</th><th>Confirmation</th></tr></thead>
+    <tbody>{rows.map(({zone,type,label,status,evidence},index)=><tr key={index}>
+      <th scope="row">{zoneText(zone)}</th><td><span className={`level-role-badge role-${zone.type}`}>{zoneName(zone.type)}</span></td>
+      <td><span className={`level-role-badge role-${type}`}>{label}</span></td><td className="level-confirmed-close">{evidence?formatPrice(evidence.close):'—'}</td>
+      <td>{evidence?<><time dateTime={new Date(evidence.end*1000).toISOString()}>{marketTime(evidence.end*1000,{year:'numeric'})} {zoneLabel}</time><small>{status} · {evidence.sessionDate===imported.sourceDate?'Sheet date':'After sheet date'} · {imported.timeframe}</small></>:<span className="muted">{status}</span>}</td>
+    </tr>)}</tbody>
+  </table></div></>;
 }
 
 function LevelFocus({item,old,sheet,previous,historical,destination,onSelect}){
@@ -36,7 +48,7 @@ function LevelFocus({item,old,sheet,previous,historical,destination,onSelect}){
   const {quoteStamp,zoneLabel}=useDisplayTime();
   const quote=history.quote,sourceDate=imported.sourceDate;
   const diff=previous?compareLevelInstruments(item,old):null;
-  const [allOpen,setAllOpen]=useState(false);
+
   const context=historical?{label:'Historical reference',reason:'Original roles · setup checks use your latest list.',tone:'muted'}:!item?{label:'Comparison only',reason:'Not in the selected list.',tone:'muted'}:imported.futures?{label:'Futures reference',reason:'Contract basis may differ from your levels.',tone:'muted'}:!marketKey?{label:'Listing needed',reason:'Choose an exact exchange to connect a chart.',tone:'muted'}:entryState(destination.entry,{...sheet,instruments:{...sheet.instruments,[item.symbol]:instrument}},history);
   const distancePrice=context.location&&history.status==='ok'?quote?.price:null;
   const openLabel=historical?'Open reference':destination.kind==='setup'?'Open setup':destination.kind==='chart'?'Open chart':destination.kind==='choose'?'Choose listing':destination.label;
@@ -55,14 +67,24 @@ function LevelFocus({item,old,sheet,previous,historical,destination,onSelect}){
       {history.candles?.length?<PriceChart symbol={imported.symbol} drawingKey={marketKey} timeframe={timeframe} candles={history.candles} price={quote?.price} instrument={instrument} indicators={history.indicators}/>:<div className="empty" role="status"><Clock size={28}/><h3>{history.status==='loading'?'Loading chart…':'Chart unavailable'}</h3><p>{history.message||'Your exact imported zones remain available below.'}</p></div>}
       <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}{timeframe==='4h'?'4h from hourly bars · ':''}{zoneLabel} time · partial bars marked</span><span>{imported.futures?'Yahoo contract history':'Regular-session candles'}</span></div>
     </section>:<div className="level-focus-unavailable" role="status"><Info size={28}/><h3>{!item?'Instrument missing from this list':destination.kind==='choose'?'Choose a listing for this symbol':'Chart not connected'}</h3><p>{!item?'The zones below belong to the comparison list.':imported.futures?'No verified chart mapping is available for this instrument. Your supplied levels are shown below.':'Use the listing action above to choose the exact exchange. Your supplied levels are shown below.'}</p></div>}
-    <div className="level-nearest"><NearZones instrument={instrument} type="S" price={distancePrice}/><NearZones instrument={instrument} type="D" price={distancePrice}/></div>
-    <div className="level-focus-bottom"><button className="text-button" aria-expanded={allOpen||!!diff} aria-controls="level-exact-zones" onClick={()=>setAllOpen(!allOpen)} disabled={!!diff}>{diff?'Comparing imported levels':`${allOpen?'Hide':'Show'} all ${imported.zones.length} levels`}{allOpen||diff?<CaretDown size={15}/>:<ArrowRight size={15}/>}</button><small>{Number.isFinite(distancePrice)?'Distance in price points to the nearest zone edge':'Distances paused · reference levels remain visible'}</small></div>
-    {(allOpen||diff)&&<section className="level-exact-zones" id="level-exact-zones" aria-label={`${imported.symbol} exact imported levels`}>
+    <section className="level-zone-details" aria-label={`${imported.symbol} zone details`}>
+    <div className="level-nearest">{['S','D','G'].map(type=><NearZones key={type} instrument={instrument} type={type} price={distancePrice}/>)}</div>
+    {!Number.isFinite(distancePrice)&&<p className="level-focus-note">Distances paused · reference levels remain visible.</p>}
+    {roles?.status==='stale'&&<p className="level-focus-note amber" role="status">Cached confirmation · {roles.message||'Showing the last confirmed roles.'}</p>}
+    <RoleTable imported={imported} roles={confirmation} reference={historical?'Historical reference':!item?'Comparison only':isExtendedQuote(quote)?'Extended-session reference':null}/>
+    <details className="level-sheet-details" open={diff?true:undefined}>
+      <summary><FileText size={18}/><span>Sheet source &amp; import changes</span><CaretDown size={16}/></summary>
+      <section className="level-exact-zones" id="level-exact-zones" aria-label={`${imported.symbol} exact imported levels`}>
+      <p className="level-sheet-source">List: {formatDate(sheet.date)} · Source timeframe: {imported.timeframe} · {imported.zones.length} zones</p>
       <div className={`level-card-date ${imported.carriedForward?'carried':''}`}><span>Levels updated <time dateTime={sourceDate}>{formatDate(sourceDate)}</time></span>{imported.carriedForward&&<strong>Carried forward</strong>}</div>
       {diff&&<div className="level-diff-heading"><strong>{diffLabels[diff.status]}</strong><span>{old?`Compared with ${formatDate(previous.date)} · levels updated ${formatDate(old.sourceDate)} · ${old.timeframe}${old.futures?' · Futures':''}`:'Not in the comparison list'}</span>{diff.metadataChanged&&<span>Timeframe or asset type changed</span>}</div>}
       <p className="level-focus-note">Original imported prices and roles{roles?.status==='ok'?' · chart colors follow confirmed flips':''}.</p>
       {item?.zones.map((zone,index)=><ZoneRow key={index} zone={zone} change={diff?(diff.added.includes(zone)?'Added':'Unchanged'):null}/>)}{diff?.removed.map((zone,index)=><ZoneRow key={`removed-${index}`} zone={zone} change="Removed"/>)}
-    </section>}
+      <p className="level-focus-note">Confirmed closes use completed Yahoo candles on the source timeframe. A changed role shows its latest flip; an unchanged role shows the latest checked close. Gaps retain their imported role. Dates refer to the instrument’s original sheet date.</p>
+      {!diff&&<p className="level-focus-note">Choose a saved date under Compare with to see exact additions, removals and timeframe changes.</p>}
+      </section>
+    </details>
+    </section>
   </div>;
 }
 

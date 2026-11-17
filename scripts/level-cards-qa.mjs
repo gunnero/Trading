@@ -19,7 +19,7 @@ try{
  await page.getByRole('button',{name:/more instruments/}).click();await expect(page.getByRole('button',{name:/^Select .* levels$/})).toHaveCount(40);await page.getByRole('button',{name:'Show focus list',exact:true}).click();await expect(page.getByRole('button',{name:/^Select .* levels$/})).toHaveCount(6);
  await page.getByLabel('Search levels').fill('NOTSUPPLIED');await expect(page.getByRole('heading',{name:'No matching levels'})).toBeVisible();await page.getByRole('button',{name:'Clear search'}).click();await chart('QQQ');
  await expect.poll(()=>requests.filter(u=>u.pathname.endsWith('/quotes')).length).toBe(0);
- await focus().getByRole('button',{name:'Show all 7 levels'}).click();await expect(focus().locator('.level-row')).toHaveCount(7);await expect(focus().locator('.level-card-date time')).toHaveAttribute('datetime','2026-10-23');await focus().getByRole('button',{name:'Hide all 7 levels'}).click();
+ await focus().locator('.level-sheet-details>summary').click();await expect(focus().locator('.level-row')).toHaveCount(7);await expect(focus().locator('.level-card-date time')).toHaveAttribute('datetime','2026-10-23');await focus().locator('.level-sheet-details>summary').click();
  const instruments=Object.values(parseLevels(before.data.levelText).instruments).filter(i=>!i.futures);
  for(const item of instruments){await pick(item.symbol);await chart(item.symbol);await expect(focus().getByRole('button',{name:`Open setup for ${item.symbol}`,exact:true})).toBeVisible();}
  for(const symbol of ['NQ','ES','RTY','CL','GC']){await pick(symbol);await chart(symbol);await expect(focus()).toContainText('Contract basis may differ');await expect(focus()).toContainText('Distances paused');}
