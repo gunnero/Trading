@@ -1,25 +1,25 @@
 import {usePortfolioPrivacy,PortfolioPrivacyControls} from './PortfolioPrivacy';
 import {useEffect,useState} from 'react';
-import {ArrowsClockwise,DownloadSimple,Printer,Plus} from '@phosphor-icons/react';
+import {DownloadSimple,Printer,Plus} from '@phosphor-icons/react';
+import PortfolioExposure from './PortfolioExposure';
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {activityRequest} from './PortfolioNotifications';
-import {portfolioExposure,reportCsv} from './data/portfolio-insights.mjs';
+import {reportCsv} from './data/portfolio-insights.mjs';
 import {portfolioPercent as percent,portfolioTone as tone,usePortfolioResource,downloadPortfolioCsv} from './PortfolioTools';
 import './portfolio-insights.css';
 import PortfolioPlanning,{AnnualReport} from './PortfolioPlanning';
 
 export default function PortfolioInsights({watchlist,tab='exposure',onTab,onPortfolios,onJournal}){
-  return <div className="pi-page"><PageHeader title="Portfolio insights" description="Account monitoring, allocation plans, performance and reports." actions={<><button className="button outline" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="button outline" onClick={onPortfolios}>Portfolios</button>}</>}/><PortfolioPrivacyControls/><nav className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>{['monitor','allocation','performance','calendar'].includes(tab)?<PortfolioPlanning tab={tab}/>:tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<Exposure watchlist={watchlist}/>}</div>;
-}
-function Exposure({watchlist}){
-  const privacy=usePortfolioPrivacy(),{money,number}=privacy;
-  const {data,error,busy,refresh}=usePortfolioResource(''),{journalStamp}=useDisplayTime(),[shared,setShared]=useState(false);
-  const result=data?portfolioExposure(data.data,watchlist):null;
-  return <section className="panel pi-panel" aria-label="Combined portfolio exposure"><header className="pi-heading"><div><h2>Combined stock exposure</h2><p>Weights use known holding values. Cash is excluded; account currencies stay separate.</p></div><button className="button outline" onClick={refresh} disabled={busy}><ArrowsClockwise size={16}/>Refresh exposure</button></header>
-    <label className="pi-check"><input type="checkbox" checked={shared} onChange={e=>setShared(e.target.checked)}/>Only stocks shared by multiple accounts</label>{error&&<p role="alert" className="amber">{error}</p>}
-    {!result?<p role="status">Loading exposure…</p>:<><p className="pi-help">{result.missingAccounts} accounts without a snapshot · {result.demoAccounts} demo accounts excluded. Values use each account’s latest snapshot; expand a stock for its dates and account weights.</p>{!result.buckets.length&&<p>No holding values are available yet.</p>}{result.buckets.map(b=><div className="pi-exposure-group" key={b.currency}><header className="pi-heading"><h3>{b.currency} holdings</h3><strong>{money(b.total,b.currency)}</strong></header>{b.missing>0&&<p className="amber">{b.missing} holdings have no value and are excluded from weights.</p>}{!b.rows.some(r=>!shared||r.shared)&&<p>No stocks are shared by multiple accounts in this currency.</p>}{b.rows.filter(r=>!shared||r.shared).map(row=><details className="pi-exposure-row" key={row.key}><summary><span><strong>{row.name}</strong><small>{row.symbol} · {row.accountCount} {row.accountCount===1?'account':'accounts'}</small></span><div className="pi-exposure-bar"><i style={{width:`${Math.max(0,Math.min(100,row.weight||0))}%`}}/></div><span><b>{money(row.value,b.currency)}</b><small>{percent(row.weight).replace('+','')} of known holdings</small></span></summary><p className="pi-help">Security: {row.identity} · share price currency {row.instrumentCurrency}</p><ul className="pi-account-breakdown">{row.accounts.map((a,i)=><li key={a.id+':'+i}><span><strong>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}</strong><small>{number(a.quantity)} shares · {a.source==='api'?(a.connected?'Broker snapshot':'Disconnected snapshot'):'Manual snapshot'} · {a.observedAt?journalStamp(a.observedAt):'Date unavailable'}{a.error?' · refresh failed':''}</small></span><span><strong>{money(a.value,b.currency)}</strong><small>{percent(a.weight).replace('+','')} of this account’s known holdings</small></span></li>)}</ul></details>)}</div>)}</>}
-  </section>;
+  const exposure=tab==='exposure';
+  return <div className={exposure?'pi-page pi-exposure-page':'pi-page'}>
+    <PageHeader title={exposure?'Portfolio Manager':'Portfolio insights'}
+      description={exposure?undefined:'Account monitoring, allocation plans, performance and reports.'}
+      actions={!exposure&&<><button className="button outline" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="button outline" onClick={onPortfolios}>Portfolios</button>}</>}/>
+    {!exposure&&<PortfolioPrivacyControls/>}
+    <nav className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>
+    {['monitor','allocation','performance','calendar'].includes(tab)?<PortfolioPlanning tab={tab}/>:tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<PortfolioExposure watchlist={watchlist} onJournal={onJournal} onPortfolios={onPortfolios}/>}
+  </div>;
 }
 function PriceAlerts(){
   const privacy=usePortfolioPrivacy(),{money,number}=privacy;

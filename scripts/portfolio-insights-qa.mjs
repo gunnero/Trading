@@ -39,8 +39,24 @@ try{
  await page.route('**/api/portfolio/insights/reports/refresh',route=>route.fulfill({json:reports(route.request().postDataJSON())}));
  await page.route('**/api/portfolio/journal?*',route=>{const q=new URL(route.request().url()).searchParams,items=(!q.get('person')||q.get('person')==='p1')&&(!q.get('stock')||trade.name.toLowerCase().includes(q.get('stock').toLowerCase()))?[trade]:[];return route.fulfill({json:{people,accounts,items,total:items.length,offset:0,more:false,statuses:[]}});});
  await page.route('**/api/portfolio/journal/notes',route=>{const b=route.request().postDataJSON();expect(route.request().headers()['x-csrf-token']).toBeTruthy();if(conflict)return route.fulfill({status:409,json:{message:'These notes changed in another view. Copy your draft and reload the saved notes.'}});trade.note={revision:trade.note.revision+1,reason:b.reason,notes:b.notes,updatedAt:now};return route.fulfill({json:trade.note});});
- await page.goto(runtime.url+'/#insights');const exposure=page.getByRole('region',{name:'Combined portfolio exposure'});await expect(exposure).toContainText('$440.00');await expect(exposure).toContainText('€220.00');await exposure.getByLabel('Only stocks shared by multiple accounts').check();await expect(exposure.locator('.pi-exposure-row')).toHaveCount(1);await exposure.locator('.pi-exposure-row summary').click();await expect(exposure).toContainText('Alex Fixture');await expect(exposure).toContainText('Sam Fixture');await expect(exposure).toContainText('100.00% of this account');mark('Shared exposure groups the exact security, separates account currencies and shows account concentrations and snapshot dates');
+ await page.goto(runtime.url+'/#insights');const exposure=page.getByRole('region',{name:'Combined portfolio exposure'});await expect(exposure).toContainText('$440.00');await expect(exposure).toContainText('€220.00');await exposure.getByLabel('Only stocks shared by multiple accounts').check();await expect(exposure.locator('tr.pe-row')).toHaveCount(1);await exposure.getByRole('button',{name:/Advanced Micro Devices/}).click();await expect(exposure).toContainText('Alex Fixture');await expect(exposure).toContainText('Sam Fixture');await expect(exposure).toContainText('100.00% of this account');mark('Shared exposure groups the exact security, separates account currencies and shows account concentrations and snapshot dates');
  await page.screenshot({path:dir+'/exposure-1488.png',fullPage:true});
+ const smallerHoldings=[75,60,40,25,15,5].map((value,i)=>({...holding,ticker:'TEST'+i,name:'Fixture holding '+i,isin:'',value}));
+ accounts[0].snapshot.holdings.push(...smallerHoldings);
+ await exposure.getByRole('button',{name:'Refresh exposure'}).click();
+ await expect(exposure).toContainText('66.67%');await expect(exposure).toContainText('$660.00');
+ await exposure.getByLabel('Only stocks shared by multiple accounts').uncheck();
+ const dollars=exposure.getByRole('table',{name:'USD stock exposure'}),other=dollars.getByRole('button',{name:/Other 3 other stocks/});
+ await expect(dollars.locator('tbody').first().locator(':scope > tr.pe-row')).toHaveCount(5);
+ await expect(other.locator('xpath=ancestor::tr[1]')).toContainText('6.82%');
+ await expect(other.locator('xpath=ancestor::tr[1]')).toContainText('$45.00');
+ await other.focus();await page.keyboard.press('Enter');
+ const tail=dollars.getByRole('table',{name:'Other USD holdings'});await expect(tail.locator('tr.pe-row')).toHaveCount(3);
+ await tail.getByRole('button',{name:/Fixture holding 5/}).click();await expect(tail).toContainText('Alex Fixture');
+ await exposure.getByLabel('Only stocks shared by multiple accounts').check();await expect(other).toHaveCount(0);
+ accounts[0].snapshot.holdings=[holding];
+ mark('Currency totals stay consistent when filtering and grouped holdings expand through to their account owners by keyboard');
+
  await page.getByRole('button',{name:'Price alerts',exact:true}).click();const alerts=page.getByRole('region',{name:'Price alert rules'});await expect(alerts).toBeVisible();await alerts.getByLabel('Holding',{exact:true}).selectOption('a1:AMD_US_EQ');await alerts.getByLabel(/Target price/).fill('120');await alerts.getByRole('button',{name:'Create alert'}).click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);await expect(alerts).toContainText('Waiting for first price');await alerts.getByRole('button',{name:'Pause',exact:true}).click();await expect(alerts.getByRole('button',{name:'Re-arm'})).toBeVisible();await alerts.getByRole('button',{name:'Re-arm'}).click();
  await alerts.getByLabel('Notify when').selectOption('zone');await alerts.getByLabel('Saved level').selectOption('0');await alerts.getByRole('button',{name:'Create alert'}).click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(2);await expect(alerts).toContainText('Supply 108–110 USD · 2026-11-04');await alerts.getByRole('button',{name:'Remove',exact:true}).first().click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);await page.reload();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);
  fail=true;await alerts.getByRole('button',{name:'Refresh alerts'}).click();await expect(alerts.getByRole('alert')).toContainText('Fixture refresh unavailable');fail=false;await alerts.getByRole('button',{name:'Refresh alerts'}).click();await expect(alerts.getByRole('alert')).toHaveCount(0);mark('Price and saved-zone alert creation, pause, re-arm, removal, persistence and outage recovery work without any order request');
@@ -55,7 +71,12 @@ try{
  await expect(page.getByRole('img',{name:'Account value history'})).toBeVisible();await page.getByRole('button',{name:'Back to accounts',exact:true}).click();await page.getByRole('button',{name:'Hide both',exact:true}).click();await page.locator('.pm-account-open').first().click();await expect(page.getByRole('img',{name:'Account value history'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Trade / orders',exact:true})).toBeDisabled();
  await page.route('**/api/portfolio/activity?*',route=>route.fulfill({json:{people,accounts,items:[trade],total:1,more:false,statuses:[]}}));
  for(const route of ['insights','insights/alerts','insights/reports','journal/broker','activity']){
-  await page.goto(runtime.url+'/#'+route);await expect(page.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
+  await page.goto(runtime.url+'/#'+route);
+  if(route==='insights'){
+   await page.getByRole('button',{name:'Portfolio privacy settings'}).click();
+   await page.getByRole('table',{name:'USD stock exposure'}).getByRole('button',{name:/Advanced Micro Devices/}).click();
+  }
+  await expect(page.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
   const root=page.locator(route==='activity'?'.pa-page':route==='journal/broker'?'.pi-panel':'.pi-page');
   if(route==='insights/reports')await expect(root.locator('.pi-report-account')).toHaveCount(3);
   else await expect(root).toContainText(route==='activity'?'Advanced Micro Devices':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'Supply 108':'Combined stock exposure');

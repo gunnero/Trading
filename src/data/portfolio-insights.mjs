@@ -3,10 +3,13 @@ import {activityDateBounds} from './portfolio-activity.mjs';
 import {moneyWeightedReturn} from './portfolio-rate.mjs';
 
 export function portfolioExposure(data,watchlist=[]){
-  const buckets=new Map();let missingAccounts=0,demoAccounts=0;
+  const buckets=new Map();let missingAccounts=0,demoAccounts=0,latestSnapshotAt=null;
   for(const account of data.accounts){
     if(account.environment==='demo'){demoAccounts++;continue;}
     const s=account.snapshot;if(!s){missingAccounts++;continue;}
+    const observedAt=s.fetchedAt||s.observedAt||null;
+    const timestamp=observedAt?new Date(observedAt).getTime():NaN;
+    if(Number.isFinite(timestamp)&&(latestSnapshotAt===null||timestamp>latestSnapshotAt))latestSnapshotAt=timestamp;
     let bucket=buckets.get(s.currency);if(!bucket){bucket={currency:s.currency,total:0,missing:0,rows:new Map()};buckets.set(s.currency,bucket);}
     const known=s.holdings.reduce((n,h)=>n+(Number.isFinite(h.value)?h.value:0),0);
     for(const h of s.holdings){
@@ -15,10 +18,10 @@ export function portfolioExposure(data,watchlist=[]){
       const key=h.isin||listing||s.source==='api'?identity:`manual:${account.id}:${identity}`;
       let row=bucket.rows.get(key);if(!row){row={key,name:h.name,symbol:listing?.symbol||h.ticker,identity:h.isin||listing?.id||h.ticker,instrumentCurrency:h.instrumentCurrency,value:0,accounts:[]};bucket.rows.set(key,row);}
       row.value+=h.value;bucket.total+=h.value;
-      row.accounts.push({id:account.id,person:data.people.find(p=>p.id===account.personId)?.name||'Unknown person',label:account.label,value:h.value,quantity:h.quantity,weight:known>0?h.value/known*100:null,observedAt:s.fetchedAt||s.observedAt||null,source:s.source,connected:account.connected,error:account.error});
+      row.accounts.push({id:account.id,person:data.people.find(p=>p.id===account.personId)?.name||'Unknown person',label:account.label,value:h.value,quantity:h.quantity,weight:known>0?h.value/known*100:null,observedAt:Number.isFinite(timestamp)?observedAt:null,source:s.source,connected:account.connected,error:account.error});
     }
   }
-  return {missingAccounts,demoAccounts,buckets:[...buckets.values()].map(b=>({...b,rows:[...b.rows.values()].sort((a,b)=>b.value-a.value).map(r=>({...r,weight:b.total>0?r.value/b.total*100:null,accountCount:new Set(r.accounts.map(a=>a.id)).size,shared:new Set(r.accounts.map(a=>a.id)).size>1}))}))};
+  return {missingAccounts,demoAccounts,latestSnapshotAt,buckets:[...buckets.values()].map(b=>({...b,rows:[...b.rows.values()].sort((a,b)=>b.value-a.value).map(r=>({...r,weight:b.total>0?r.value/b.total*100:null,accountCount:new Set(r.accounts.map(a=>a.id)).size,shared:new Set(r.accounts.map(a=>a.id)).size>1}))}))};
 }
 export function monthBounds(month,timeZone='Europe/Skopje'){
   if(typeof month!=='string'||!/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(month))throw Error('Choose a valid month.');
