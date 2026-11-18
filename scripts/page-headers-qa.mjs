@@ -24,9 +24,9 @@ try{
    const marketHeader=['briefing','earnings','news'].includes(route);
    const sharedTypography=['titleX','font','weight','color','background'];
    const commonKeys=['x','y','width','titleX','titleY','font','size','weight','line','tracking','color','background','subtitle'];
-   const keys=['sentiment','settings/watchlist','settings/charts'].includes(route)?sharedTypography:marketHeader||['journal/trades','journal/plans','review'].includes(route)?[...sharedTypography,'tracking']:commonKeys;
+   const keys=['sentiment','settings/watchlist','settings/charts','settings/connections'].includes(route)?sharedTypography:marketHeader||['journal/trades','journal/plans','review'].includes(route)?[...sharedTypography,'tracking']:commonKeys;
    for(const key of keys)if(metric[key]!==baseline[key])layoutIssues.push({route,width,key,actual:metric[key],expected:baseline[key]});
-   const titleSize=['settings/watchlist','settings/charts'].includes(route)&&width>760?'36px':['journal/plans','review'].includes(route)&&width>740?'36px':route==='sentiment'?(width<=600?'30px':'38px'):width<=600?'27px':marketHeader?'28px':'30px';
+   const titleSize=['settings/watchlist','settings/charts','settings/connections'].includes(route)&&width>760?'36px':['journal/plans','review'].includes(route)&&width>740?'36px':route==='sentiment'?(width<=600?'30px':'38px'):width<=600?'27px':marketHeader?'28px':'30px';
    expect(metric.size,route+' at '+width).toBe(titleSize);
    for(const action of await page.locator('.page-header-actions button,.page-header-actions a').all()){await expect(action).toBeVisible();const b=await action.boundingBox();expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width+1);}
    if(width===1488){await page.locator('.page-header').screenshot({path:`${dir}/${route.replace('/','-')}-header.png`});if(!route.includes('/')||route==='journal/trades')await page.screenshot({path:`${dir}/${route.replace('/','-')}-desktop.png`});}

@@ -12,12 +12,12 @@ export const TV_SCRIPT = 'https://www.tradingview.com/script/seVxGaLs-gunner-s-l
 const CNN = 'https://edition.cnn.com/markets/fear-and-greed';
 const YAHOO = 'https://finance.yahoo.com/';
 const MARKET_NEWS = '/api/news?symbols=DIA%2CIWM%2CQQQ%2CSPY';
-export function useBriefing({manual,setManual,section='overview'}) {
+export function useBriefing({manual,setManual,section='overview',connectionsOpen=false}) {
   const sentiment=useFeed('/api/sentiment');
-  const news=useFeed(MARKET_NEWS,section==='overview'||section==='news');
+  const news=useFeed(MARKET_NEWS,section==='overview'||section==='news'||connectionsOpen);
   const now=useMinuteClock();
   const range=periodRange('upcoming',marketDay(now));
-  const calendar=useFeed(`/api/calendar?${new URLSearchParams(range)}`,section==='overview'||section==='briefing');
+  const calendar=useFeed(`/api/calendar?${new URLSearchParams(range)}`,section==='overview'||section==='briefing'||connectionsOpen);
   const [calendarPeriod,setCalendarPeriod]=useState('week');
   const earnings=useFeed(`/api/earnings?${new URLSearchParams(range)}`,section==='overview');
   return {sentiment,calendar,news,manual,setManual,now,calendarPeriod,setCalendarPeriod,earnings};

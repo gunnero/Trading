@@ -63,7 +63,7 @@ try{
  await connection.getByLabel('API key',{exact:true}).fill('isolated-browser-fixture-key');await connection.getByRole('button',{name:'Connect & check'}).click();
  await expect(connection.getByRole('alert')).toHaveText('Oanor rejected this key.');await expect(connection.getByLabel('API key',{exact:true})).toHaveValue('');
  rejectKey=false;await connection.getByLabel('API key',{exact:true}).fill('isolated-browser-fixture-key');await connection.getByRole('button',{name:'Connect & check'}).click();
- await expect(connection).toContainText('Key verified.');await expect(page.locator('.settings-source-status')).toContainText('30.12');await expect(connection.getByLabel('Replace API key')).toHaveValue('');await expect(page.locator('.settings-source-status')).toContainText('API snapshot');
+ await expect(connection).toContainText('Key verified.');await expect(page.locator('#connection-detail-cnn')).toContainText('30 / 100');await expect(connection.getByLabel('Replace API key')).toHaveValue('');await expect(page.locator('#connection-detail-cnn')).toContainText('API snapshot');
  expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('isolated-browser-fixture-key');
  await page.locator('.settings-content').screenshot({path:'docs/qa/sentiment-api-connection-mobile.png'});expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
  await page.setViewportSize({width:1488,height:1100});await page.locator('.settings-content').screenshot({path:'docs/qa/sentiment-api-connection-desktop.png'});

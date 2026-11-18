@@ -15,14 +15,16 @@ export function useFeed(url,active=true) {
   const refreshRef=useRef(()=>{});
   useEffect(()=>{
     if(!url||!active){refreshRef.current=()=>{};return;}
-    let cancelled=false,busy=false;
+    let cancelled=false,busy=false,queued=false;
     async function request(force=false){
-      if(cancelled||busy||document.hidden)return;
+      if(cancelled||document.hidden)return;
+      if(busy){if(force)queued=true;return;}
       busy=true;
       if(force)setState(s=>({key:url,value:{...(s.key===url?s.value:{status:'loading'}),refreshing:true}}));
       const value=await feeds.read(url,force);
       if(!cancelled)setState({key:url,value});
       busy=false;
+      if(queued){queued=false;return request(true);}
     }
     refreshRef.current=()=>request(true);
     const onVisible=()=>request();

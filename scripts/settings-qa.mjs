@@ -46,11 +46,29 @@ try{
  await page.getByRole('button',{name:'Restore app defaults',exact:true}).click();await page.getByRole('button',{name:'Confirm reset',exact:true}).click();await save();await expect(page.getByLabel('Default chart timeframe')).toHaveValue('4h');expect((await read()).data.chartDrawings).toEqual(before.data.chartDrawings);
  mark('Chart defaults persist after refresh; apply/reset require confirmation and preserve imported data and drawings');
  const settingsNav=page.getByRole('navigation',{name:'Settings sections'});
- await settingsNav.getByRole('link',{name:'Connections'}).click();await expect(page.getByLabel('API key',{exact:true})).toBeVisible();
- await page.getByLabel('API key',{exact:true}).fill('isolated-unsaved-key-fixture');await settingsNav.getByRole('link',{name:'Account & security',exact:true}).click();await settingsNav.getByRole('link',{name:'Connections'}).click();await expect(page.getByLabel('API key',{exact:true})).toHaveValue('');
- await page.reload();expect(page.url()).toContain('#settings/connections');await expect(settingsNav.getByRole('link',{name:'Connections'})).toHaveAttribute('aria-current','page');await page.screenshot({path:dir+'/connections-desktop.png'});
- await page.goto(runtime.url+'/#sentiment');await expect(page.getByLabel('API key',{exact:true})).toHaveCount(0);await page.locator('.sentiment-source-details summary').click();await page.getByRole('button',{name:'Manage CNN connection'}).click();await expect(page.getByLabel('API key',{exact:true})).toBeVisible();expect(page.url()).toContain('#settings/connections');
- mark('CNN management lives in Connections, clears unsaved keys when leaving, retains its route on refresh and is linked from Fear & Greed');
+ await settingsNav.getByRole('link',{name:'Connections'}).click();
+ const statusTable=page.getByRole('table',{name:'Data source status'});
+ const setupButton=page.getByRole('button',{name:'Connection settings',exact:true});
+ const openKey=page.getByLabel('API key',{exact:true});
+ await expect(statusTable.getByRole('rowheader')).toHaveCount(6);
+ await expect(statusTable.getByRole('button',{name:'CNN Fear & Greed',exact:true})).toHaveAttribute('aria-expanded','true');
+ await expect(openKey).toHaveCount(0);await setupButton.click();await openKey.fill('isolated-unsaved-key-fixture');
+ await settingsNav.getByRole('link',{name:'Account & security',exact:true}).click();await settingsNav.getByRole('link',{name:'Connections'}).click();
+ await setupButton.click();await expect(openKey).toHaveValue('');await setupButton.click();
+ await page.reload();await expect(settingsNav.getByRole('link',{name:'Connections'})).toHaveAttribute('aria-current','page');
+ const refresh=page.getByRole('button',{name:'Refresh status',exact:true});await expect(refresh).toBeEnabled();
+ const startRequests=requests.length;await refresh.click();await expect(refresh).toBeEnabled();
+ const updates=requests.slice(startRequests);expect(updates.filter(path=>path==='/api/market/chart')).toHaveLength(3);for(const kind of ['sentiment','calendar','news'])expect(updates).toContain('/api/'+kind);
+ const treasury=page.getByRole('button',{name:'U.S. Treasury daily yield',exact:true});await treasury.click();
+ await expect(statusTable).toContainText('4.05%');await expect(statusTable).toContainText('2026-10-23');
+ let unavailable=true;await page.route('**/api/market/chart?symbol=US2Y&interval=D',route=>unavailable?route.fulfill({json:{status:'unavailable',message:'Fixture provider pause'}}):route.fallback());
+ await refresh.click();await expect(statusTable).toContainText('Fixture provider pause');await expect(statusTable).not.toContainText('4.05%');
+ unavailable=false;const retryStart=requests.length;await page.getByRole('button',{name:'Retry U.S. Treasury daily yield',exact:true}).click();
+ await expect(statusTable).toContainText('4.05%');expect(requests.slice(retryStart).filter(path=>path==='/api/market/chart')).toHaveLength(1);
+ await statusTable.getByRole('button',{name:'CNN Fear & Greed',exact:true}).click();
+ await page.screenshot({path:dir+'/connections-desktop.png'});
+ await page.goto(runtime.url+'/#sentiment');await expect(openKey).toHaveCount(0);await page.locator('.sentiment-source-details summary').click();await page.getByRole('button',{name:'Manage CNN connection'}).click();await expect(openKey).toBeVisible();expect(page.url()).toContain('#settings/connections/cnn');
+ mark('Six source checks, independent retries, Treasury date-only observations, CNN configuration and clearing unsaved credentials work from Settings and Fear & Greed');
  await footer.getByRole('button',{name:'Account & security',exact:true}).click();expect(page.url()).toContain('#settings/account');await expect(page.getByRole('heading',{name:'Account & security',exact:true})).toBeVisible();await expect(page.getByRole('dialog')).toHaveCount(0);await page.getByLabel('Current password',{exact:true}).fill('unsaved-fixture');await settingsNav.getByRole('link',{name:'Charts',exact:true}).click();await settingsNav.getByRole('link',{name:'Account & security',exact:true}).click();await expect(page.getByLabel('Current password',{exact:true})).toHaveValue('');await expect(page.locator('.settings-content')).toContainText('owner@example.com');await page.screenshot({path:dir+'/account-desktop.png'});
  await settingsNav.getByRole('link',{name:'Workspace',exact:true}).click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloadPromise;const backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(JSON.stringify(backup)).not.toContain('isolated-unsaved-key-fixture');await expect(page.locator('.settings-content')).toContainText('Europe/Skopje');
  mark('Account controls open inline in Settings and clear unsaved credentials on leaving; Workspace exposes time settings and a credential-free backup');
@@ -63,6 +81,10 @@ try{
    await settingsNav.getByRole('link',{name:category,exact:true}).click();await expect(page.locator('.settings-content')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
    expect(await page.locator('.settings-content').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+   if(category==='Connections'){
+    const visibleDetails=page.locator('.connection-facts dd, .connection-warning p');
+    expect(await visibleDetails.evaluateAll(nodes=>nodes.every(el=>el.scrollWidth<=el.clientWidth+1))).toBe(true);
+   }
    if(['Charts','Connections'].includes(category)&&[390,820].includes(width))await page.screenshot({path:`${dir}/${category.toLowerCase()}-${width}.png`,fullPage:true});
   }
   if(width===390){await page.getByRole('button',{name:'Open navigation',exact:true}).click();await expect(footer.getByRole('button',{name:'Settings',exact:true})).toBeVisible();await footer.getByRole('button',{name:'Log out',exact:true}).scrollIntoViewIfNeeded();await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeInViewport();await page.screenshot({path:dir+'/drawer-phone.png'});await footer.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);}

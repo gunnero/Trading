@@ -1,5 +1,5 @@
 import {apiFetch} from './auth-client';
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {PRIMARY_QUOTES, quoteKey} from './data/quotes.mjs';
 import {overviewWatchlist} from './data/watchlist.mjs';
 const empty={status:'loading',quote:null};
@@ -29,22 +29,35 @@ export function useMarketQuotes(watchlist,full=false,extra=[],active=true,includ
   },[keyString,active]);
   return Object.fromEntries(keys.map(k=>[k,state[k]||empty]));
 }
-export function useMarketChart(symbol,timeframe,active=true){
-  const key=`${symbol}:${timeframe}`;const [state,setState]=useState({key:null,status:'loading'});
+export function useMarketChart(symbol,timeframe,active=true,pollMs=60000){
+  const key=`${symbol}:${timeframe}`;
+  const [state,setState]=useState({key:null,status:'loading'}),manualRefresh=useRef(null);
   useEffect(()=>{
     if(!active){setState({key:null,status:'loading'});return;}
     if(!symbol)return;
     let cancelled=false,busy=false;const controller=new AbortController();
-    async function refresh(){
-      if(busy||document.hidden)return;busy=true;
+    async function refresh(manual=false){
+      if(busy||document.hidden)return;
+      busy=true;
+      if(manual)setState(previous=>({...previous,refreshing:true}));
       try{
         const response=await apiFetch(`/api/market/chart?${new URLSearchParams({symbol,interval:timeframe})}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(35000)])});
-        if(!response.ok)throw new Error();const body=await response.json();
+        if(!response.ok)throw new Error();
+        const body=await response.json();
         if(!cancelled)setState({...body,key});
-      }catch{if(!cancelled)setState(s=>s.key===key&&(s.candles||s.points)?{...s,status:'stale',message:'History refresh unavailable. Showing cached history.'}:{key,status:'unavailable',message:'Chart history unavailable. Retrying automatically.'});}finally{busy=false;}
+      }catch{
+        if(!cancelled)setState(previous=>previous.key===key&&(previous.candles?.length||previous.points?.length)
+          ?{...previous,status:'stale',refreshing:false,message:'History refresh unavailable. Showing cached history.'}
+          :{key,status:'unavailable',message:'Chart history unavailable. Retrying automatically.'});
+      }finally{busy=false;}
     }
-    refresh();const interval=setInterval(refresh,60000);document.addEventListener('visibilitychange',refresh);
-    return()=>{cancelled=true;controller.abort();clearInterval(interval);document.removeEventListener('visibilitychange',refresh);};
-  },[key,active]);
-  return !symbol?{status:'unavailable',message:'Choose an instrument to open its chart.'}:state.key===key?state:{status:'loading'};
+    const automatic=()=>refresh();
+    manualRefresh.current=()=>refresh(true);
+    automatic();const interval=setInterval(automatic,pollMs);document.addEventListener('visibilitychange',automatic);
+    return()=>{cancelled=true;manualRefresh.current=null;controller.abort();clearInterval(interval);document.removeEventListener('visibilitychange',automatic);};
+  },[key,active,pollMs]);
+  return useMemo(()=>{
+    const result=!symbol?{status:'unavailable',message:'Choose an instrument to open its chart.'}:state.key===key?state:{status:'loading'};
+    return {...result,refresh:()=>manualRefresh.current?.()};
+  },[state,key,symbol]);
 }
