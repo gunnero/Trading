@@ -1,24 +1,24 @@
 /* Keep the desktop chart over the workspace, with the sidebar in view. */
 @media (min-width: 1100px) {
-  .modal.company-modal:has(.company-detail[data-tab="overview"]) {
+  .modal.company-modal:has(.company-detail:is([data-tab="overview"],[data-tab="financials"])) {
     inset-inline: var(--sidebar) 0;
     margin-inline: auto;
-    width: min(1240px, calc(100vw - var(--sidebar) - 32px));
+    width: min(var(--company-dialog-width, 1240px), calc(100vw - var(--sidebar) - 32px));
   }
-  .modal.company-modal:has(.company-detail[data-tab="overview"])::backdrop {
+  .modal.company-modal:has(.company-detail:is([data-tab="overview"],[data-tab="financials"]))::backdrop {
     clip-path: inset(0 0 0 var(--sidebar));
   }
-  .company-detail[data-tab="overview"] .company-identity h3,
-  .company-detail[data-tab="overview"] .company-quote > strong { font-size: 24px; }
+  .company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-identity h3,
+  .company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-quote > strong { font-size: 24px; }
 }
 
-.company-detail[data-tab="overview"] .company-mark { background: var(--panel); color: var(--text); }
+.company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-mark { background: var(--panel); color: var(--text); }
 .company-detail[data-tab="overview"] .company-quote > small,
 .company-detail[data-tab="overview"] .chart-footnote { font-size: 11px; color: var(--muted); }
-.company-detail[data-tab="overview"] .company-tabs > button,
-.company-detail[data-tab="overview"] .company-use { font-size: 13px; }
-.company-detail[data-tab="overview"] .company-use { min-height: 34px; padding-inline: 12px; }
-.company-detail[data-tab="overview"] .company-tabs { margin-bottom: 10px; }
+.company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-tabs > button,
+.company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-use { font-size: 13px; }
+.company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-use { min-height: 34px; padding-inline: 12px; }
+.company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-tabs { margin-bottom: 10px; }
 
 .company-position-strip, .company-position-strip > strong { font-size: 13px; }
 .company-position-strip > strong { display: inline-flex; align-items: center; gap: 8px; }
@@ -82,7 +82,7 @@
   .company-chart .chart-tool-label { display: inline; font-size: 11px; }
 }
 @media (max-width: 599px) {
-  .modal.company-modal:has(.company-detail[data-tab="overview"]) { margin: auto; }
+  .modal.company-modal:has(.company-detail:is([data-tab="overview"],[data-tab="financials"])) { margin: auto; }
   .company-detail .company-chart .drawing-chart-frame > .price-chart { height: 320px; }
   .company-detail .company-chart .compact-chart-header { flex-direction: column; align-items: stretch; }
   .company-detail .company-chart .chart-header-left { display: contents; }
@@ -90,5 +90,5 @@
   .company-detail .company-chart .compact-chart-header > .segmented button { min-width: 0; flex: 1; min-height: 38px; padding: 4px; font-size: 11px; }
   .company-detail .company-chart .chart-header-icons { justify-content: space-between; width: 100%; }
   .company-detail .company-chart .chart-header-icons button { width: 44px; height: 44px; }
-  .company-detail[data-tab="overview"] .company-tabs > button { flex: 1; padding-inline: 4px; }
+  .company-detail:is([data-tab="overview"],[data-tab="financials"]) .company-tabs > button { flex: 1; padding-inline: 4px; }
 }

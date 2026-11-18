@@ -17,6 +17,7 @@ import {useStockSetup} from './useStockSetup';
 import {CompanyNews} from './CompanyNews';
 import './company-detail.css';
 import './company-overview.css';
+import './company-financials.css';
 import {CompanyEarnings} from './CompanyEarnings';
 import {PortfolioPosition} from './PortfolioPosition';
 import {PortfolioStockChart} from './PortfolioStockChart';
@@ -44,9 +45,20 @@ function useCompany(symbol){
  },[symbol,revision]);
  return {...(state.key===symbol?state:{status:'loading'}),refresh:()=>setRevision(r=>r+1)};
 }
+const signedSummaryMetrics=new Set(['grossMargin','operatingMargin','dividendYield','ytdReturn','threeYearReturn','fiveYearReturn']);
 function MetricGrid({data,ids,compact=false}){
- const labels={marketCap:'Market cap',trailingPE:'P/E TTM',priceBook:'Price / book',dividendYield:'Dividend yield',grossMargin:'Gross margin',operatingMargin:'Operating margin',cash:'Cash',debt:'Debt',freeCashflow:'Free cash flow'};
- return <dl className="company-metrics">{ids.map(id=>{const metric=data.metrics[id];return metric?<div key={id}><dt title={metric.label}>{compact?(labels[id]||metric.label):metric.label}</dt><dd>{metricValue(metric)}</dd>{metric.asOf&&<small>As of {formatDate(metric.asOf)}</small>}</div>:null;})}</dl>;
+ const labels={marketCap:data.fund?'Net assets':'Market cap',trailingPE:'P/E TTM',priceBook:'Price / book',dividendYield:'Dividend yield',grossMargin:'Gross margin',operatingMargin:'Operating margin',cash:'Cash',debt:'Debt',freeCashflow:'Free cash flow'};
+ return <dl className="company-metrics">{ids.map(id=>{
+  const metric=data.metrics[id];
+  if(!metric)return null;
+  const signed=compact&&signedSummaryMetrics.has(id)&&Number.isFinite(metric.value);
+  const tone=signed&&metric.value!==0?(metric.value>0?'green':'red'):undefined;
+  return <div key={id}>
+   <dt title={metric.label}>{compact?(labels[id]||metric.label):metric.label}</dt>
+   <dd className={tone}>{metricValue(metric)}</dd>
+   {metric.asOf&&<small>As of {formatDate(metric.asOf)}</small>}
+  </div>;
+ })}</dl>;
 }
 function EarningsCard({data}){
  const e=data.earnings,dates=e.dates,today=marketDay(Date.now()),next=dates.find(d=>d>=today),past=dates.length&&!next;
@@ -83,22 +95,76 @@ function Profile({data,entry,q}){
   </details>
  </section>;
 }
+const statements=[['income','Income statement'],['balance','Balance sheet'],['cash','Cash flow']];
+const incomeFields=[['Revenue','revenue'],['Gross profit','grossProfit'],['Operating income','operatingIncome'],['Net income','income']];
+
+function IncomeStatement({rows,currency,period}){
+ if(!rows.length)return <p className="company-unavailable">No {period} income statement history supplied for this listing.</p>;
+ return <div className="table-scroll" tabIndex={0} role="region" aria-label="Reported income statements">
+  <table>
+   <thead><tr><th scope="col">Item</th>{rows.map(row=><th scope="col" key={row.period}>{/^\d{4}$/.test(row.period)?`FY${row.period}`:row.period}</th>)}</tr></thead>
+   <tbody>{incomeFields.map(([label,key])=><tr key={key}><th scope="row">{label}</th>{rows.map(row=>{
+    const value=row[key];
+    const millions=Number.isFinite(value)?value/1e6:null;
+    const precision=millions&&Math.abs(millions)<0.01?{maximumSignificantDigits:2}:{};
+    return <td key={row.period} className={value<0?'red':undefined} title={Number.isFinite(value)?`${currency?currency+' ':''}${number(value)}`:undefined}>{number(millions,precision)}</td>;
+   })}</tr>)}</tbody>
+  </table>
+ </div>;
+}
+
 function FinancialHistory({data}){
  const [period,setPeriod]=useState('annual'),[statement,setStatement]=useState('income');
- const rows=(data[period]||[]).toReversed();
- const fields=[['Revenue','revenue'],['Gross profit','grossProfit'],['Operating income','operatingIncome'],['Net income','income']];
+ const isIncome=statement==='income',isBalance=statement==='balance';
+ const currency=isIncome?(data.earnings?.currency||data.financialCurrency):data.financialCurrency;
+ const snapshotPeriod=isBalance?'latest reported quarter':'trailing 12 months';
  return <section className="company-history">
-  <div className="company-statement-controls"><div className="company-statement-tabs" role="group" aria-label="Financial statement">{[['income','Income statement'],['balance','Balance sheet'],['cash','Cash flow']].map(([id,label])=><button key={id} aria-pressed={statement===id} onClick={()=>setStatement(id)}>{label}</button>)}</div><div className="segmented" aria-label="Financial history period">{['annual','quarterly'].map(p=><button key={p} aria-pressed={period===p} className={period===p?'selected':''} onClick={()=>setPeriod(p)}>{p==='quarterly'?'Quarterly':'Annual'}</button>)}</div></div>
-  <p className="company-statement-caption">{data.financialCurrency||'Currency not supplied'} · Fiscal periods · Reported values</p>
-  <div className="company-statement-body"><div>{statement==='income'?(rows.length?<div className="table-scroll" tabIndex={0} role="region" aria-label="Reported income statements"><table><thead><tr><th scope="col">Item</th>{rows.map(r=><th scope="col" key={r.period}>{/^\d{4}$/.test(r.period)?`FY${r.period}`:r.period}</th>)}</tr></thead><tbody>{fields.map(([label,key])=><tr key={key}><th scope="row">{label}</th>{rows.map(r=><td key={r.period} className={r[key]<0?'red':''}>{number(r[key],{notation:'compact'})}</td>)}</tr>)}</tbody></table></div>:<p className="company-unavailable">No {period} income statement history supplied for this listing.</p>):<div className="company-statement-unavailable"><p>No {period} {statement==='balance'?'balance sheet':'cash flow'} history supplied.</p><span>Available snapshot · {statement==='balance'?'latest reported quarter':'trailing 12 months'}</span><MetricGrid data={data} ids={statement==='balance'?['cash','debt','debtEquity','currentRatio']:['operatingCashflow','freeCashflow']}/></div>}</div>
-  <aside><div><Stack size={18}/><span>Statement currency<strong>{data.financialCurrency||'Not supplied'}</strong></span></div><div><Note size={18}/><span>Reported values<small>Company-reported figures<br/>(no estimates)</small></span></div></aside></div>
-  <p className="company-statement-caption">“—” means not supplied. Fiscal periods follow the company’s reporting calendar; no currency conversion is applied.</p>
+  <div className="company-statement-controls">
+   <div className="company-statement-tabs" role="group" aria-label="Financial statement">{statements.map(([id,label])=><button key={id} aria-pressed={statement===id} onClick={()=>setStatement(id)}>{label}</button>)}</div>
+   <div className="segmented" role="group" aria-label="Financial history period">{['annual','quarterly'].map(id=><button key={id} aria-pressed={period===id} className={period===id?'selected':''} onClick={()=>setPeriod(id)}>{id==='quarterly'?'Quarterly':'Annual'}</button>)}</div>
+  </div>
+  <p className="company-statement-caption">{isIncome?`${currency?currency+' millions':'Amounts in millions · currency unavailable'} · Fiscal periods`:`Available snapshot · ${snapshotPeriod}`}</p>
+  <div className="company-statement-body">
+   {isIncome?<IncomeStatement rows={(data[period]||[]).toReversed()} currency={currency} period={period}/>:<div className="company-statement-unavailable">
+    <p>No {period} {isBalance?'balance sheet':'cash flow'} history supplied.</p>
+    <MetricGrid data={data} ids={isBalance?['cash','debt','debtEquity','currentRatio']:['operatingCashflow','freeCashflow']}/>
+   </div>}
+   <aside aria-label="Statement details">
+    <div><Stack size={20} aria-hidden="true"/><span>Statement currency<strong>{currency||'Not supplied'}</strong></span></div>
+    <div><Note size={20} aria-hidden="true"/><span>Reported values<small>{isIncome?'Company-reported figures for each fiscal period.':`Yahoo Finance snapshot · ${snapshotPeriod}.`}</small></span></div>
+   </aside>
+  </div>
+  {isIncome&&<p className="company-statement-caption">A dash means the source did not supply a figure.</p>}
  </section>;
 }
+
+const corporateSummaries=[
+ ['Valuation',Tag,['marketCap','trailingPE','priceBook','dividendYield']],
+ ['Profitability',ChartBar,['grossMargin','operatingMargin']],
+ ['Balance sheet',Stack,['cash','debt']],
+ ['Cash flow',Coins,['freeCashflow']],
+];
+
 function Financials({data,clockStamp,zoneLabel}){
- const summaries=[['Valuation',Tag,['marketCap','trailingPE','priceBook','dividendYield']],['Profitability',ChartBar,['grossMargin','operatingMargin']],['Balance sheet',Stack,['cash','debt']],['Cash flow',Coins,['freeCashflow']]];
- return <div className="company-financials">{data.fund?<div className="company-financial-summary company-fund-summary">{data.groups.filter(g=>g.id==='fund'||g.id==='trading').map(group=><section key={group.id}><h3>{group.title}</h3><MetricGrid data={data} ids={group.ids}/></section>)}</div>:<><div className="company-financial-summary">{summaries.map(([title,Icon,ids])=><section key={title}><h3><Icon size={18}/>{title}</h3><MetricGrid data={data} ids={ids} compact/></section>)}</div><FinancialHistory data={data}/><div className="company-fund-note"><Buildings size={20}/><div><strong>Fund view: net assets · expense ratio · yield · returns</strong><p>For ETFs and funds, Trading Desk shows fund-specific metrics instead of company financials.</p></div></div></>}
-  <details className="company-disclosure"><summary>All financial metrics & source dates</summary><p className="company-report-note">Quote currency: {data.currency||'not supplied'} · Financial statements: {data.financialCurrency||'not supplied'} · Latest reported quarter: {data.quarter?formatDate(data.quarter):'not supplied'}<br/>TTM = trailing 12 months. Estimates and reported figures are labeled separately.</p><div className="company-two-column">{data.groups.map(group=><section className="company-card" key={group.id}><h3>{group.title}</h3><MetricGrid data={data} ids={group.ids}/></section>)}</div><div className="company-two-column"><EarningsCard data={data}/><section className="company-card"><h3>Corporate actions & source dates</h3><div className="company-event-row"><span>Latest stock split</span><strong>{data.split.factor||'Not supplied'}</strong></div><div className="company-event-row"><span>Split date</span><strong>{data.split.date?formatDate(data.split.date):'Not supplied'}</strong></div><p className="small-copy muted">Trading snapshot quoted {clockStamp(data.quoteObservedAt)} {zoneLabel}. Financial, ownership and short-interest figures can have different reporting dates. Company snapshots refresh every 30 minutes.</p></section></div></details>
+ const summaries=data.fund?[
+  ['Fund information',Stack,['marketCap','expenseRatio','fundYield']],
+  ['Fund returns',ChartBar,['ytdReturn','threeYearReturn','fiveYearReturn']],
+ ]:corporateSummaries;
+ return <div className="company-financials">
+  <div className={`company-financial-summary${data.fund?' company-fund-summary':''}`}>{summaries.map(([title,Icon,ids])=>
+   <section key={title}><h3><Icon size={19} aria-hidden="true"/>{title}</h3><MetricGrid data={data} ids={ids} compact/></section>
+  )}</div>
+  {!data.fund&&<FinancialHistory data={data}/>}
+  <details className="company-disclosure company-financial-details"><summary><Stack size={18} aria-hidden="true"/>All financial metrics &amp; source dates</summary>
+   <p className="company-report-note">Quote currency: {data.currency||'not supplied'} · Financial statements: {data.financialCurrency||'not supplied'} · Latest reported quarter: {data.quarter?formatDate(data.quarter):'not supplied'}<br/>TTM means trailing 12 months.</p>
+   <div className="company-two-column">{data.groups.map(group=><section className="company-card" key={group.id}><h3>{group.title}</h3><MetricGrid data={data} ids={group.ids}/></section>)}</div>
+   <div className="company-two-column"><EarningsCard data={data}/><section className="company-card">
+    <h3>Corporate actions &amp; source dates</h3>
+    <div className="company-event-row"><span>Latest stock split</span><strong>{data.split.factor||'Not supplied'}</strong></div>
+    <div className="company-event-row"><span>Split date</span><strong>{data.split.date?formatDate(data.split.date):'Not supplied'}</strong></div>
+    <p className="small-copy muted">Trading snapshot quoted {clockStamp(data.quoteObservedAt)} {zoneLabel}. Financial, ownership and short-interest figures can have different reporting dates. Company snapshots refresh every 30 minutes.</p>
+   </section></div>
+  </details>
  </div>;
 }
 export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,position}){
