@@ -191,7 +191,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       if(req.method==='GET'&&path==='/api/portfolio/insights/performance'){res.end(JSON.stringify(await planning.performance(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/insights/calendar'){res.end(JSON.stringify(await planning.calendar(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/insights/alerts'){res.end(JSON.stringify(alerts.read()));return;}
-      if(req.method==='GET'&&path==='/api/portfolio/insights/reports'){res.end(JSON.stringify(reports.read(Object.fromEntries(url.searchParams))));return;}
+      if(req.method==='GET'&&path==='/api/portfolio/insights/reports'){res.end(JSON.stringify(url.searchParams.get('view')==='filters'?reports.filterOptions():reports.read(Object.fromEntries(url.searchParams))));return;}
       if(req.method==='GET'&&path==='/api/portfolio/journal'){res.end(JSON.stringify(reports.journal(Object.fromEntries(url.searchParams))));return;}
       const hoursMatch=path.match(/^\/api\/portfolio\/accounts\/([a-f0-9-]{36})\/hours$/);
       if(req.method==='GET'&&hoursMatch){res.end(JSON.stringify(await metadata.hours(hoursMatch[1],url.searchParams.get('ticker'))));return;}

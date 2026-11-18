@@ -40,6 +40,10 @@ export function createPortfolioReports(db,{now,credential,decode,account,account
     finally{pending.delete(id);}
   }
   function chosen(filters){return accounts().accounts.filter(a=>(!filters.person||a.personId===filters.person)&&(!filters.account||a.id===filters.account));}
+  function filterOptions(){
+    const root=accounts();
+    return {people:root.people,accounts:root.accounts.map(({id,personId,label,environment})=>({id,personId,label,environment}))};
+  }
   function read(filters={}){
     let bounds;try{if(filters.year!==undefined){if(!/^(19|20|21)\d{2}$/.test(String(filters.year))||filters.month)throw Error('Choose a valid year.');bounds=activityDateBounds(filters.year+'-01-01',filters.year+'-12-31',filters.timeZone);}else bounds=monthBounds(filters.month,filters.timeZone);}catch(e){throw fail(400,e.message);}
     if(bounds.from>now())throw fail(400,'Choose the current period or an earlier period.');
@@ -69,5 +73,5 @@ export function createPortfolioReports(db,{now,credential,decode,account,account
     return note(id,executionId);
   }
   function remove(id){for(const table of ['portfolio_income','portfolio_income_state','portfolio_execution_notes'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
-  return {read,refresh,journal,saveNote,syncIncome,remove};
+  return {read,filterOptions,refresh,journal,saveNote,syncIncome,remove};
 }

@@ -1,0 +1,89 @@
+.mr-view {min-width:0;color:var(--text);}
+.planning-view.mr-view .pi-tabs {margin:0;border-bottom:1px solid var(--border);}
+.mr-filters {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:13px 0 16px;border-bottom:1px solid var(--border);}
+.mr-filters label {display:grid;gap:6px;min-width:0;font-size:13px;font-weight:600;}
+.mr-filters label>span {display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--panel);border-radius:6px;min-height:40px;padding:0 9px;color:var(--primary);}
+.mr-filters label>span:focus-within {outline:2px solid var(--primary);outline-offset:1px;}
+.mr-filters label svg {flex:none;}
+.mr-filters input,.mr-filters select {width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--text);height:38px;padding:3px;font:inherit;font-weight:500;}
+.mr-currency {display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin:12px 0 0;}
+.mr-currency select {color:var(--text);border:1px solid var(--border);border-radius:5px;background:var(--panel);padding:4px;}
+.mr-metrics {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:20px 0 23px;gap:0;}
+.mr-metrics>div {padding:0 22px;min-width:0;border-left:1px solid var(--border);}
+.mr-metrics>div:first-child {border:0;padding-left:0;}
+.mr-metrics dt {font-size:14px;font-weight:600;}
+.mr-metrics dd {margin:5px 0 0;font-size:clamp(20px,1.85vw,29px);line-height:1.16;letter-spacing:-.6px;font-weight:700;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
+.mr-metrics dd small {font-size:.65em;letter-spacing:0;}
+.mr-metrics>div>small,.mr-accounts small {color:var(--muted);font-size:11px;font-weight:500;}
+.mr-table-card,.mr-card {background:var(--panel);border:1px solid var(--border);border-radius:8px;min-width:0;}
+.mr-accounts,.mr-transactions {width:100%;border-collapse:separate;border-spacing:0;font-size:14px;font-variant-numeric:tabular-nums;}
+.mr-accounts td,.mr-accounts th,.mr-transactions th,.mr-transactions td {padding:9px 13px;text-align:left;white-space:normal;overflow-wrap:anywhere;}
+.mr-accounts thead th,.mr-transactions thead th {color:var(--text);background:var(--panel-hover);font-size:12px;font-weight:600;}
+.mr-accounts thead th:first-child,.mr-transactions thead th:first-child {border-top-left-radius:7px;}
+.mr-accounts thead th:last-child,.mr-transactions thead th:last-child {border-top-right-radius:7px;}
+.mr-accounts td,.mr-accounts tbody th,.mr-transactions td,.mr-transactions tbody th {border-top:1px solid var(--border);}
+.mr-accounts tbody th {color:var(--text);}
+.mr-accounts tbody tr:nth-child(even) {background:color-mix(in srgb,var(--selection) 45%,transparent);}
+.mr-accounts tbody tr:last-child>*:first-child {border-bottom-left-radius:7px;}
+.mr-accounts tbody tr:last-child>*:last-child {border-bottom-right-radius:7px;}
+.mr-accounts th:first-child {width:24%;}
+.mr-badge {display:inline-block;border-radius:4px;padding:2px 7px;background:var(--panel-hover);font-size:12px;font-weight:600;}
+.mr-partial {color:var(--amber);background:color-mix(in srgb,var(--amber) 13%,var(--panel));}
+.mr-dates {display:block;font-size:12px;}
+.mr-accounts td small {display:block;}
+.mr-panels {display:grid;grid-template-columns:minmax(0,1.48fr) minmax(0,1fr);gap:17px;margin:20px 0;}
+.mr-card {padding:15px;}
+.mr-card h2 {margin:0 0 11px;font-size:clamp(19px,1.6vw,24px);letter-spacing:-.5px;}
+.mr-transactions th,.mr-transactions td {padding:6px 8px;font-weight:500;font-size:13px;}
+.mr-transactions tr>:nth-child(2) {text-align:center;}
+.mr-transactions tr>:last-child {text-align:right;}
+.mr-transactions tbody th {color:var(--text);}
+.mr-figure {margin:0;}
+.mr-chart {width:100%;height:224px;}
+.mr-sr {position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;}
+.mr-empty {display:grid;place-items:center;min-height:75px;padding:12px;color:var(--muted);font-size:14px;text-align:center;}
+.mr-source {display:flex;gap:9px;align-items:flex-start;border-top:1px solid var(--border);padding:11px 0;color:var(--muted);font-size:12px;}
+.mr-source svg {flex:none;}
+.mr-source p {margin:0 0 3px;}
+.mr-detail {margin:4px 0;font-size:13px;}
+.mr-detail>summary {color:var(--text);cursor:pointer;font-weight:600;}
+.mr-detail .pi-report-account {margin-top:12px;padding:12px 0;}
+.mr-tools {display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin:10px 0;}
+.mr-tools button {display:flex;align-items:center;gap:6px;font-size:12px;}
+@media(max-width:900px){
+ .mr-filters {gap:9px;}
+ .mr-panels {grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px;}
+ .mr-accounts td,.mr-accounts th {padding:8px;}
+ .mr-metrics>div {padding:0 12px;}
+}
+@media(max-width:730px){
+ .mr-panels {grid-template-columns:1fr;}
+ .mr-accounts,.mr-accounts tbody {display:block;}
+ .mr-accounts thead {position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;}
+ .mr-accounts tbody tr {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 16px;padding:12px;}
+ .mr-accounts tbody tr+tr {border-top:1px solid var(--border);}
+ .mr-accounts td,.mr-accounts tbody th {border:0;padding:0;}
+ .mr-accounts tbody th:first-child,.mr-accounts td:last-child {grid-column:1/-1;width:auto;}
+ .mr-accounts td::before {content:attr(data-label);display:block;color:var(--muted);font-size:11px;}
+ .mr-dates {display:inline-block;margin:3px 5px 0 0;}
+ .mr-metrics {grid-template-columns:1fr 1fr;row-gap:16px;}
+ .mr-metrics>div:nth-child(3) {border-left:0;padding-left:0;}
+}
+@media(max-width:510px){
+ .mr-filters {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .mr-filters label:first-child {grid-column:1/-1;}
+ .mr-card {padding:12px;}
+ .mr-chart {height:196px;}
+ .mr-tools {gap:9px;}
+}
+@media print{
+ .mr-view :is(.section-tabs,.page-header-actions,.mr-tools,.mr-detail>summary) {display:none!important;}
+ .mr-view .page-header {padding:0!important;}
+ .mr-view .mr-detail::details-content {content-visibility:visible;}
+ .mr-view .mr-card,.mr-view .mr-metrics,.mr-view tr {break-inside:avoid;}
+ .mr-view .mr-card,.mr-view .mr-table-card {box-shadow:none;}
+ .mr-view .mr-currency {display:block;}
+}
+
+.mr-print-scope {display:none;}
+@media print{.mr-print-scope {display:block;}}

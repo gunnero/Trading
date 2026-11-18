@@ -162,5 +162,34 @@ test('actual portfolio routes validate, create alerts and save execution notes t
  response=await post('/journal/notes',{accountId:f.id,executionId:1,revision:0,reason:'Fixture',notes:'Saved via API'});assert.equal(response.status,200);
  assert.equal((await (await fetch(base+'/journal')).json()).items[0].note.notes,'Saved via API');
  assert.equal((await post('/journal/notes',{accountId:f.id,executionId:1,revision:0,reason:'x',notes:'x'})).status,409);
+ const options=await (await fetch(base+'/insights/reports?view=filters')).json();
+ assert.deepEqual(Object.keys(options.accounts[0]).sort(),['environment','id','label','personId']);
+ assert.equal(options.accounts[0].id,f.id);assert.equal(options.people[0].name,'Fixture One');
  response=await post('/insights/reports/refresh',{month:'2026-11'});assert.equal(response.status,200);assert.equal((await response.json()).accounts[0].income.length,1);
+});
+
+test('monthly activity separates currencies, cash fees, charges and demo accounts and clips local weeks to the month',async()=>{
+ const {monthlyActivity}=await import('../src/data/monthly-report.mjs');
+ const month='2026-10',timeZone='Europe/Skopje',generatedAt=at('2026-11-04T19:00:00Z');
+ const account={currency:'USD',environment:'live',tradesComplete:true,incomeComplete:true,fundingComplete:true,
+   funding:[{type:'DEPOSIT',currency:'USD',amount:2000},{type:'WITHDRAW',currency:'USD',amount:50},{type:'FEE',currency:'USD',amount:-1}],
+   income:[{currency:'EUR',amount:2}],trades:[{side:'BUY',currency:'USD',netValue:100,realized:null,charges:[],at:at('2026-10-01T18:00:00Z')},
+     {side:'SELL',currency:'USD',netValue:110,realized:-3,charges:[{currency:'EUR',amount:.15}],at:at('2026-10-04T21:59:00Z')},
+     {side:'SELL',currency:'USD',netValue:115,realized:8,charges:[],at:at('2026-10-04T22:01:00Z')}]};
+ const report=monthlyActivity({month,timeZone,generatedAt,accounts:[account,{...account,environment:'demo'}]});
+ assert.deepEqual(report.buckets.map(b=>b.key),['live/USD','live/EUR','demo/USD','demo/EUR']);
+ const [usd,eur]=report.buckets,summary=Object.fromEntries(usd.summary.map(r=>[r.key,r.amount]));
+ assert.equal(usd.result,5);assert.equal(usd.weeks[0].amount,-3);assert.equal(usd.weeks[1].amount,8);
+ assert.equal(usd.weeks.at(-1).to,'2026-10-31');assert.equal(usd.weeks.at(-1).amount,0);
+ assert.equal(summary.buys,-100);assert.equal(summary.sells,225);assert.equal(summary.cashFees,-1);assert.equal(summary.withdrawals,-50);assert.equal(summary.charges,0);
+ assert.equal(eur.summary.find(r=>r.key==='charges').amount,.15);
+});
+test('monthly report distinguishes incomplete or missing results from reported zero',async()=>{
+ const {monthlyActivity}=await import('../src/data/monthly-report.mjs');
+ const at=Date.parse('2026-11-05T12:00Z'),trade={at,side:'SELL',currency:'USD',realized:null,netValue:null,charges:null};
+ const account={currency:'USD',environment:'live',trades:[trade],income:[],funding:[],tradesComplete:true};
+ const report={month:'2026-11',timeZone:'UTC',generatedAt:at,accounts:[account]};
+ let b=monthlyActivity(report).buckets[0];assert.equal(b.result,null);assert.equal(b.weeks.at(-1).amount,null);assert.equal(b.weeks.at(-1).to,'2026-11-05');
+ const rows=Object.fromEntries(b.summary.map(r=>[r.key,r]));assert.equal(rows.sells.count,1);assert.equal(rows.sells.amount,null);assert.equal(rows.deposits.count,null);assert.equal(rows.charges.amount,null);
+ trade.realized=0;assert.equal(monthlyActivity(report).buckets[0].result,0);
 });
