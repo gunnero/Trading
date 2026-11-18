@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {createPortfolioService} from '../server/portfolio.mjs';
 import {allocationPlan,contributionBreakdown,performanceIndex,drawdownSummary,benchmarkComparison,annualTotals} from '../src/data/portfolio-planning.mjs';
 import {parseBenchmarkPrices,resolveSymbol} from '../server/market-data.mjs';
+import {calendarRows,calendarWindow} from '../src/data/holdings-calendar.mjs';
 import {reportCsv} from '../src/data/portfolio-insights.mjs';
 const day=86400000,now=Date.parse('2026-11-04T16:00:00Z'),instrument={ticker:'AMD_US_EQ',name:'AMD',currency:'USD',isin:'US0079031078'};
 async function fixture(t){
@@ -102,8 +103,23 @@ test('contributions include closed stocks, separate currencies, and withhold tot
  const result=contributionBreakdown({currency:'USD',holdings:[{ticker:'A',name:'A',unrealized:20}]},{complete:false,items:[{ticker:'A',name:'A',currency:'USD',side:'SELL',realized:10},{ticker:'B',name:'B',currency:'EUR',side:'SELL',realized:-5},{ticker:'C',name:'C',currency:'USD',side:'SELL',realized:null}]});
  assert.equal(result.rows[0].total,30);assert.equal(result.rows.find(r=>r.ticker==='B').total,-5);assert.equal(result.rows.find(r=>r.ticker==='C').total,null);assert.equal(result.complete,false);
 });
+test('holdings calendar separates rolling, month and day coverage across year end',()=>{
+ const today='2026-12-22',range=calendarWindow(today,null,null);
+ assert.deepEqual([range.from,range.to],['2026-12-22','2027-01-20']);
+ assert.equal(calendarWindow(today,'2028-02',null).to,'2028-02-29');
+ assert.equal(calendarWindow(today,'2027-01','2027-01-04').to,'2027-01-04');
+ const holding={ticker:'A',events:[{type:'Earnings',date:'2027-01-03'},{type:'Ex-dividend',date:'2026-12-21'}]};
+ const {events,unavailable}=calendarRows([holding,{ticker:'B',events:[{type:'Dividend payment',date:today}]}],today);
+ assert.deepEqual(events.map(row=>row.holding.ticker),['B','A']);
+ assert.deepEqual(unavailable.map(row=>row.missing),[['Dividend'],['Earnings']]);
+});
 test('holdings calendar uses exact listings, skips past dates and retains estimate/source timestamps',async t=>{
  const f=await fixture(t);const c=await f.service.planning.calendar({account:f.id});assert.equal(c.items[0].listing,'NASDAQ:AMD');assert.equal(c.items[0].events.length,3);assert.equal(c.items[0].events[0].estimated,true);assert.equal(c.items[0].status,'ok');assert.ok(c.items[0].fetchedAt);await assert.rejects(f.service.planning.calendar({account:f.id,offset:-1}));
+ f.advance(Date.parse('2026-11-11T02:00:00Z')-now);
+ const sameUsDay=await f.service.planning.calendar({account:f.id});
+ assert.equal(sameUsDay.holdingsKey,c.holdingsKey);assert.ok(sameUsDay.items[0].events.some(e=>e.date==='2026-11-10'));
+ f.advance(4*3600000);
+ assert.ok(!(await f.service.planning.calendar({account:f.id})).items[0].events.some(e=>e.date==='2026-11-10'));
 });
 test('annual report covers all execution pages and local year boundaries, keeps currencies and export coverage',async t=>{
  const f=await fixture(t),fill=(id,filledAt)=>({order:{id,instrument,side:'SELL',quantity:1,filledQuantity:1,type:'MARKET',status:'FILLED',createdAt:filledAt},fill:{id,type:'TRADE',quantity:1,price:110,filledAt,walletImpact:{currency:'USD',netValue:110,realisedProfitLoss:10,taxes:[{name:'FEE',quantity:.5,currency:'EUR'}]}}});

@@ -1,4 +1,5 @@
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
+import {marketDay} from '../src/data/calendar.mjs';
 import {parseWatchlist} from '../src/data/market.js';
 import {portfolioListing} from '../src/data/portfolio-listings.mjs';
 import {allocationPlan,contributionBreakdown,performanceIndex,drawdownSummary,benchmarkComparison} from '../src/data/portfolio-planning.mjs';
@@ -83,12 +84,15 @@ export function createPortfolioPlanning(db,{now,account,accounts,credential,acti
   }
   async function calendar(filters){
     const choices=calendarChoices(filters.account),offset=Number(filters.offset||0);if(!Number.isSafeInteger(offset)||offset<0||offset>500)throw fail(400,'Invalid calendar page.');
-    const today=new Date(now()).toISOString().slice(0,10),queue=choices.slice(offset,offset+8),items=new Array(queue.length);let cursor=0;
+    const today=marketDay(now()),queue=choices.slice(offset,offset+8),items=new Array(queue.length);let cursor=0;
     const worker=async()=>{while(cursor<queue.length){const i=cursor++,h=queue[i];let result;try{result=h.listing?await company(h.listing):null;}catch{}const d=result?.data,events=[];
-      for(const date of d?.earnings?.dates||[])if(date>=today)events.push({type:'Earnings',date,estimated:d.earnings.estimated!==false});
+      for(const date of d?.earnings?.dates||[])if(date>=today)events.push({type:'Earnings',date,estimated:d.earnings.estimated??null});
       for(const [key,type] of [['exDividend','Ex-dividend'],['dividendDate','Dividend payment']])if(d?.[key]>=today)events.push({type,date:d[key],estimated:false});
       items[i]={...h,events,status:result?.status||'unavailable',fetchedAt:result?.fetchedAt||null,message:!h.listing?'No verified market listing.':!d?'Company dates are unavailable.':!events.length?'No upcoming dates supplied.':null};
-    }};await Promise.all([worker(),worker()]);return {accountId:filters.account,items,offset,more:offset+items.length<choices.length,total:choices.length,source:'Yahoo Finance',generatedAt:now()};
+    }};
+    await Promise.all([worker(),worker()]);
+    const holdingsKey=createHash('sha256').update(JSON.stringify(choices)).digest('hex');
+    return {accountId:filters.account,holdingsKey,items,offset,more:offset+items.length<choices.length,total:choices.length,source:'Yahoo Finance',generatedAt:now()};
   }
   function remove(id){for(const table of ['portfolio_planning','portfolio_monitor_state'])db.prepare(`DELETE FROM ${table} WHERE account_id=?`).run(id);}
   return {read,save,settings,check,orderLimit,performance,calendar,remove};

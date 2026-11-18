@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useDisplayTime} from './DisplayTime';
+import PortfolioHoldingsCalendar from './PortfolioHoldingsCalendar';
 import PortfolioAllocation from './PortfolioAllocation';
 import PortfolioPerformance from './PortfolioPerformance';
 import PortfolioMonitor from './PortfolioMonitor';
@@ -15,11 +16,7 @@ export default function PortfolioPlanning({tab,navigation,onJournal}){
   if(tab==='monitor')return <PortfolioMonitor accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
   if(tab==='allocation')return <PortfolioAllocation accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
   if(tab==='performance')return <PortfolioPerformance accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
-  return <>{navigation}<section className="panel pi-panel" aria-label="Portfolio planning"><div className="pi-report-filters"><label>Planning account<select aria-label="Planning account" value={a?.id||''} onChange={e=>setSelected(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><button className="button outline" disabled={view.busy} onClick={view.refresh}>Refresh account view</button></div>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!view.data?<p role="status">Loading accounts…</p>:!a?<p>Add an account in Portfolio Manager to get started.</p>:<HoldingsCalendar key={a.id} account={a}/>}</section></>;
-}
-function HoldingsCalendar({account:a}){
-  const {journalStamp}=useDisplayTime(),[offset,setOffset]=useState(0),view=usePortfolioResource('insights/calendar?'+new URLSearchParams({account:a.id,offset}),1800000),data=view.data;
-  return <><h2>Holdings calendar</h2><p>Upcoming earnings, ex-dividend and dividend payment dates for held stocks.</p><p className="pi-help">Yahoo Finance company snapshots · dates retain the publisher’s calendar day. Estimated earnings can change; a payment date does not confirm eligibility or an amount.</p>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!data?<p role="status">Loading company dates…</p>:<><ul className="pi-rule-list">{data.items.map(h=><li key={h.ticker}><div><strong>{h.name}</strong>{h.events.map((e,i)=><p key={e.type+':'+i}><time>{e.date}</time> · {e.type}{e.estimated?' · estimated':''}</p>)}{h.message&&<p>{h.message}</p>}<small>{h.listing||h.ticker} · {h.status==='stale'?'Cached; refresh unavailable':h.status==='unavailable'?'Unavailable':'Yahoo Finance'}{h.fetchedAt?` · checked ${journalStamp(h.fetchedAt)}`:''}</small></div></li>)}</ul>{!data.total&&<p>No holdings in this account.</p>}<div className="pi-actions"><button className="button outline" disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-8))}>Previous holdings</button><span>{data.total?`${offset+1}–${offset+data.items.length} of ${data.total}`:'0 holdings'}</span><button className="button outline" disabled={!data.more} onClick={()=>setOffset(offset+8)}>Next holdings</button></div></>}</>;
+  return <PortfolioHoldingsCalendar accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
 }
 export function AnnualReport(){
   const privacy=usePortfolioPrivacy(),{settings,journalStamp}=useDisplayTime(),[year,setYear]=useState(String(new Date().getFullYear())),[person,setPerson]=useState(''),[people,setPeople]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState('');
