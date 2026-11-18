@@ -69,7 +69,10 @@ try{
    await expect(page.getByRole('button',{name:'Clear checked confirmation'})).toBeDisabled();await page.getByRole('checkbox',{name:/I checked this confirmation/}).check();settingsFail=false;await page.getByRole('button',{name:'Clear checked confirmation'}).click();await expect(page.locator('.pm-order-result')).toContainText('No order was resent.');
   }else{
    settingsFail=false;lookupReady=true;await page.getByRole('button',{name:'Check saved result'}).click();await expect(page.locator('.pm-order-result')).toContainText(mode==='unknown'?'Result uncertain':mode==='not-sent'?'Order not submitted':mode==='cancel'?'Cancellation requested':mode==='rejected'?'Order rejected':'Order received by Trading 212.');
-   if(mode==='unknown')await expect(page.getByRole('button',{name:/^Review (buy|sell) order$/})).toBeDisabled();
+   if(mode==='unknown'){
+     const previousLookups=lookups;await page.getByRole('button',{name:'Check status',exact:true}).click();await expect.poll(()=>lookups).toBeGreaterThan(previousLookups);
+     await expect(page.locator('.pm-order-result .broker-status')).toHaveText('Unknown');await expect(page.getByRole('button',{name:/^Review (buy|sell) order$/})).toBeDisabled();expect(posts).toBe(1);
+   }
    if(['malformed','wrong-token','network'].includes(mode))await expect(page.getByLabel('Order shares')).toHaveValue('');
    if(mode==='rejected')await expect(page.getByLabel('Order shares')).toHaveValue('1');
   }

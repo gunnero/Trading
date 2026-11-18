@@ -8,6 +8,7 @@ import {normalizePortfolioSnapshot,portfolioStatus,portfolioTotals,portfolioPerf
 import {portfolioListing,portfolioListingChoices} from './data/portfolio-listings.mjs';
 import {CompanyDetail} from './CompanyDetail';
 import {PortfolioPosition} from './PortfolioPosition';
+import {HoldingRecovery,ListingRecovery} from './PortfolioRecovery';
 import {PortfolioHistory} from './PortfolioHistory';
 import {PortfolioTradePage,portfolioTradeRoute} from './PortfolioTradePage';
 import {usePortfolioHours,HoursButton,StockHours} from './PortfolioHours';
@@ -50,12 +51,12 @@ export default function PortfolioManager({route='portfolio',onNavigate,sheet,wat
   const {clockStamp,zoneLabel}=useDisplayTime();
   const accept=useCallback(result=>{if(active.current&&(!current.current||result.revision>=current.current.revision)){current.current=result;setState(result);}},[]);
   const load=useCallback(async()=>{try{accept(await request());if(active.current)setError('');}catch(e){if(active.current)setError(e.message);}},[accept]);
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(onlyAccountId)=>{
     if(syncing.current||document.hidden||dialogRef.current)return;
     syncing.current=true;if(active.current)setRefreshing(true);
     try{
       const fresh=await request();accept(fresh);
-      const queue=fresh.data.accounts.filter(a=>a.connected);
+      const queue=fresh.data.accounts.filter(a=>a.connected&&(!onlyAccountId||a.id===onlyAccountId));
       const work=async()=>{while(queue.length&&active.current&&!document.hidden&&!dialogRef.current){const a=queue.shift();accept(await request(`/accounts/${a.id}/sync`,{}));}};
       await Promise.all([work(),work()]);if(active.current)setError('');
     }catch(e){if(active.current)setError(e.message);}
@@ -100,7 +101,7 @@ export default function PortfolioManager({route='portfolio',onNavigate,sheet,wat
   function openTrade(a,holding,side){setHoldingView(null);onNavigate(portfolioTradeRoute(a.id,holding,side));}
   if(isTradePage)return <PortfolioTradePage onAccountChange={openTrade} route={route} state={state} error={error} onReload={load} onBack={a=>{if(a)privacy.update({account:a.id,filter:filter==='all'?'all':a.personId});onNavigate('portfolio');}} sheet={sheet} watchlist={watchlist}/>;
   return <div className={`pm-page${isAccountPage?' pm-account-page':''}`}>
-    <PageHeader title="Portfolio Manager" description={isAccountPage?undefined:'People, accounts and holdings in one place.'} actions={isAccountPage?undefined:<>{onInsights&&<button className="button outline" onClick={onInsights}>Portfolio insights</button>}{onActivity&&<button className="button outline" onClick={onActivity}>Activity & alerts</button>}<button className="button outline" disabled={refreshing||!!dialog} onClick={refresh}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
+    <PageHeader title="Portfolio Manager" description={isAccountPage?undefined:'People, accounts and holdings in one place.'} actions={isAccountPage?undefined:<>{onInsights&&<button className="button outline" onClick={onInsights}>Portfolio insights</button>}{onActivity&&<button className="button outline" onClick={onActivity}>Activity & alerts</button>}<button className="button outline" disabled={refreshing||!!dialog} onClick={()=>refresh()}><ArrowsClockwise size={17} className={refreshing?'pm-spinning':''}/>{refreshing?'Refreshing…':'Refresh'}</button><button className="button primary" disabled={privacy.privateMode} onClick={()=>setDialog({type:'person'})}><Plus size={17}/>Add person</button></>}/>
     {isAccountPage?<button className="text-button pm-account-back" onClick={()=>onNavigate('portfolio')}><ArrowLeft size={17}/>Back to accounts</button>:<PortfolioPrivacyControls accountPreviews={accounts.length>0}/>}
     {error&&<div className="pm-alert" role="alert"><WarningCircle size={19}/><span>{error}</span><button className="text-button" onClick={load}>Reload latest</button></div>}
     {!state?<div className="panel pm-empty" role="status">{isAccountPage?'Loading account…':'Loading your portfolios…'}</div>:!isAccountPage?<>
@@ -137,7 +138,11 @@ export default function PortfolioManager({route='portfolio',onNavigate,sheet,wat
             {account.connected&&<button className="button primary" disabled={actionsHidden} onClick={()=>openTrade(account)}><ArrowsLeftRight size={17}/>Trade / orders</button>}
           </div>
         </header>
-        {account.error&&<p className="pm-alert" role="status">{selectedPrivacy.privateMode?'Account refresh needs attention.':account.error}{account.retryAt&&` Next attempt after ${clockStamp(account.retryAt)}.`}</p>}
+        {account.error&&<HoldingRecovery retained={!!account.snapshot} observation={account.snapshot?.observedAt??account.snapshot?.fetchedAt??account.lastSuccess}
+          message={selectedPrivacy.privateMode?'Account refresh needs attention.':account.error} retry={account.connected&&!actionsHidden?()=>refresh(account.id):undefined}
+          disabled={refreshing||account.retryAt>Date.now()}>
+          {account.retryAt>Date.now()&&<p>Next attempt after {clockStamp(account.retryAt)} {zoneLabel}.</p>}
+        </HoldingRecovery>}
         {account.snapshot?<><PortfolioHistory key={account.id} account={account} watchlist={watchlist}>
           <Holdings account={account} snapshot={account.snapshot} watchlist={watchlist} search={search} setSearch={setSearch}
             onToggleValues={()=>setValueVisibility({route,preferences:privacy.preferences,visible:selectedPrivacy.hideBalances})} onOpen={h=>setHoldingView({route,accountId:account.id,ticker:h.ticker})}/>
@@ -221,8 +226,8 @@ function HoldingDetail({holding,account,owner,sheet,watchlist,setupInterval,onTr
   const choices=portfolioListingChoices(watchlist),automatic=portfolioListing(holding,watchlist),entry=automatic||choices.find(e=>e.id===chosen);
   const position={holding,accountId:account.id,connected:account.connected,platform:account.platform,orderListing:automatic,onTrade:account.connected&&!privacy.privateMode?onTrade:null,listing:entry,currency:account.snapshot.currency,owner,accountLabel:privacy.label(account.label,account.id),sourceLabel:privacy.privateMode?'Saved snapshot':account.snapshot.sourceLabel,source:account.snapshot.source,observedAt:account.snapshot.observedAt,lastSuccess:account.lastSuccess,status:portfolioStatus(account),environment:account.environment};
   return <>
-    {!automatic&&<div className="pm-listing-picker"><label>Stock / ETF listing<select aria-label="Holding chart listing" value={entry?.id||''} onChange={e=>setChosen(e.target.value)}><option value="" disabled>Choose this holding’s ticker</option>{choices.map(e=><option key={e.id} value={e.id}>{e.exchange}:{e.symbol}</option>)}</select></label><p>No unique automatic match for {holding.name} ({holding.ticker}). Choose this holding’s own ticker and currency. QQQ is a separate ETF, not an exchange selection. This choice applies to this view only.</p></div>}
-    {entry?<CompanyDetail key={entry.id} entry={entry} sheet={sheet} setupInterval={setupInterval} position={position} onUseCustom={onUseCustom&&choices.some(item=>item.id===entry.id)?()=>onUseCustom(entry.id):undefined}/>:<><PortfolioPosition position={position}/><div className="empty"><h3>Choose a chart listing</h3><p>Your holding details are available above. A matching listing is needed for its chart, company details and your saved levels.</p></div></>}
+    {!automatic&&<ListingRecovery holding={holding} choices={choices} selected={entry?.id||''} onSelect={setChosen}/>}
+    {entry?<CompanyDetail key={entry.id} entry={entry} sheet={sheet} setupInterval={setupInterval} position={position} onUseCustom={onUseCustom&&choices.some(item=>item.id===entry.id)?()=>onUseCustom(entry.id):undefined}/>:<PortfolioPosition position={position}/>}
     <details className="company-disclosure"><summary>Listing & trading hours</summary>{automatic&&<p className="pm-auto-listing">Chart matched automatically · <strong>{automatic.exchange}:{automatic.symbol}</strong></p>}<StockHours accountId={account.id} connected={account.connected} ticker={holding.ticker} name={holding.name}/></details>
   </>;
 }

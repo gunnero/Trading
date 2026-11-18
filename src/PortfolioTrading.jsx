@@ -1,5 +1,10 @@
-import {ArrowsClockwise,CaretDown} from '@phosphor-icons/react';
+import {ArrowsClockwise,CaretDown,Receipt,WarningCircle} from '@phosphor-icons/react';
 import {portfolioListing} from './data/portfolio-listings.mjs';
+import {OrderReview} from './PortfolioOrderReview';
+import {BrokerStatus,statusTone} from './BrokerOrderStatus';
+import {HoldingRecovery} from './PortfolioRecovery';
+import {money,priceMoney,shares,percent,tone,sessionLabel} from './data/portfolio-order-display.mjs';
+import {orderStatusLabel as statusLabel} from './data/portfolio-activity.mjs';
 import {StockHours} from './PortfolioHours';
 import {useEffect,useRef,useState} from 'react';
 import {apiFetch} from './auth-client';
@@ -7,13 +12,6 @@ import {useDisplayTime} from './DisplayTime';
 import {cashOrderQuantity,cashPercentage,orderPercentage,roundedOrderQuantity,orderQuantityPrecision,marketBuyCashLimit,sellRemainder,exactOrderQuantity} from './data/portfolio-order-size.mjs';
 import {portfolioOrderLevels} from './data/portfolio-order-levels.mjs';
 
-const money=(value,currency)=>Number.isFinite(value)&&currency?new Intl.NumberFormat('en-US',{style:'currency',currency}).format(value):'—';
-const priceMoney=(value,currency)=>Number.isFinite(value)&&currency?new Intl.NumberFormat('en-US',{style:'currency',currency,maximumFractionDigits:8}).format(value):'—';
-const shares=value=>Number.isFinite(value)?new Intl.NumberFormat('en-US',{maximumFractionDigits:8}).format(value):'—';
-const percent=value=>Number.isFinite(value)?`${value>0?'+':''}${value.toFixed(2)}%`:'—';
-const tone=value=>value>0?'green':value<0?'red':'';
-const sessionLabel=order=>order.extendedHours===true?'Extended sessions · 24/5 where available':order.extendedHours===false?'Regular hours only':'Session not reported by broker';
-const statusLabel=status=>({NEW:'Pending',LOCAL:'Pending',UNCONFIRMED:'Pending',CONFIRMED:'Pending',PARTIALLY_FILLED:'Partially filled',FILLED:'Filled',CANCELLED:'Cancelled',REJECTED:'Rejected',REPLACING:'Replacing',REPLACED:'Replaced',CANCELLING:'Cancelling'}[status]||status);
 const finalStatuses=new Set(['FILLED','CANCELLED','REJECTED','REPLACED']);
 const recoveryKey=id=>'opening-bell.order-check.'+id;
 function SellRejectionHelp({attempt}){
@@ -40,7 +38,7 @@ async function request(id,path='',body,signal){
 export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY',sheet,watchlist,onPortfolioChange}){
   const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[authorized,setAuthorized]=useState(false),[query,setQuery]=useState(initialHolding?.ticker||''),[matches,setMatches]=useState(null),[instrument,setInstrument]=useState(null),[side,setSide]=useState(initialSide),[type,setType]=useState('MARKET'),[quantity,setQuantity]=useState(''),[limit,setLimit]=useState(''),[validity,setValidity]=useState('DAY'),[review,setReview]=useState(null),[confirmed,setConfirmed]=useState(false),[result,setResult]=useState(null),[orders,setOrders]=useState(null),[checkedAttempt,setCheckedAttempt]=useState(null),[now,setNow]=useState(Date.now());
   const [linkedTicker,setLinkedTicker]=useState(initialHolding?.ticker||null),[searchError,setSearchError]=useState('');
-  const searchInput=useRef(null);
+  const searchInput=useRef(null),reviewButton=useRef(null),reviewSource=useRef(null);
   const {clockStamp,zoneLabel}=useDisplayTime(),id=account.id;
   const [recoveryToken,setRecoveryToken]=useState(()=>savedConfirmation(id)),[recoveryError,setRecoveryError]=useState(''),[recoveryAttempt,setRecoveryAttempt]=useState(null),[recoveryMissing,setRecoveryMissing]=useState(false),[recoveryChecked,setRecoveryChecked]=useState(false),[recoveryRefresh,setRecoveryRefresh]=useState(0);
   const orderBlocked=state?.blocked||!!recoveryToken;
@@ -168,9 +166,19 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
   async function run(fn){if(busy)return;setBusy(true);setError('');try{await fn();}catch(e){setError(e.message);}finally{setBusy(false);}}
   async function refresh(){setState(await request(id));}
   async function pending(){const data=await request(id,'/orders');acceptOrders(data);await refresh();}
-  async function prepare(body){if(orderBlocked||savedConfirmation(id))return;setResult(null);setConfirmed(false);setReview(await request(id,'/preview',body));}
+  async function checkSavedStatus(token){
+    const {attempt}=await request(id,'/attempt?'+new URLSearchParams({token}));
+    if(attempt?.token!==token)throw Error('The saved confirmation could not be verified.');
+    if(['ACCEPTED','REJECTED','REVIEWED','UNKNOWN'].includes(attempt.state))acceptResult(attempt);
+    await refresh();
+  }
+  async function prepare(body){if(orderBlocked||savedConfirmation(id))return;reviewSource.current=document.activeElement;setResult(null);setConfirmed(false);setReview(await request(id,'/preview',body));}
+  function returnToTicket(){
+    setReview(null);
+    requestAnimationFrame(()=>{const source=reviewSource.current; (source?.isConnected&&source!==document.body?source:reviewButton.current)?.focus();});
+  }
   async function submit(){
-    if(!review||orderBlocked||savedConfirmation(id))return;
+    if(!review||!confirmed||review.expiresAt<=Date.now()||orderBlocked||savedConfirmation(id))return;
     const token=review.token;submittedDraft.current={token,...currentDraft.current};rememberConfirmation(token);setRecoveryAttempt(review);setReview(null);
     try{const outcome=await request(id,'/submit',{token,confirmed:true});if(outcome.token!==token||!['ACCEPTED','REJECTED','REVIEWED','UNKNOWN'].includes(outcome.state))throw Error('Unverified confirmation response');acceptResult(outcome);if(outcome.state==='UNKNOWN')setState(current=>({...current,blocked:true}));clearConfirmation(token);}
     catch{setRecoveryError('The confirmation response was not received. Checking the saved result; this order will not be resent.');}
@@ -203,9 +211,13 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
   const listing=instrument&&portfolioListing({...instrument,instrumentCurrency:instrument.currency},watchlist);
   const displaySymbol=listing?.symbol||instrument?.shortName||ticker?.replace(/_US_EQ$/,'');
   const holdingPanel=<section className="pm-order-holding" aria-label="Current holding">
-          <div className="pm-section-heading"><h3>Current holding / cash</h3>{instrument&&<button type="button" className="text-button" disabled={busy||holding?.loading||position&&now-position.checkedAt<5000} onClick={()=>setHoldingRefresh(value=>value+1)}>Refresh holding</button>}</div>
+          <div className="pm-section-heading"><h3>Current holding / cash</h3>{instrument&&!holding?.error&&<button type="button" className="text-button" disabled={busy||holding?.loading||position&&now-position.checkedAt<5000} onClick={()=>setHoldingRefresh(value=>value+1)}>Refresh holding</button>}</div>
           {instrument?<div className="pm-holding-symbol"><strong>{displaySymbol}</strong> · {instrument.name}<span>{listing?.exchange||instrument.currency}</span></div>:<p>Select a stock to see its holding and available cash.</p>}
-          {holding?.error?<><p role="status">{holding.error} {holding.loading?'Retrying the holding check…':'The holding check will retry automatically.'} This does not change any order’s status.</p><details><summary>Refresh details</summary><small>{clockStamp(holding.failedAt)} {zoneLabel}{holding.status?` · HTTP ${holding.status}`:''}{holding.requestId?` · App request ${holding.requestId}`:''}{holding.ray?` · Gateway ${holding.ray}`:''}</small></details></>:instrument&&(holding?.loading||!holding)?<p role="status">Checking shares and value…</p>:null}
+          {holding?.error?<HoldingRecovery message={holding.error} observation={position?.checkedAt} retained={!!position}
+            retry={()=>setHoldingRefresh(value=>value+1)} disabled={busy||holding.loading} retryLabel="Refresh holding">
+            <p role="status">{holding.loading?'Retrying the holding check…':'The holding check will retry automatically.'} Broker order tracking continues independently.</p>
+            <details><summary>Refresh details</summary><small>{clockStamp(holding.failedAt)} {zoneLabel}{holding.status?` · HTTP ${holding.status}`:''}{holding.requestId?` · App request ${holding.requestId}`:''}{holding.ray?` · Gateway ${holding.ray}`:''}</small></details>
+          </HoldingRecovery>:instrument&&(holding?.loading||!holding)?<p role="status">Checking shares and value…</p>:null}
           {position&&<>
             <dl><div><dt>Current shares</dt><dd>{shares(position?.shares)}</dd></div><div><dt>Position value · {position?.currency}</dt><dd>{money(position?.value,position?.currency)}</dd></div><div><dt>{position?.priceQuote?.source==='Yahoo Finance'?'Latest market price':'Current price'} · {position?.instrumentCurrency}</dt><dd>{priceMoney(position?.price,position?.instrumentCurrency)}</dd></div><div><dt>Average purchase price</dt><dd>{priceMoney(position?.averagePrice,position?.instrumentCurrency)}</dd></div><div className="pm-holding-profit"><dt>Holding profit / loss · {position?.currency}</dt><dd className={tone(position?.unrealized)}>{money(position?.unrealized,position?.currency)} <small className={tone(position?.unrealized)}>{percent(position?.unrealizedPercent)}</small></dd></div><div><dt>Available to sell</dt><dd>{shares(position?.availableShares)} shares</dd></div><div><dt>Available cash · {position?.currency}</dt><dd>{money(position?.availableCash,position?.currency)}</dd></div>{estimate!==null&&Number.isFinite(position.availableCash)&&<div><dt>Estimated remaining cash</dt><dd>{money(position.availableCash+(side==='BUY'?-estimate:estimate),position.currency)}</dd></div>}</dl>
             {position?.priceQuote&&<p className="pm-history-state">{quoteNote(position.priceQuote)}</p>}{!priceFresh&&position?.price>0&&<p className="pm-history-state">Refresh the quote to update the market estimate.</p>}
@@ -214,19 +226,26 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
           </>}
         </section>;
   const receiptStatus=result?.order?.status;
-  const receiptHeading=result?.state==='UNKNOWN'?'Result uncertain':result?.state==='REJECTED'?'Order rejected':result?.state==='NOT_SENT'?'Order not submitted':result?.state==='REVIEWED'?'Confirmation checked':result?.action==='CANCEL'&&!finalStatuses.has(receiptStatus)?'Cancellation requested':receiptStatus==='FILLED'?'Order filled':receiptStatus==='PARTIALLY_FILLED'?'Order partially filled':receiptStatus==='CANCELLED'?'Order cancelled':receiptStatus==='REJECTED'?'Order rejected by broker':'Order accepted';
-  const receipt=result&&<section className={`pm-order-result ${result.state==='UNKNOWN'?'pm-alert':''}`} aria-label="Latest order status" role="status">
-    <strong>{receiptHeading}</strong>
-    {result.action==='ORDER'&&<p>{result.side} · {result.ticker} · {result.type} · {shares(result.quantity)} shares</p>}
-    {result.order&&<p className="pm-order-receipt-status">Order #{result.order.id??result.orderId} · <strong>{statusLabel(receiptStatus)||'Awaiting status'}</strong> · {shares(result.order.filledQuantity)} shares filled</p>}
-    <p>{result.message}</p>
-    {result.state==='ACCEPTED'&&result.action==='ORDER'&&<p>{finalStatuses.has(receiptStatus)?'This is the confirmed broker status.':receiptStatus==='PARTIALLY_FILLED'?'Part of this order has filled. The remaining quantity is still being tracked.':'The broker has accepted this order; it is waiting for execution. Its status updates here automatically.'} A holding or cash refresh warning does not mean this order failed.</p>}
+  const receiptHeading=result?.state==='UNKNOWN'?'Result uncertain':result?.state==='REJECTED'?(result.action==='CANCEL'?'Cancellation rejected':'Order rejected'):result?.state==='NOT_SENT'?'Order not submitted':result?.state==='REVIEWED'?'Confirmation checked':result?.action==='CANCEL'&&!finalStatuses.has(receiptStatus)?'Cancellation requested':receiptStatus==='FILLED'?'Order filled':receiptStatus==='PARTIALLY_FILLED'?'Order partially filled':receiptStatus==='CANCELLED'?'Order cancelled':receiptStatus==='REJECTED'?'Order rejected by broker':'Order accepted';
+  const receiptId=result?.order?.id??result?.orderId;
+  const receiptLabel=result?.state==='ACCEPTED'?(statusLabel(receiptStatus)||'Awaiting broker status'):
+    ({UNKNOWN:'Unknown',REJECTED:'Rejected',NOT_SENT:'Not submitted',REVIEWED:'Reviewed'}[result?.state]||'Unknown');
+  const updatedFinal=result?.state==='ACCEPTED'&&result.orderCheckedAt&&finalStatuses.has(receiptStatus);
+  const receiptMessage=result?.message||(result?.state==='UNKNOWN'?'Check the outcome in Trading 212 before submitting another order.':'');
+  const receipt=result&&<section className="pm-order-result broker-receipt" data-tone={statusTone(receiptLabel)} aria-label="Latest order status" role="status">
+    <header><h3>{receiptHeading}</h3>{receiptId!=null&&<span className="broker-order-id"><Receipt size={16}/>Order #{receiptId}</span>}</header>
+    <div className="broker-receipt-state"><BrokerStatus label={receiptLabel}/>
+      {result.state==='ACCEPTED'&&Number.isFinite(result.order?.filledQuantity)&&<span>{shares(result.order.filledQuantity)}{Number.isFinite(result.quantity??result.order.quantity)?` of ${shares(result.quantity??result.order.quantity)}`:''} shares filled</span>}</div>
+    {result.action==='ORDER'&&<p className="broker-receipt-instrument">{result.side} · {result.ticker} · {result.type} · {shares(result.quantity)} {result.quantity===1?'share':'shares'}</p>}
+    {receiptMessage&&!updatedFinal&&<p>{receiptMessage}</p>}
+    {result.state==='ACCEPTED'&&result.action==='ORDER'&&!finalStatuses.has(receiptStatus)&&<p>{receiptStatus==='PARTIALLY_FILLED'?'The remaining quantity is still being tracked.':'Tracking continues while the broker processes this order.'}</p>}
     {result.orderCheckedAt&&<small>Status checked {clockStamp(result.orderCheckedAt)} {zoneLabel}</small>}
+    {result.state==='UNKNOWN'&&result.token&&<button className="button outline" disabled={busy} onClick={()=>run(()=>checkSavedStatus(result.token))}>Check status</button>}
     <SellRejectionHelp attempt={result}/>
     {result.brokerCode==='insufficient-free-for-stocks-buy'&&<p>The broker could not fund this buy. Refresh the holding to check available cash and pending orders, then review a smaller quantity. Market execution prices can differ from the displayed price. This order has not been retried.</p>}
   </section>;
   return <section className="pm-trading" aria-label="Account trading">
-    {recoveryToken&&<section className="pm-alert pm-order-recovery" aria-label="Order confirmation status" role="status"><h3>Checking submitted order</h3><p>{recoveryError||'Waiting for the confirmation result. This order will not be resent.'}</p>{recoveryAttempt&&<p>{recoveryAttempt.action==='CANCEL'?`Cancellation · #${recoveryAttempt.orderId}`:`${recoveryAttempt.side} · ${recoveryAttempt.ticker} · ${recoveryAttempt.type} · ${shares(recoveryAttempt.quantity)} shares`}</p>}<p>New orders are paused until the result is known. This check continues after refreshing the page.</p><button className="button outline" disabled={busy} onClick={()=>setRecoveryRefresh(value=>value+1)}>Check saved result</button>{recoveryMissing&&<><label className="pm-check"><input type="checkbox" checked={recoveryChecked} onChange={e=>setRecoveryChecked(e.target.checked)}/>I checked this confirmation in Trading 212, including pending orders and trade history.</label><button className="button outline" disabled={!recoveryChecked||busy} onClick={()=>run(async()=>{await refresh();clearConfirmation(recoveryToken);setResult({state:'REVIEWED',message:'Marked checked in Trading 212. No order was resent.'});})}>Clear checked confirmation</button></>}</section>}
+    {recoveryToken&&<section className="pm-alert pm-order-recovery" aria-label="Order confirmation status" role="status"><h3><WarningCircle size={21}/>Checking submitted order</h3><p>{recoveryError||'Waiting for the confirmation result. This order will not be resent.'}</p>{recoveryAttempt&&<p>{recoveryAttempt.action==='CANCEL'?`Cancellation · #${recoveryAttempt.orderId}`:`${recoveryAttempt.side} · ${recoveryAttempt.ticker} · ${recoveryAttempt.type} · ${shares(recoveryAttempt.quantity)} shares`}</p>}<p>New orders are paused until the result is known. This check continues after refreshing the page.</p><button className="button outline" disabled={busy} onClick={()=>setRecoveryRefresh(value=>value+1)}>Check saved result</button>{recoveryMissing&&<><label className="pm-check"><input type="checkbox" checked={recoveryChecked} onChange={e=>setRecoveryChecked(e.target.checked)}/>I checked this confirmation in Trading 212, including pending orders and trade history.</label><button className="button outline" disabled={!recoveryChecked||busy} onClick={()=>run(async()=>{await refresh();clearConfirmation(recoveryToken);setResult({state:'REVIEWED',message:'Marked checked in Trading 212. No order was resent.'});})}>Clear checked confirmation</button></>}</section>}
     {error&&<p className="pm-alert" role="alert">{error}</p>}
     {!state?<p role="status">Loading trading settings…</p>:!account.connected?<p>Reconnect this account to trade.</p>:!state.enabled?<div className="pm-trading-enable">
       <h3>Trading is disabled for this account</h3><p>The account owner must enable Metadata, Orders: Read and Orders: Execute on their Trading 212 API key. Update the connection if the key or secret changes.</p>
@@ -240,16 +259,9 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
       </div>
       {state.blocked&&<p className="pm-alert" role="status">An earlier order has an uncertain result. Check Trading 212 and mark that attempt reviewed below before submitting another order.</p>}
       {receipt}
-      {review?<div className="pm-order-review" aria-label="Order review">
-        <h3>{review.action==='CANCEL'?'Review cancellation':`Review ${review.side.toLowerCase()} order`}</h3>
-        <dl><div><dt>Account</dt><dd>{owner} · {account.label} · {review.environment.toUpperCase()} · {review.brokerId}</dd></div>{review.action==='CANCEL'?<><div><dt>Order</dt><dd>#{review.orderId} · {review.order.side} · {review.order.ticker}</dd></div><div><dt>Shares</dt><dd>{review.order.quantity??'Value order'}</dd></div></>:<><div><dt>Stock / ETF</dt><dd>{review.name} · {review.ticker}</dd></div><div><dt>Order</dt><dd>{review.side} · {review.quantity} shares · {review.type}</dd></div><div><dt>Trading session</dt><dd>{review.type==='LIMIT'?'Set by broker · not selectable here':sessionLabel(review)}</dd></div><div><dt>{review.type==='LIMIT'?'Limit price':'Market reference price'}</dt><dd>{priceMoney(review.referencePrice,review.currency)}</dd></div><div><dt>Account order limit</dt><dd>{review.maxOrderValue!=null?money(review.maxOrderValue,review.currency):'No limit set'}</dd></div><div><dt>Estimated value, before additional charges</dt><dd>{money(review.estimate,review.currency)}</dd></div><div><dt>Shares · before → after full fill</dt><dd>{shares(review.currentShares)} → {shares(review.remainingShares)}</dd></div><div><dt>Available cash · before → estimated after</dt><dd>{money(review.availableCash,review.currency)} → {money(review.remainingCash,review.currency)}</dd></div>{review.requestedCashAmount!==null&&review.requestedCashAmount!==undefined&&<div><dt>Requested amount</dt><dd>{money(review.requestedCashAmount,review.currency)} · converted to the fixed share quantity above</dd></div>}{review.side==='SELL'&&<div><dt>Estimated sale profit / loss</dt><dd className={tone(review.estimatedProfit)}>{money(review.estimatedProfit,review.currency)} ({percent(review.estimatedProfitPercent)})</dd></div>}{review.side==='SELL'&&<div><dt>Available shares</dt><dd>{review.availableShares}</dd></div>}{review.type==='LIMIT'&&<div><dt>Duration</dt><dd>{review.timeValidity==='DAY'?'Day':'Good until cancelled'}</dd></div>}</>}</dl>
-        {review.sellAll&&<p className="pm-cash-conversion pm-sell-all" role="status">Sell all available shares: {review.quantity}. No rounding. Confirming sends this exact quantity to Trading 212.</p>}
-        {review.requestedQuantity!=null&&<p className="pm-cash-conversion" role="status">Rounded down from {review.requestedQuantity} to {review.quantity} shares ({review.quantityPrecision} decimal places). Confirming sends only the adjusted quantity.</p>}
-        {review.marketCashLimit!=null&&<p className="pm-market-budget">Available cash: {money(review.availableCash,review.currency)}. The reviewed shares are fixed; the final cost depends on execution prices and charges.</p>}
-        {review.priceQuote&&<p className="pm-history-state">{quoteNote(review.priceQuote)}</p>}{review.action!=='CANCEL'&&<small>After values assume a full fill at the reference price, before fees and taxes. Sale profit uses the holding’s average cost; the broker’s final result can differ.</small>}<p>{review.action==='CANCEL'?'Cancellation may arrive after a fill. Check the final broker status.':review.type==='MARKET'?(review.extendedHours?'This order permits pre-market, after-hours and overnight execution where the broker supports it. Thin liquidity can delay execution or change the fill price.':'This order permits regular-session execution only and waits when that session is closed.')+' The final execution price can differ from the reference price.':'A limit order may remain pending or fill partially. This API does not let us select its trading session. Use Trading 212 directly to choose 24/5 for a limit order.'}</p>
-        <label className="pm-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I confirm this {review.environment==='demo'?'demo':'real-money'} {review.action==='CANCEL'?'cancellation':review.side.toLowerCase()+' order'} for the account shown above.</label>
-        <div className="pm-actions"><button className="button primary" disabled={!confirmed||busy||seconds===0||orderBlocked} onClick={()=>run(submit)}>{review.action==='CANCEL'?'Confirm cancellation':`Confirm ${review.environment==='demo'?'demo':'live'} ${review.side.toLowerCase()}`}</button><button className="button outline" disabled={busy} onClick={()=>setReview(null)}>Back</button><small>{seconds?`Review expires in ${seconds}s`:'Review expired. Go back and review again.'}</small></div>
-      </div>:<form className="pm-order-form" onSubmit={e=>{e.preventDefault();if(!fresh||exceedsMarketBudget||orderBlocked||sellBlocked||!sizedQuantity)return;run(()=>prepare({side,type,...(type==='MARKET'?{extendedHours}:{}),ticker:instrument?.ticker,...(sizeMode==='cash'?{cashAmount:Number(cashAmount)}:{quantity:Number(quantity),...(side==='SELL'?{sellAll}:{})}),limitPrice:Number(limit),timeValidity:validity}));}}><div className="pm-ticket-entry">
+      {review?<OrderReview key={review.token} review={review} owner={owner} accountLabel={account.label} listing={review.action!=='CANCEL'&&review.ticker===ticker?listing:null}
+        confirmed={confirmed} onConfirmChange={setConfirmed} seconds={seconds} busy={busy} blocked={orderBlocked}
+        onBack={returnToTicket} onSubmit={()=>run(submit)} quoteNote={quoteNote}/>:<form className="pm-order-form" onSubmit={e=>{e.preventDefault();if(!fresh||exceedsMarketBudget||orderBlocked||sellBlocked||!sizedQuantity)return;run(()=>prepare({side,type,...(type==='MARKET'?{extendedHours}:{}),ticker:instrument?.ticker,...(sizeMode==='cash'?{cashAmount:Number(cashAmount)}:{quantity:Number(quantity),...(side==='SELL'?{sellAll}:{})}),limitPrice:Number(limit),timeValidity:validity}));}}><div className="pm-ticket-entry">
         <h3>Trade ticket</h3>
         <div className="pm-ticket-row"><label htmlFor="pm-stock-search">Instrument</label><div>
           {instrument?<button id="pm-stock-search" className="pm-selected-instrument" aria-label="Change instrument" type="button" onClick={()=>{changeQuery('');requestAnimationFrame(()=>searchInput.current?.focus());}}>
@@ -289,12 +301,12 @@ export function PortfolioTrading({account,owner,initialHolding,initialSide='BUY'
           <p className="pm-order-estimate">Estimated order value <strong>{money(estimate,position?.currency)}</strong></p>
         </div>}
         <p className="pm-ticket-note">Review fixes the share quantity. The final cash amount can change.</p>
-        <button className="button primary" disabled={busy||!instrument||!fresh||orderBlocked||!sizedQuantity||exceedsMarketBudget||sellBlocked} type="submit">{busy?'Checking broker…':`Review ${side.toLowerCase()} order`}</button>
+        <button ref={reviewButton} className="button primary" disabled={busy||!instrument||!fresh||orderBlocked||!sizedQuantity||exceedsMarketBudget||sellBlocked} type="submit">{busy?'Checking broker…':`Review ${side.toLowerCase()} order`}</button>
       </div>{holdingPanel}</form>}
       <PortfolioOrderList orders={orders} error={trackingError||orders?.error||orders?.historyError||orders?.balanceError||orders?.activityError} busy={busy} blocked={orderBlocked}
         refresh={()=>run(pending)} cancel={orderId=>run(()=>prepare({action:'CANCEL',orderId}))}/>
     </>}
-    {state?.attempts.length>0&&<details className="pm-trade-attempts" open={state.blocked}><summary>Recent order attempts</summary>{state.attempts.map(attempt=><div key={attempt.token}><strong>{attempt.action==='CANCEL'?'CANCEL #'+attempt.orderId:attempt.side+' '+attempt.quantity+' '+attempt.ticker} · {attempt.state}</strong><p>{attempt.message}</p><SellRejectionHelp attempt={attempt}/>{attempt.action==='ORDER'&&attempt.type==='MARKET'&&<small>Requested: {sessionLabel(attempt)}</small>}<small>{clockStamp(attempt.createdAt)} {zoneLabel} · {attempt.environment?.toUpperCase()} · account {attempt.brokerId}</small>{attempt.state==='UNKNOWN'&&<><label className="pm-check"><input type="checkbox" disabled={busy} checked={checkedAttempt===attempt.token} onChange={e=>setCheckedAttempt(e.target.checked?attempt.token:null)}/>I checked this attempt’s outcome in Trading 212, including pending orders and trade history.</label><button className="button outline" disabled={busy||checkedAttempt!==attempt.token} onClick={()=>run(async()=>{setState(await request(id,'/acknowledge',{token:attempt.token,checkedBroker:true}));setCheckedAttempt(null);})}>Mark reviewed</button></>}</div>)}</details>}
+    {state?.attempts.length>0&&<details className="pm-trade-attempts" open={state.blocked}><summary>Recent order attempts</summary>{state.attempts.map(attempt=><div key={attempt.token}><strong>{attempt.action==='CANCEL'?'CANCEL #'+attempt.orderId:attempt.side+' '+attempt.quantity+' '+attempt.ticker} · {attempt.state}</strong><p>{attempt.message}</p><SellRejectionHelp attempt={attempt}/>{attempt.action==='ORDER'&&attempt.type==='MARKET'&&<small>Requested: {sessionLabel(attempt)}</small>}<small>{clockStamp(attempt.createdAt)} {zoneLabel} · {attempt.environment?.toUpperCase()} · account {attempt.brokerId}</small>{attempt.state==='UNKNOWN'&&<>{result?.token!==attempt.token&&<button className="button outline" disabled={busy} onClick={()=>run(()=>checkSavedStatus(attempt.token))}>Check status</button>}<label className="pm-check"><input type="checkbox" disabled={busy} checked={checkedAttempt===attempt.token} onChange={e=>setCheckedAttempt(e.target.checked?attempt.token:null)}/>I checked this attempt’s outcome in Trading 212, including pending orders and trade history.</label><button className="button outline" disabled={busy||checkedAttempt!==attempt.token} onClick={()=>run(async()=>{const updated=await request(id,'/acknowledge',{token:attempt.token,checkedBroker:true});setState(updated);const checked=updated.attempts.find(item=>item.token===attempt.token);if(checked&&result?.token===attempt.token)setResult(checked);setCheckedAttempt(null);})}>Mark reviewed</button></>}</div>)}</details>}
   </section>;
 }
 
@@ -335,7 +347,7 @@ function PortfolioOrderList({orders,error,busy,blocked,refresh,cancel}){
             <td>{order.type}<small>{sessionLabel(order)}</small></td>
             <td>{order.quantity!=null?shares(order.quantity)+' shares':money(order.value,order.currency)}</td>
             <td>{money(order.limitPrice,order.priceCurrency||order.currency)}</td>
-            <td><span className="pm-order-status" data-status={status}>{status}</span><small>{shares(order.filledQuantity)} shares filled</small>{order.awaitingHistory&&<small>Waiting for broker history</small>}</td>
+            <td><BrokerStatus label={status}/><small>{shares(order.filledQuantity)} shares filled</small>{order.awaitingHistory&&<small>Waiting for broker history</small>}</td>
             <td>{!order.awaitingHistory&&!['CANCELLING','FILLED','CANCELLED','REJECTED','REPLACED'].includes(order.status)&&<button type="button" className="text-button" disabled={busy||blocked} onClick={()=>cancel(order.id)}>Review cancellation</button>}</td>
           </tr>;
         })}</tbody></table>

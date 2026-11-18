@@ -4,6 +4,7 @@ import {apiFetch} from './auth-client';
 import {useDisplayTime} from './DisplayTime';
 import {PORTFOLIO_RANGES} from './data/portfolio-history.mjs';
 import {usePortfolioPrivacy} from './PortfolioPrivacy';
+import {HistoryProgress} from './PortfolioRecovery';
 import {PortfolioValueChart} from './PortfolioValueChart';
 
 const percent=v=>Number.isFinite(v)?`${v>0?'+':''}${v.toFixed(2)}%`:'—';
@@ -74,9 +75,7 @@ export function PortfolioHistory({account,watchlist=[],children}){
     {!hideBalances&&r?.estimated&&<p className="pm-history-state" role="status">Estimated return · Uses a reconstructed balance at {clockStamp(r.baselineAt)} {zoneLabel}.</p>}
     {children}
     {account.connected&&!hideBalances&&<details className="pm-history-explainer pm-older-history" open={historyOpen} onToggle={event=>{if(event.target===event.currentTarget)setHistoryOpen(event.currentTarget.open);}}><summary><DownloadSimple size={17}/><strong>Older account history</strong>{rebuildState?.pages>0&&<small>{rebuildState.pages} pages saved</small>}{rebuildState?.status==='ready'&&<small className="pm-status green">Available</small>}<span>Details <CaretDown size={14}/></span></summary>
-      <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
-      <p>Uses historical daily stock prices from Yahoo Finance. Supports matching account and stock currencies, verified listings, ordinary trades and paired stock splits verified against the price history. Transfers, other corporate actions or missing prices may prevent a reliable rebuild.</p>
-      {rebuildState?.pages>0&&<p role="status">{rebuildState.pages} pages saved{Number.isFinite(rebuildState.records)?` · ${rebuildState.records} records`:''} · {rebuildState.priced}{rebuildState.instruments?` of ${rebuildState.instruments}`:''} instruments priced. Progress is saved on the server and survives refreshes.</p>}
+      <HistoryProgress state={rebuildState}>
       {rebuildState?.status==='loading'?<p role="status">{rebuildState.historyComplete?(rebuildState.stage==='listings'?'Matching historical instruments with Trading 212…':'Transactions saved · checking balances and collecting daily prices. The older chart is still being built.'):'Reading older history…'} {rebuildState.historyComplete?'Prices continue automatically as each batch finishes. Keep this page open; completed prices are saved.':'Keep this page open; broker history continues each minute.'}</p>:<>
         {rebuildState?.status==='paused'&&<p role="status">Import paused. Saved pages will be reused. {rebuildState.retryAt?`Automatic retry after ${clockStamp(rebuildState.retryAt)} ${zoneLabel} while this page is open.`:'It resumes automatically while this page is open.'}</p>}
         {['blocked','unavailable'].includes(rebuildState?.status)&&rebuildState?.canResume&&<p role="status">{rebuildState.historyComplete?(rebuildState.stage==='prices'?'Transactions saved; older chart not ready.':'History import complete. The chart needs additional information before it can be calculated.'):'History import stopped at the next unread page.'} Saved history is retained; retrying will reuse it.</p>}
@@ -84,9 +83,14 @@ export function PortfolioHistory({account,watchlist=[],children}){
       </>}
       {data?.rebuild?.message&&<p role="status">{data.rebuild.message}</p>}
       {rebuildState?.listingMessage&&<p role="status">{rebuildState.listingMessage}</p>}
+      </HistoryProgress>
       {rebuildState?.listingChecks?.length>0&&<details open={rebuildState.listingChecks.some(i=>['unmatched','unavailable'].includes(i.status))} className="pm-listing-checks"><summary>Historical instruments · {rebuildState.priced} / {rebuildState.instruments} ready</summary>
         <ul>{[...rebuildState.listingChecks].sort((a,b)=>listingPriority(a.status)-listingPriority(b.status)).map(i=><li key={i.ticker}><strong>{i.name}</strong> · {i.ticker} · {i.currency}<br/>{i.status==='saved'?`Prices saved · ${i.listing||'verified listing'}`:i.status==='pending'?`Waiting for prices · ${i.listing}`:i.status==='unavailable'?`${i.listing} · ${i.message}`:'No exact listing verified. Automatic matching needs the same instrument, currency and exchange; a similar fund is not substituted.'}</li>)}</ul>
       </details>}
+      <details className="broker-history-method"><summary>Reconstruction method and coverage</summary>
+      <p>Rebuild estimated daily balances from this account’s full trade, cash and dividend history. Purchases, sales and cash must reconcile with the current account before the chart is added. Your API key needs History: Orders, History: Transactions and History: Dividends read permissions.</p>
+      <p>Uses historical daily stock prices from Yahoo Finance. Supports matching account and stock currencies, verified listings, ordinary trades and paired stock splits verified against the price history. Transfers, other corporate actions or missing prices may prevent a reliable rebuild.</p>
+      </details>
       {data?.rebuild?.status==='ready'&&<p>Reconstructed history is available. Estimated points are identified on the chart.</p>}
     </details>}
     <details className="pm-history-explainer"><summary>Return details</summary>

@@ -52,7 +52,7 @@ try{
     if(type==='MARKET'){await page.getByRole('button',{name:'Cash amount',exact:true}).click();await page.getByLabel('Order cash amount').fill('200');}
     else{await page.getByLabel('Order limit price').fill('100');await page.getByLabel('Order shares').fill('2');}
     await page.getByRole('button',{name:/^Review (buy|sell) order$/}).click();await page.getByRole('checkbox',{name:/I confirm this demo buy/}).check();await page.getByRole('button',{name:'Confirm demo buy'}).click();
-    await expect(result).toContainText('Order accepted');await expect(result).toContainText('Order #76 · Pending');await expect(result).toContainText('waiting for execution');
+    await expect(result).toContainText('Order accepted');await expect(result.locator('.broker-order-id')).toHaveText('Order #76');await expect(result.locator('.broker-status')).toHaveText('Pending');await expect(result).toContainText('Tracking continues');
     await expect(type==='MARKET'?page.getByLabel('Order cash amount'):page.getByLabel('Order shares')).toHaveValue('');
     await expect(holding).toContainText('HTTP 502');await expect(holding).toContainText('$1,000.00');await expect(holding).toContainText('Last confirmed holding');await expect(holding).toContainText('For reference only');
     await expect(page.getByRole('button',{name:'100%',exact:true})).toBeDisabled();
@@ -63,15 +63,15 @@ try{
     mark(`${type}: acceptance is prominent, submitted size clears, and failed holdings retain reference values without enabling another review`);
 
     const poll=async()=>{const before=orderReads;await expect.poll(async()=>{await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));return orderReads;}).toBeGreaterThan(before);};
-    includeMatching=false;await poll();await expect(result).toContainText('Order #76 · Pending');await expect(result).not.toContainText('#900');
+    includeMatching=false;await poll();await expect(result.locator('.broker-order-id')).toHaveText('Order #76');await expect(result.locator('.broker-status')).toHaveText('Pending');await expect(result).not.toContainText('#900');
     includeMatching=true;trackedStatus='FILLED';
-    for(const mismatch of [{ticker:'MSFT_US_EQ'},{side:'SELL'},{type:type==='LIMIT'?'MARKET':'LIMIT'},{quantity:3}]){matchingOverride=mismatch;await poll();await expect(result).toContainText('Order #76 · Pending');}
+    for(const mismatch of [{ticker:'MSFT_US_EQ'},{side:'SELL'},{type:type==='LIMIT'?'MARKET':'LIMIT'},{quantity:3}]){matchingOverride=mismatch;await poll();await expect(result.locator('.broker-order-id')).toHaveText('Order #76');await expect(result.locator('.broker-status')).toHaveText('Pending');}
     matchingOverride={};activityError='Order status is saved; activity updates are waiting to catch up.';
-    includeMatching=true;trackedStatus='PARTIALLY_FILLED';await poll();await expect(result).toContainText('Order partially filled');await expect(result).toContainText('1 shares filled');await expect(result).toContainText('remaining quantity');
+    includeMatching=true;trackedStatus='PARTIALLY_FILLED';await poll();await expect(result).toContainText('Order partially filled');await expect(result).toContainText('1 of 2 shares filled');await expect(result).toContainText('remaining quantity');
     await expect(page.getByText(activityError,{exact:true})).toBeVisible();activityError=null;
     ordersFail=true;await poll();await expect(page.getByText('Order status refresh unavailable',{exact:true})).toBeVisible();await expect(result).toContainText('Order partially filled');
-    ordersFail=false;trackedStatus='FILLED';await poll();await expect(result).toContainText('Order filled');await expect(result).toContainText('2 shares filled');
-    trackedStatus='NEW';await poll();await expect(result).toContainText('Order filled');await expect(result).toContainText('2 shares filled');expect(posts).toBe(1);expect(holdingReads).toBeGreaterThan(1);
+    ordersFail=false;trackedStatus='FILLED';await poll();await expect(result).toContainText('Order filled');await expect(result).toContainText('2 of 2 shares filled');
+    trackedStatus='NEW';await poll();await expect(result).toContainText('Order filled');await expect(result).toContainText('2 of 2 shares filled');expect(posts).toBe(1);expect(holdingReads).toBeGreaterThan(1);
     trackedStatus='CANCELLED';await poll();await expect(result).toContainText('Order filled');
     mark(`${type}: matching order updates through partial and full fills while holdings fail; unrelated IDs, stale pending snapshots and status-read failures cannot overwrite the confirmed receipt`);
     for(const width of [320,1488]){await page.setViewportSize({width,height:1100});expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await result.screenshot({path:`${dir}/${type.toLowerCase()}-receipt-${width}.png`});}

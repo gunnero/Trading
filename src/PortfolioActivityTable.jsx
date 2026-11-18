@@ -3,6 +3,7 @@ import {CaretDown,CaretRight} from '@phosphor-icons/react';
 import {useDisplayTime} from './DisplayTime';
 import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {portfolioListing} from './data/portfolio-listings.mjs';
+import {BrokerStatus} from './BrokerOrderStatus';
 import {orderStatusLabel} from './data/portfolio-activity.mjs';
 
 export function ActivityAccount({item}){
@@ -50,7 +51,7 @@ export default function PortfolioActivityTable({kind,items,watchlist}){
           <><td data-label="Filled / ordered">{privacy.number(item.filledQuantity)} / {privacy.number(item.quantity)}
               {item.quantity==null&&Number.isFinite(item.value)&&<small>Value order · {amount(item.value,item.currency)}</small>}</td>
             <td data-label="Limit price">{amount(item.limitPrice,item.priceCurrency||item.currency)}</td>
-            <td data-label="Status"><span className={item.status==='FILLED'?'green':item.status==='PARTIALLY_FILLED'?'amber':item.status==='REJECTED'?'red':''}>{orderStatusLabel(item.status)}</span>{item.awaitingHistory&&<small>Awaiting broker confirmation</small>}</td></>}
+            <td data-label="Status"><BrokerStatus label={orderStatusLabel(item.status)}/>{item.awaitingHistory&&<small>Awaiting broker confirmation</small>}</td></>}
       </tr>{open&&<tr className="pa-detail" id={detailId}><td colSpan={headers.length}><dl>
         <div><dt>Broker order reference</dt><dd>{(trades?item.orderId:item.id)??'—'}</dd>
           {trades&&<small>Execution {item.id}</small>}</div>

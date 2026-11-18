@@ -1,0 +1,76 @@
+/* A single visual language for real broker states in the ticket and activity views. */
+.broker-status,.broker-order-id,.broker-account-strip span,.broker-receipt-state { display:inline-flex; align-items:center; gap:7px; }
+:is(.broker-status,.broker-receipt)[data-tone="pending"] { --broker-ink:var(--amber); --broker-fill:var(--warning-tint); }
+:is(.broker-status,.broker-receipt)[data-tone="partial"] { --broker-ink:var(--primary); --broker-fill:var(--selection); }
+:is(.broker-status,.broker-receipt)[data-tone="filled"] { --broker-ink:var(--green); --broker-fill:var(--positive-tint); }
+:is(.broker-status,.broker-receipt)[data-tone="rejected"] { --broker-ink:var(--red); --broker-fill:var(--negative-tint); }
+:is(.broker-status,.broker-receipt)[data-tone="neutral"] { --broker-ink:var(--muted); --broker-fill:var(--panel-hover); }
+.broker-status { width:fit-content; max-width:100%; border-radius:5px; padding:3px 8px; background:var(--broker-fill); color:var(--broker-ink); font-size:13px; line-height:1.35; font-weight:650; vertical-align:middle; }
+.broker-status svg,.broker-review svg,.broker-recovery header>svg { flex:none; }
+.pm-trading .broker-review,.broker-recovery,.pm-trading .broker-receipt {
+  min-width:0; background:var(--panel); border:1px solid var(--border); border-radius:9px;
+  padding:clamp(14px,2vw,22px); color:var(--text); overflow-wrap:anywhere;
+}
+.pm-trading .broker-review { display:grid; gap:12px; }
+.broker-review header h3,.broker-receipt header h3,.broker-recovery header h3 { margin:0; color:var(--text); font-size:20px; line-height:1.25; letter-spacing:-.45px; }
+.pm-trading .broker-review header p,.broker-recovery header p,.broker-receipt p { margin:4px 0 0; font-size:13px; line-height:1.45; color:var(--muted); }
+.broker-account-strip { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; padding:9px 12px; background:var(--selection); border-radius:5px; font-size:13px; }
+.broker-account-strip span { min-width:0; overflow-wrap:anywhere; }
+.broker-account-strip span+span { border-inline-start:1px solid var(--border); padding-inline-start:12px; }
+.broker-account-strip svg { width:16px; height:16px; }
+.broker-review-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start; }
+.broker-review-ticket,.broker-review-estimates { min-width:0; padding:12px; border:1px solid var(--border); border-radius:7px; }
+.broker-review-estimates h4 { margin:0 0 8px; font-size:15px; }
+.broker-review-estimates>small { display:block; margin-top:8px; }
+.broker-instrument { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+.broker-instrument>div { min-width:0; }
+.broker-instrument>b { flex:none; white-space:nowrap; font-size:17px; border-radius:5px; padding:5px 10px; }
+.broker-instrument>b.buy { color:var(--green); background:var(--positive-tint); }
+.broker-instrument>b.sell { color:var(--red); background:var(--negative-tint); }
+.broker-instrument strong,.broker-instrument small { display:block; }
+.broker-instrument strong { font-size:19px; line-height:1.15; }
+.pm-trade-page .broker-review dl.broker-facts,.broker-recovery dl.broker-facts { display:block; margin:0; padding:0; }
+.broker-facts>div,.pm-order-holding .broker-recovery dl.broker-facts>div {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:baseline; gap:10px;
+  padding:7px 0; border:0; border-top:1px solid var(--border);
+}
+.broker-facts dt { font-size:13px; color:var(--muted); }
+.broker-review .broker-facts dd,.broker-recovery .broker-facts dd { margin:0; text-align:end; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.broker-review-warning { padding:8px 10px; display:flex; gap:9px; align-items:flex-start; background:var(--warning-tint); border-radius:5px; color:var(--amber); }
+.pm-trading .broker-review-warning p { margin:0; color:var(--text); }
+.broker-review-actions { display:flex; gap:9px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:12px; }
+.broker-review-actions small { flex:1 1 auto; }
+.broker-review-actions button,.broker-recovery button { min-height:38px; justify-content:center; }
+.broker-review>.pm-check { display:flex; gap:8px; align-items:baseline; }
+.broker-review>.pm-check input { flex:none; }
+.broker-connection,.broker-listing,.broker-receipt { width:min(100%,660px); }
+.broker-cancel { width:min(100%,600px); }
+.broker-cancel .broker-review-columns { grid-template-columns:minmax(0,1fr); }
+.pm-trading .broker-receipt { display:grid; gap:7px; border-inline-start:4px solid var(--broker-ink); }
+.broker-receipt header { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; }
+.broker-receipt header h3 { font-size:18px; }
+.broker-order-id { padding:3px 8px; border-radius:4px; background:var(--selection); font-size:13px; }
+.broker-receipt-state { flex-wrap:wrap; gap:6px 10px; color:var(--text); padding:8px 10px; border-radius:5px; background:var(--broker-fill); font-size:13px; }
+.broker-receipt-state .broker-status { padding:0; }
+.broker-receipt>button { justify-self:start; }
+.pm-trading .broker-receipt p,.pm-trading .broker-receipt small { margin:0; }
+.pm-order-recovery h3,.broker-recovery header { display:flex; gap:9px; align-items:flex-start; }
+.broker-recovery { display:grid; gap:9px; }
+.broker-recovery header h3 { font-size:17px; }
+.broker-recovery header>svg { color:var(--primary); }
+.broker-connection header>svg { color:var(--red); }
+.broker-listing header>svg { color:var(--amber); }
+.broker-recovery button { justify-self:start; }
+.broker-recovery>p,.broker-recovery>small { margin:0; color:var(--muted); font-size:13px; line-height:1.45; }
+.broker-history-progress,.broker-listing { margin:14px 0; }
+.broker-history-progress { max-width:580px; }
+.broker-pricing-progress { display:flex; align-items:center; gap:10px; font:inherit; color:var(--text); }
+.broker-pricing-progress progress { min-width:0; height:9px; flex:1; accent-color:var(--primary); }
+.broker-listing label { display:grid; gap:5px; width:min(100%,430px); font-size:13px; }
+.broker-listing select { min-height:38px; width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:5px; background:var(--surface); color:var(--text); }
+@media(max-width:760px){.broker-review-columns { grid-template-columns:minmax(0,1fr); }}
+@media(max-width:520px){
+  .broker-review-actions small { flex-basis:100%; }
+  .broker-review-actions button { flex:1 1 auto; min-height:44px; }
+  .broker-recovery button,.broker-listing select { min-height:44px; }
+}
