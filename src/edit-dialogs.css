@@ -1,0 +1,98 @@
+.modal.edit-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-width: calc(100vw - 20px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  overflow: auto;
+}
+.modal.edit-dialog.import-dialog { width: min(640px, calc(100vw - 32px)); }
+.modal.edit-dialog.plan-edit-dialog { width: min(525px, calc(100vw - 32px)); }
+.edit-dialog > .modal-inner { padding: 22px; }
+.edit-dialog .modal-header {
+  position: static; display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0 18px; padding: 0; border: 0; background: transparent;
+}
+.edit-dialog .modal-header h2 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.5px; }
+.edit-dialog .modal-header .icon-button { flex: none; width: 34px; height: 34px; }
+.edit-fields { display: grid; gap: 12px; min-width: 0; }
+.edit-field { display: grid; gap: 5px; min-width: 0; font-size: 13px; font-weight: 600; }
+.edit-field input, .edit-field select, .edit-field textarea {
+  width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+  font: inherit; font-size: 14px; font-weight: 400;
+}
+.edit-field textarea { resize: vertical; }
+.edit-field input:focus, .edit-field select:focus, .edit-field textarea:focus,
+.import-source-actions .file-picker:focus-within { outline: 2px solid var(--primary); outline-offset: 1px; }
+.edit-pair, .plan-observation { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.edit-dialog p.edit-help, .edit-dialog p.edit-info { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.edit-info, .edit-error, .import-status, .import-duplicates p, .drawings-cleared span {
+  display: flex; align-items: flex-start; gap: 7px;
+}
+.edit-info svg, .edit-error svg, .import-status svg, .import-duplicates svg, .drawings-cleared svg { flex: none; align-self: center; }
+.edit-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.edit-footer .button { min-height: 40px; justify-content: center; }
+.edit-person { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: end; }
+.edit-person > button { min-height: 40px; }
+.plan-observation { margin: 0; }
+.plan-observation dt { font-size: 13px; font-weight: 600; }
+.plan-observation dd { margin: 5px 0 2px; padding: 8px 10px; border-radius: 5px; background: var(--selection); font-size: 17px; font-weight: 700; }
+.plan-observation dd span { font-size: 13px; }
+.plan-observation small, .plan-zone p, .plan-zone span { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.plan-zone { border-left: 2px solid var(--accent-border); padding-left: 9px; font-size: 13px; }
+.plan-zone p { margin: 2px 0 0; }
+.import-source-actions, .import-file, .import-paging { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.import-source-actions { justify-content: space-between; }
+.import-file { border: 1px solid var(--border); padding: 5px 8px 5px 12px; border-radius: 5px; flex-wrap: nowrap; }
+.import-file strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.import-file > svg { flex: none; color: var(--primary); }
+.import-preview { min-width: 0; }
+.import-preview h3 { margin: 0 0 8px; font-size: 15px; }
+.import-preview h3 small { font: inherit; color: var(--muted); }
+.import-table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; }
+.import-table { border-collapse: collapse; width: 100%; font-size: 13px; color: var(--text); }
+.import-table :is(th,td) { padding: 6px 9px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.import-table thead { background: var(--selection); }
+.import-table tbody tr:last-child > * { border-bottom: 0; }
+.import-table .duplicate-row { background: var(--negative-tint); }
+.import-table .duplicate-row td:last-child, .edit-error { color: var(--red); }
+.import-table .zone-type { display: inline-block; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.import-table .type-D { color: var(--green); background: var(--positive-tint); }
+.import-table .type-S { color: var(--red); background: var(--negative-tint); }
+.import-table .type-G { color: var(--amber); background: var(--warning-tint); }
+.import-paging { justify-content: flex-end; font-size: 12px; color: var(--muted); }
+.import-paging button { padding: 6px 3px; color: var(--primary); }
+.import-status, .import-duplicates p, .edit-error { margin: 10px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.import-status svg, .drawings-cleared svg { color: var(--green); }
+.import-duplicates svg { color: var(--red); }
+.import-duplicates button { margin-top: 5px; }
+.import-carried { margin-top: 8px; font-size: 13px; }
+.import-carried summary { cursor: pointer; }
+.import-carried ul { margin: 6px 0; padding: 0; list-style: none; }
+.import-carried li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.confirmation-body { text-align: center; padding: 8px 0 16px; }
+.confirmation-icon { display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 12px; border-radius: 50%; background: var(--selection); color: var(--primary); }
+.confirmation-icon.warning { background: var(--warning-tint); color: var(--amber); }
+.confirmation-body h3 { margin: 0 0 6px; font-size: 20px; overflow-wrap: anywhere; }
+.confirmation-body p { margin: 0 auto; max-width: 36ch; font-size: 14px; line-height: 1.5; }
+.edit-footer .clear-confirm { background: #b12746; color: white; border: 1px solid #b12746; }
+.edit-footer .clear-confirm:hover { background: #94203b; }
+.drawings-cleared { display: flex; align-items: center; gap: 9px; padding: 6px 12px; background: var(--positive-tint); color: var(--text); font-size: 13px; }
+.drawings-cleared button { color: var(--primary); padding: 5px; }
+.drawings-cleared button:last-child { margin-left: auto; }
+@media (max-width: 520px) {
+  .modal.edit-dialog { max-height: calc(100dvh - 16px); }
+  .edit-dialog > .modal-inner { padding: 16px; }
+  .edit-field input, .edit-field select, .edit-field textarea { font-size: 16px; }
+  .edit-fields { gap: 10px; }
+  .edit-field input, .edit-field select, .edit-footer .button, .edit-person > button { min-height: 44px; }
+  .edit-dialog .modal-header { margin-bottom: 12px; }
+}
+@media (max-width: 380px) {
+  .edit-pair { grid-template-columns: minmax(0,1fr); }
+  .confirm-dialog .edit-footer .button { flex: 1 1 auto; }
+}

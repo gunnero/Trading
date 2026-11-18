@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Users,Plus,ArrowLeft,ArrowsLeftRight,ArrowsClockwise,LinkSimple,UploadSimple,DownloadSimple,PencilSimple,X,Briefcase,ShieldCheck,MagnifyingGlass,WarningCircle,Eye,EyeSlash,CaretRight,CaretUp,CaretDown,CaretUpDown} from '@phosphor-icons/react';
+import {Modal} from './DeskModal';
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {apiFetch} from './auth-client';
@@ -226,18 +227,42 @@ function HoldingDetail({holding,account,owner,sheet,watchlist,setupInterval,onTr
   </>;
 }
 
-function PortfolioDialog({dialog,people,accounts,mutate,reload,onClose,onSelect,onAccountRemoved}){
+function PortfolioDialog({dialog,people,accounts,mutate,reload,onClose,onSelect,onAccountRemoved,onPersonCreated}){
   const {type,account,person}=dialog;
+  const creatingAccount=type==='account'&&!account;
+  const [addingPerson,setAddingPerson]=useState(false);
   const [name,setName]=useState(person?.name||''),[personId,setPersonId]=useState(account?.personId||dialog.personId||people[0]?.id||''),[platform,setPlatform]=useState(account?.platform||'Trading 212'),[label,setLabel]=useState(account?.label||'Invest'),[apiKey,setApiKey]=useState(''),[apiSecret,setApiSecret]=useState(''),[authorized,setAuthorized]=useState(false),[environment,setEnvironment]=useState(account?.environment||'live'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[snapshot,setSnapshot]=useState(null),[confirm,setConfirm]=useState(false);
   const title=type==='person'?(person?'Edit person':'Add person'):type==='account'?(account?'Edit account':'Add platform account'):type==='connect'?'Trading 212 connection':'Import portfolio snapshot';
   async function run(fn,close=true){setBusy(true);setError('');try{await fn();if(close)onClose();}catch(e){setError(e.message);if(e.status===409)await reload();}finally{setBusy(false);}}
   async function save(event){event.preventDefault();await run(async()=>{
-    if(type==='person')await mutate('/people'+(person?'/'+person.id:''),{name},person?'PUT':'POST');
+    if(type==='person'){
+      const result=await mutate('/people'+(person?'/'+person.id:''),{name},person?'PUT':'POST');
+      if(!person)onPersonCreated?.(result.data.people.at(-1).id);
+    }
     if(type==='account'){const result=await mutate('/accounts'+(account?'/'+account.id:''),{personId,platform,label},account?'PUT':'POST');onSelect(account?.id||result.data.accounts.at(-1).id);}
     if(type==='connect')await mutate(`/accounts/${account.id}/connect`,{apiKey,apiSecret,authorized,environment});
     if(type==='import')await mutate(`/accounts/${account.id}/snapshot`,{snapshot});
   });}
   const close=()=>{if(!busy)onClose();};
+  if(creatingAccount){
+    if(addingPerson)return <PortfolioDialog dialog={{type:'person'}} people={people} accounts={accounts} mutate={mutate} reload={reload} onPersonCreated={setPersonId} onClose={()=>setAddingPerson(false)}/>;
+    return <Modal title="Add account" className="edit-dialog account-edit-dialog" onClose={close} initialFocus="#account-person">
+      <form onSubmit={save}>
+        <div className="edit-fields">
+          <div className="edit-person"><label className="edit-field">Person<select id="account-person" aria-label="Person" required value={personId} onChange={event=>setPersonId(event.target.value)}>
+            {people.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <button type="button" className="text-button" disabled={busy} onClick={()=>setAddingPerson(true)}><Plus size={16}/>Add person</button></div>
+          <label className="edit-field">Account label<input required maxLength={100} value={label} onChange={event=>setLabel(event.target.value)} placeholder="Invest, ISA, or another account name"/></label>
+          <label className="edit-field">Platform<input aria-label="Platform" required list="account-platforms" maxLength={60} value={platform} onChange={event=>setPlatform(event.target.value)}/>
+            <datalist id="account-platforms"><option value="Trading 212"/><option value="Interactive Brokers"/><option value="Other"/></datalist></label>
+          <p className="edit-help">Trading 212 supports automatic account reads. Other platforms use imported snapshots.</p>
+          {error&&<p role="alert" className="edit-error"><WarningCircle size={18}/>{error}</p>}
+        </div>
+        <div className="edit-footer"><button type="button" className="button outline" disabled={busy} onClick={close}>Cancel</button>
+          <button type="submit" className="button primary" disabled={busy}>{busy?'Saving…':'Create account'}</button></div>
+      </form>
+    </Modal>;
+  }
   return <Dialog title={title} onClose={close}><form className="pm-form" onSubmit={save}>
     {type==='person'&&<><p>Track a whole account for each person. Adding someone does not send an invitation or give them access to your desk.</p><label>Full name<input required maxLength={100} value={name} onChange={e=>setName(e.target.value)} autoFocus placeholder="Person’s full name"/></label></>}
     {type==='account'&&<><label>Person<select aria-label="Person" value={personId} onChange={e=>setPersonId(e.target.value)}>{people.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label><label>Platform<input required maxLength={60} list="pm-platforms" value={platform} onChange={e=>setPlatform(e.target.value)} disabled={account?.connected}/><datalist id="pm-platforms"><option value="Trading 212"/><option value="Interactive Brokers"/><option value="Other"/></datalist></label><label>Account label<input required maxLength={100} value={label} onChange={e=>setLabel(e.target.value)} placeholder="Invest, ISA, or another account name"/></label><p>Trading 212 supports automatic account reads. Other platforms currently support imported snapshots.</p></>}

@@ -45,14 +45,22 @@ try{
   await page.getByRole('button',{name:'Stocks',exact:true}).click();
   await expect(page.locator('[data-watchlist-id]').first()).toHaveAttribute('data-watchlist-id','NASDAQ:NVDA');
   await page.getByRole('button',{name:'All',exact:true}).click();
-  async function importListings(text){
+  async function importListings(text,duplicate){
     await page.getByRole('button',{name:'Import watchlist',exact:true}).click();
     const dialog=page.getByRole('dialog');
     await dialog.getByLabel('Watchlist export').fill(text);
-    await dialog.getByRole('button',{name:'Import watchlist',exact:true}).click();
+    const confirm=dialog.getByRole('button',{name:'Import watchlist',exact:true});
+    if(duplicate){
+      await expect(dialog.locator('.duplicate-row')).toContainText('QQQ');
+      await expect(dialog.getByRole('status')).toContainText('NASDAQ:QQQ');
+      await expect(confirm).toBeDisabled();
+      await dialog.getByRole('button',{name:'Keep first occurrence of each listing'}).click();
+      await expect(dialog.locator('.duplicate-row')).toHaveCount(0);
+    }
+    await confirm.click();
     await save();
   }
-  await importListings('###FUND,NASDAQ:QQQ,NASDAQ:QQQ,AMEX:SPY');
+  await importListings('###FUND,NASDAQ:QQQ,NASDAQ:QQQ,AMEX:SPY',true);
   await expect(page.locator('[data-watchlist-id]')).toHaveCount(2);
   await importListings(before.data.watchText);await expect(page.locator('[data-watchlist-id]')).toHaveCount(readWatchlist(before.data.watchText).length);
   mark('Direction and status controls work alongside grouped sorting, and importing preserves exact listings and removes duplicates');

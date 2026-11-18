@@ -62,17 +62,21 @@ export function mergeLevelSheets(previousText, incomingText, previousDates = {})
   return { levelText, levelSourceDates, date: incoming.date, updated, added, carried };
 }
 
-export function parseWatchlist(text, { allowEmpty = false } = {}) {
+export function parseWatchlist(text, { allowEmpty = false, onRow } = {}) {
   let group = 'STOCKS';
   const entries = [], seen = new Set();
   for (const item of text.trim().split(/[,\r\n]+/).map(x => x.trim()).filter(Boolean)) {
     if (item.startsWith('###')) { group = item.slice(3); continue; }
     const parts = item.split(':');
     if (parts.length !== 2 || !/^[A-Z0-9_]+$/.test(parts[0]) || !/^[A-Z0-9.!]+$/.test(parts[1])) throw new Error(`Invalid watchlist entry: ${item}`);
-    if (seen.has(item)) continue;
-    seen.add(item);
     const [exchange, ticker] = parts;
-    entries.push({ id: item, exchange, ticker, group, symbol: group === 'FUTURES' ? ticker.replace(/1!$/, '') : ticker });
+    const entry = { id: item, exchange, ticker, group, symbol: group === 'FUTURES' ? ticker.replace(/1!$/, '') : ticker };
+    const duplicate = seen.has(item);
+    onRow?.(entry, duplicate);
+    if (!duplicate) {
+      seen.add(item);
+      entries.push(entry);
+    }
   }
   if (!entries.length && !allowEmpty) throw new Error('The watchlist is empty.');
   return entries;

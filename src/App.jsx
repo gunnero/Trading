@@ -7,7 +7,12 @@ import {PageHeader,PageNavigation} from './PageHeader';
 import {canonicalRoute,routeView,routeGroup,marketTabs,portfolioTabs} from './data/navigation.mjs';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
-import { Briefcase, ChartBar, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, Notebook, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
+import { Briefcase, ChartBar, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, Notebook, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
+import {Modal} from './DeskModal';
+import {PlanDialog} from './PlanDialog';
+import {ImportDialog} from './ImportDialog';
+import {WorkspaceConflict} from './WorkspaceConflict';
+import './edit-dialogs.css';
 import {AppearanceSwitch} from './AppearanceSwitch';
 import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';
@@ -19,7 +24,7 @@ const PortfolioManager=React.lazy(()=>import('./PortfolioManager'));
 import { PriceChart, Sparkline } from './Charts';
 import { TIMEFRAMES } from './data/candles';
 import { useBriefing, BriefingStrip, SidebarSentiment, TV_SCRIPT } from './Briefing';
-import { formatDate, formatPrice, zoneText, zoneName, parseLevels, mergeLevelSheets, parseWatchlist, matchingInstrument, locate, toneFor } from './data/market';
+import { formatDate, formatPrice, zoneText, zoneName, parseLevels, matchingInstrument, locate, toneFor } from './data/market';
 import { useWorkspace } from './useWorkspace';
 import { MarketClock, MarketHours } from './MarketClock';
 import {MarketContextChart} from './MarketContextChart';
@@ -31,7 +36,6 @@ import {LEVEL_FRAMES} from './data/zone-roles.mjs';
 import {useZoneRoles,ZoneRoleStatus} from './ZoneRoles';
 import {useMarketQuotes, useMarketChart} from './useMarketData';
 import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay,entryState,isExtendedQuote,awaitingSessionQuote} from './data/quotes.mjs';
-import {marketDay} from './data/calendar.mjs';
 import {FocusTabs,SetupControls,RetestPanel} from './RetestDesk';
 import {useRetestScan} from './useRetestScan';
 import ChartGrid,{GridDetail} from './ChartGrid';
@@ -53,14 +57,6 @@ const currentRoute=()=>canonicalRoute(window.location.hash.slice(1));
 const groupLabels = { STOCKS: 'Stocks', 'DEPOSITARY RECEIPT': 'Depositary receipts', FUND: 'Funds', FUTURES: 'Futures', CRYPTO: 'Crypto' };
 function Status({ text, tone }) { return <span className={`status ${tone || toneFor(text)}`}>{text}</span>; }
 function Empty({ title, children, icon: Icon = MagnifyingGlass }) { return <div className="empty"><Icon size={30} weight="light" /><h3>{title}</h3><p>{children}</p></div>; }
-function Modal({ title, subtitle, children, onClose, wide = false, className = '', initialFocus }) {
-  const ref = useRef(null);
-  useEffect(() => { const dialog = ref.current, trigger = document.activeElement, previousOverflow=document.body.style.overflow; document.body.style.overflow='hidden'; if (!dialog.open) dialog.showModal(); if(initialFocus)dialog.querySelector(initialFocus)?.focus({preventScroll:true}); return () => { document.body.style.overflow=previousOverflow; if (dialog.open) dialog.close(); if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({preventScroll:true}); }; }, []);
-  return <dialog ref={ref} className={`modal ${wide ? 'wide' : ''} ${className}`} aria-labelledby="dialog-title" onCancel={onClose} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div className="modal-inner"><header className="modal-header"><div><h2 id="dialog-title">{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={22}/></button></header>{children}</div>
-  </dialog>;
-}
-
 export function App() {
   const workspace=useWorkspace();
   if(!workspace.data) return <div className="workspace-loading"><ChartBar size={36} weight="fill"/><h1>Trading Desk</h1><p>{workspace.status==='loading'?'Loading your saved workspace…':workspace.error}</p>{workspace.status!=='loading'&&<button className="button primary" onClick={workspace.retry}>Retry connection</button>}</div>;
@@ -70,6 +66,8 @@ function SessionDesk({workspace}) {
   const {quoteStamp,zoneLabel,settings:displayTime}=useDisplayTime();
   const [route, setRoute] = useState(currentRoute);
   const section=routeView(route),group=routeGroup(route),category=settingsCategory(route),watchlistOpen=section==='settings'&&category==='watchlist';
+  const [conflictDismissed,setConflictDismissed]=useState(false);
+  useEffect(()=>{if(workspace.status!=='conflict')setConflictDismissed(false);},[workspace.status]);
   const saveNeedsAttention=workspace.status==='error'||workspace.status==='conflict';
   const showSaveFooter=section!=='settings'||category!=='workspace'||saveNeedsAttention;
   const {user,signOut}=useAuth();
@@ -85,7 +83,6 @@ function SessionDesk({workspace}) {
   const focus=preferences.focus||primarySymbol,customKey=preferences.customSymbol||'',setupInterval=preferences.setupInterval||'2m';
   const sheet=useMemo(()=>parseLevels(levelText,levelSourceDates),[levelText,levelSourceDates]);
   const watchlist=useMemo(()=>readWatchlist(watchText),[watchText]);
-  const setWatchText=watchText=>workspace.update(current=>replaceWatchlist(current,parseWatchlist(watchText)));
   const setFocus=focus=>workspace.update(current=>({...current,preferences:{...current.preferences,focus,...(['QQQ','SPY'].includes(focus)?{symbol:focus}:{})}}));
   const setCustom=customSymbol=>workspace.update(current=>({...current,preferences:{...current.preferences,customSymbol,focus:'custom'}}));
   function openCustomListing(id){
@@ -252,7 +249,13 @@ function SessionDesk({workspace}) {
         {section === 'news' && <React.Suspense fallback={<p role="status">Loading headlines…</p>}><NewsPage watchlist={watchlist} marketFeed={briefing.news} quotes={quotes} onOpenMarket={symbol=>{setLevelView(null);setMacroSymbol(symbol);setDialog('macro-chart');}}/></React.Suspense>}
         {section === 'levels' && <LevelsView workspace={workspace.data} watchlist={watchlist} onImport={() => setDialog('import')} onSelect={openLevel} onBack={()=>navigate('overview')}/ >}
 
-        {showSaveFooter&&<div className={`workspace-save-status ${saveNeedsAttention?'needs-attention':''}`} role="status" aria-live="polite"><span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span><div>{saveNeedsAttention&&<>{workspace.status==='error'&&<button onClick={workspace.retry}>Retry save</button>}<button onClick={workspace.reload}>Load saved version</button></>}<button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button></div></div>}
+        {showSaveFooter&&<div className={`workspace-save-status ${saveNeedsAttention?'needs-attention':''}`} role="status" aria-live="polite">
+          <span>{workspace.status==='saved'?'Workspace saved':workspace.status==='saving'?'Saving workspace…':workspace.status==='pending'?'Unsaved changes…':workspace.error}</span>
+          <div>{workspace.status==='error'&&<><button onClick={workspace.retry}>Retry save</button><button onClick={workspace.reload}>Load saved version</button></>}
+            {workspace.status==='conflict'&&<button onClick={()=>setConflictDismissed(false)}>Review save conflict</button>}
+            <button onClick={workspace.backup}><DownloadSimple size={14}/>Back up workspace</button>
+          </div>
+        </div>}
         <footer className="app-footer"><span>TRADING DESK <span className="footer-separator">/</span> EARLY ACCESS</span><span>Yahoo market data · U.S. Treasury daily 2Y · sources may be delayed</span></footer>
       </main></PageNavigation.Provider>
     </div>
@@ -266,7 +269,8 @@ function SessionDesk({workspace}) {
     {dialog === 'tradingview' && <TradingViewDialog symbol={symbol||primarySymbol} marketKey={marketKey} timeframe={timeframe} levelText={levelText} sheet={sheet} onClose={() => setDialog(null)}/>}
     {dialog === 'import' && <ImportDialog kind="levels" initial={levelText} sourceDates={levelSourceDates} onClose={() => setDialog(null)} onImport={(merged,text) => { workspace.update(current=>importLevelList(current,text)); setDialog(null); setToast(`${merged.updated.length} updated · ${merged.added.length} added · ${merged.carried.length} carried forward for ${formatDate(merged.date)}.`); }}/ >}
     {dialog === 'watch-add' && <AddSymbolDialog watchlist={watchlist} onClose={()=>setDialog(null)} onAdd={addSymbol}/>}
-    {dialog === 'watch-import' && <ImportDialog kind="watchlist" initial={watchText} onClose={() => setDialog(null)} onImport={(parsed, text) => { setWatchText(text); setRemovedEntry(null); setDialog(null); setToast(`Imported ${parsed.length} symbols into your radar.`); }}/ >}
+    {dialog === 'watch-import' && <ImportDialog kind="watchlist" initial={watchText} onClose={() => setDialog(null)} onImport={parsed => { workspace.update(current=>replaceWatchlist(current,parsed)); setRemovedEntry(null); setDialog(null); setToast(`Imported ${parsed.length} symbols into your radar.`); }}/ >}
+    {workspace.status==='conflict'&&!conflictDismissed&&<WorkspaceConflict workspace={workspace} onClose={()=>setConflictDismissed(true)}/>}
     {dialog === 'plan' && planSnapshot && <PlanDialog symbol={planSnapshot.symbol} marketKey={planSnapshot.marketKey} setup={planSnapshot.setup} context={planSnapshot.context} quote={planSnapshot.quote} onClose={() => setDialog(null)} onSave={plan => { setPlans(p => [{ ...plan, id: crypto.randomUUID(), createdAt:new Date().toISOString(), notes: '', sessionDate:planSnapshot.quote.sessionDate, priceMode:'yahoo', marketQuote:{price:planSnapshot.quote.price,observedAt:planSnapshot.quote.observedAt,provider:'Yahoo Finance'} }, ...p]); setDialog(null); navigate('journal/plans'); setToast(`${planSnapshot.symbol} draft saved to Trade journal → Plans.`); }}/ >}
     {dialog === 'instrument' && selectedEntry && (chartableEntry(selectedEntry)?<Modal title={`${selectedEntry.symbol} details`} subtitle="Company, trading context & catalysts" onClose={()=>setDialog(null)} wide className="company-modal"><CompanyDetail key={selectedEntry.id} entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} setupInterval={setupInterval} onUseCustom={()=>openCustomListing(selectedEntry.id)}/></Modal>:<InstrumentDialog entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} onClose={() => setDialog(null)}/>)}
     {toast && <div className="toast" role="status"><Check size={19}/>{toast}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={17}/></button></div>}
@@ -321,43 +325,6 @@ function AddSymbolDialog({watchlist,initialSymbol='',onClose,onAdd}) {
   </form></Modal>;
 }
 
-function ImportDialog({ kind, initial, sourceDates, onClose, onImport }) {
-  const [text, setText] = useState(kind==='levels'?'':initial);
-  const [error, setError] = useState('');
-  const isLevels = kind === 'levels';
-  const preview=useMemo(()=>{
-    if(!isLevels||!text.trim())return null;
-    try{return {merged:mergeLevelSheets(initial,text,sourceDates)};}catch(error){return {error:error.message};}
-  },[isLevels,initial,text,sourceDates]);
-  const loadFile = async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 200000) { setError('Choose a text file smaller than 200 KB.'); return; }
-    try { setText(await file.text()); setError(''); } catch { setError('Could not read this file. Try pasting the text.'); }
-  };
-  const submit = e => { e.preventDefault(); try { onImport(isLevels ? mergeLevelSheets(initial,text,sourceDates) : parseWatchlist(text), text); } catch (err) { setError(err.message); } };
-  return <Modal title={isLevels ? 'Import your daily levels' : 'Import your watchlist'} subtitle={isLevels ? 'Paste the new daily list. Missing instruments keep their last supplied levels.' : 'Paste a TradingView watchlist export, or choose its text file.'} onClose={onClose} wide><form onSubmit={submit}><div className="import-actions"><label className="button outline file-picker"><UploadSimple size={17}/>Choose .txt file<input type="file" accept=".txt,text/plain" onChange={loadFile}/></label><a className="text-button" download href={`/data/${isLevels ? 'levels' : 'watchlist'}.txt`}><DownloadSimple size={17}/>Original import</a></div><label className="field-label" htmlFor="import-text">{isLevels ? 'Level sheet' : 'Watchlist export'}</label><textarea id="import-text" className="import-text" placeholder={isLevels?'LVLS YYYY-MM-DD\nQQQ|30min|S 708.14-707.23':undefined} spellCheck={false} value={text} onChange={e => {setText(e.target.value);setError('');}} rows={13}/><p className="form-help">{isLevels ? 'Included instruments replace their entire previous row. Only missing instruments carry forward, with their original dates, timeframes and asset types. Older levels remain chart references; setup comparisons still require the quote’s U.S. session date.' : 'Exchange prefixes and futures symbols are preserved. Spot crypto is kept separate from futures.'}</p>{preview?.merged&&<div className="level-import-preview" aria-label="Level import preview"><p role="status"><strong>{preview.merged.updated.length} updated · {preview.merged.added.length} added · {preview.merged.carried.length} carried forward</strong></p>{preview.merged.carried.length>0&&<details><summary>Instruments kept from earlier lists</summary><ul>{preview.merged.carried.map(item=><li key={item.symbol}><strong>{item.symbol}{item.futures?' · FUT':''}</strong><span>{item.sourceDate} · {item.timeframe} · {item.zones.length} zones</span></li>)}</ul></details>}</div>}{(error||preview?.error)&&<div className="form-error" role="alert"><WarningCircle size={18}/>{error||preview.error}</div>}<div className="modal-footer"><span className="muted">Imports save automatically to your workspace.</span><button className="button primary" type="submit">{isLevels ? 'Import levels' : 'Import watchlist'}<CaretRight size={18}/></button></div></form></Modal>;
-}
-
-function PlanDialog({ symbol, marketKey, setup, context, quote, onClose, onSave }) {
-  const {quoteStamp}=useDisplayTime();
-  const [scenario, setScenario] = useState(setup?.direction==='bullish'?'continuation':'rejection');
-  const [strategy, setStrategy] = useState('');
-  const [expiration, setExpiration] = useState('');
-  const [budget, setBudget] = useState('');
-  const [thesis, setThesis] = useState('');
-  const zone = context.zone || context.supply || context.demand;
-  const scenarioTitle = scenario==='rejection'?'Bearish break & retest':'Bullish break & retest';
-  return <Modal title={`${symbol} session plan`} subtitle={`Conditional plan · Yahoo quote ${formatPrice(quote.price)} · ${quoteStamp(quote)}`} onClose={onClose} wide><form onSubmit={e => {e.preventDefault(); onSave({ symbol, marketKey, scenario, scenarioTitle, strategy, expiration, budget,
-      setupSnapshot:{zone:{type:zone.type,low:zone.low,high:zone.high},timeframe:setup.timeframe||null,stage:setup.stage,direction:setup.direction||null},
-      thesis: thesis || `Wait for a ${setup?.timeframe||'2m'} close ${scenario==='rejection'?'below':'above'} ${formatPrice(scenario==='rejection'?zone.low:zone.high)}, then a later candle touching the zone and closing back on that side. Require ${scenario==='rejection'?'bearish':'bullish'} EMA 9/21 and VWAP alignment. Invalidation reference: ${formatPrice(scenario==='rejection'?zone.high:zone.low)}.` });}}>
-    <div className="plan-scenario-tabs"><button type="button" className={scenario === 'rejection' ? 'active red' : ''} onClick={() => setScenario('rejection')}><ArrowDownRight size={21}/>Bearish break & retest</button><button type="button" className={scenario === 'continuation' ? 'active green' : ''} onClick={() => setScenario('continuation')}><ArrowUpRight size={21}/>Bullish break & retest</button></div>
-    <div className="plan-summary"><div><span>Decision zone</span><strong>{zoneText(zone)}</strong></div><div><span>Condition to evaluate</span><strong>{scenario === 'rejection' ? `Break below & retest ${formatPrice(zone.low)}` : `Hold & retest above ${formatPrice(zone.high)}`}</strong></div><div><span>What changes the thesis</span><strong>{scenario === 'rejection' ? `Acceptance above ${formatPrice(zone.high)}` : `Failed retest below ${formatPrice(zone.low)}`}</strong></div></div>
-    <div className="form-grid"><label>Option structure<select required value={strategy} onChange={e => setStrategy(e.target.value)}><option value="">Choose your structure</option><option>Long call</option><option>Long put</option><option>Call debit spread</option><option>Put debit spread</option></select></label><label>Planned expiration<input type="date" required min={marketDay(Date.now())} value={expiration} onChange={e=>setExpiration(e.target.value)}/></label></div>
-    <div className="options-placeholder"><FileText size={24}/><div><strong>{expiration ? 'Ready for contract data' : 'Select an expiration to assess contracts'}</strong><p>Bid/ask spreads, IV and Greeks will appear here when an options feed is connected. This is a proposed date; listed expirations and contracts are not yet verified.</p></div></div>
-    <label className="block-label">Premium loss budget · optional ($)<input type="number" min="1" step="0.01" placeholder="Set your planned maximum" value={budget} onChange={e => setBudget(e.target.value)}/></label><label className="block-label">Your thesis<textarea rows={3} maxLength={10000} placeholder="What must happen, and what would change your mind?" value={thesis} onChange={e => setThesis(e.target.value)}/></label><p className="form-help">A price invalidation and a premium loss budget are separate. This form saves a draft; it does not monitor risk or place an order.</p><div className="modal-footer"><button type="button" className="text-button" onClick={onClose}>Back to desk</button><button className="button primary" type="submit">Save draft plan<Check size={19}/></button></div>
-  </form></Modal>;
-}
 function InstrumentDialog({entry,sheet,result,onClose}) {
   const {quoteStamp}=useDisplayTime();
   const q=result?.quote,instrument=matchingInstrument(entry,sheet),state=entryState(entry,sheet,result);

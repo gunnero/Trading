@@ -1,6 +1,7 @@
 import {createContext,useContext,useEffect,useId,useRef,useState} from 'react';
-import {Cursor,LineSegment,Minus,Rectangle,TextT,ArrowUUpLeft,ArrowUUpRight,Trash,Eye,EyeSlash} from '@phosphor-icons/react';
+import {Cursor,LineSegment,Minus,Rectangle,TextT,ArrowUUpLeft,ArrowUUpRight,Trash,Eye,EyeSlash,PencilSimple,CheckCircle,X} from '@phosphor-icons/react';
 import {DRAWING_PALETTE,DRAWING_COLORS,MAX_DRAWINGS,timeIndex,indexTime} from './data/drawings.mjs';
+import {Modal} from './DeskModal';
 import {useSavedChart} from './ChartSettings';
 
 const DrawingContext=createContext(null),EMPTY=[];
@@ -38,18 +39,19 @@ export function DrawingChart({scope,symbol,timeframe,times,instance,formatValue,
   const {config,set:saveConfig}=useSavedChart(scope),color=config.drawingColor,hidden=!config.drawingsVisible,open=config.panel==='drawings';
   const setColor=drawingColor=>saveConfig({drawingColor}),setHidden=hidden=>saveConfig({drawingsVisible:!hidden});
   const [tool,setTool]=useState('select'),[selected,setSelected]=useState(null),[draft,setDraft]=useState(null),[clear,setClear]=useState(false);
+  const [clearedScope,setClearedScope]=useState(null);
   const frame=useRef(null),selectedItem=items.find(item=>item.id===selected),stack=store?.history[scope];
   const remaining=Math.min(MAX_DRAWINGS-items.length,1000-Object.values(store?.items||{}).reduce((sum,list)=>sum+list.length,0),!items.length&&Object.keys(store?.items||{}).length>=300?0:Infinity);
-  useEffect(()=>{setTool('select');setSelected(null);setDraft(null);setClear(false);},[scope]);
+  useEffect(()=>{setTool('select');setSelected(null);setDraft(null);setClear(false);setClearedScope(null);},[scope]);
   useEffect(()=>{if(!open){setTool('select');setSelected(null);setDraft(null);setClear(false);}},[open]);
-  const commit=next=>store?.change(scope,next);
+  const commit=next=>{setClearedScope(null);store?.change(scope,next);};
   const choose=next=>{setTool(next);setDraft(null);setHidden(false);setClear(false);setSelected(null);};
   const remove=()=>{commit(items.filter(item=>item.id!==selected));setSelected(null);};
   const updateSelected=patch=>{if(selectedItem)commit(items.map(item=>item.id===selected?{...item,...patch}:item));};
   const select=id=>{setSelected(id);setTool('select');setHidden(false);setDraft(null);if(!open)saveConfig({panel:'drawings'});};
   const focusChart=()=>frame.current?.querySelector('.price-chart')?.focus({preventScroll:true});
   function keydown(event){
-    if(event.target.closest('input,textarea,select'))return;
+    if(event.target.closest('input,textarea,select,.confirm-dialog'))return;
     if(event.key==='Escape'&&(tool!=='select'||draft||selected||clear)){event.preventDefault();event.stopPropagation();choose('select');}
     else if((event.key==='Delete'||event.key==='Backspace')&&selectedItem){event.preventDefault();event.stopPropagation();remove();}
     else if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){
@@ -76,8 +78,17 @@ export function DrawingChart({scope,symbol,timeframe,times,instance,formatValue,
       {selectedItem?.type==='text'&&<NoteEditor key={selectedItem.id+selectedItem.text} item={selectedItem} onSave={text=>updateSelected({text})}/>}
       {selectedItem?.type==='horizontal'&&<LevelEditor key={selectedItem.id+selectedItem.points[0].price} value={selectedItem.points[0].price} onSave={price=>updateSelected({points:[{...selectedItem.points[0],price}]})}/>}
       {selectedItem&&<span>{toolName(selectedItem.type)} · {selectedItem.points.map(p=>formatValue(p.price)).join(' → ')}</span>}
-      {!clear?<button type="button" onClick={()=>setClear(true)}>Clear drawings</button>:<><span>Clear this chart’s {items.length} drawings?</span><button type="button" onClick={()=>{commit([]);setSelected(null);setDraft(null);setClear(false);}}>Clear this chart</button><button type="button" onClick={()=>setClear(false)}>Cancel</button></>}
+      <button type="button" onClick={()=>setClear(true)}>Clear drawings</button>
     </div>}
+    {clear&&!!items.length&&<Modal title="Clear drawings?" className="edit-dialog confirm-dialog" initialFocus=".cancel-clear" onClose={()=>setClear(false)}>
+      <div className="confirmation-body"><span className="confirmation-icon"><PencilSimple size={32}/></span>
+        <h3>{scope.replace('|',' · ')}</h3><p>Remove {items.length} {items.length===1?'drawing':'drawings'} from this chart? You can undo this change.</p></div>
+      <div className="edit-footer"><button className="button outline cancel-clear" onClick={()=>setClear(false)}>Cancel</button>
+        <button className="button clear-confirm" onClick={()=>{commit([]);setSelected(null);setDraft(null);setTool('select');setClear(false);setClearedScope(scope);}}>Clear drawings</button></div>
+    </Modal>}
+    {clearedScope===scope&&!items.length&&!!stack?.past.length&&<div className="drawings-cleared"><span role="status"><CheckCircle size={17}/>Drawings cleared</span>
+      <button type="button" onClick={()=>{store.change(scope,null,'undo');setClearedScope(null);}}>Undo</button>
+      <button type="button" aria-label="Dismiss drawing notice" onClick={()=>setClearedScope(null)}><X size={15}/></button></div>}
     </>}{!!unavailable&&<p className="drawing-history-note">{unavailable} drawing{unavailable===1?' is':'s are'} outside the loaded history; saved anchors are retained.</p>}
     <div className="drawing-chart-frame" ref={frame} onPointerDownCapture={event=>{if(!event.target.closest('.drawing-overlay'))setSelected(null);}}>
       {children}

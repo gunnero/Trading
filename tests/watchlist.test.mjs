@@ -37,3 +37,15 @@ test('An empty saved watchlist is valid and can be repopulated; empty imports st
   const entry=newWatchEntry({symbol:'TLT',exchange:'NASDAQ',group:'FUND'});
   assert.deepEqual(readWatchlist(addWatchEntry(empty,entry).watchText),[entry]);
 });
+
+test('Import preview marks repeated listings across groups and preserves distinct exchanges',()=>{
+  const input='###FUND,NASDAQ:QQQ,###STOCKS,AMEX:QQQ,NASDAQ:QQQ,NASDAQ:QQQ';
+  const rows=[];
+  const entries=parseWatchlist(input,{onRow:(entry,duplicate)=>rows.push([entry.id,entry.group,duplicate])});
+  assert.deepEqual(rows,[
+    ['NASDAQ:QQQ','FUND',false],['AMEX:QQQ','STOCKS',false],
+    ['NASDAQ:QQQ','STOCKS',true],['NASDAQ:QQQ','STOCKS',true],
+  ]);
+  assert.equal(serializeWatchlist(entries),'###FUND,NASDAQ:QQQ,###STOCKS,AMEX:QQQ');
+  assert.throws(()=>parseWatchlist(input+',missing-exchange'),/Invalid watchlist entry/);
+});

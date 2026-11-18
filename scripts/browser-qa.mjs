@@ -1,6 +1,7 @@
 import {openWatchlist} from '../tests/fixtures/navigation.mjs';
 import {testFetch as fetch} from '../tests/fixtures/auth.mjs';
 if (!process.env.OPENING_BELL_TEST_URL) throw new Error('Run this check through its npm script to use an isolated workspace.');
+import {mockBriefing} from '../tests/fixtures/briefing.mjs';
 import {mockMarket} from '../tests/fixtures/market.mjs';
 import { chromium, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
@@ -23,9 +24,11 @@ const assertNoOverflow = async () => { expect(await page.evaluate(() => document
 const originalLevels = readFileSync('server/seed/levels.txt', 'utf8');
 const originalWatchlist = readFileSync('server/seed/watchlist.txt', 'utf8');
 try {
+  await page.clock.setFixedTime(new Date('2026-10-24T18:00:00Z'));
   await mockMarket(page);
+  await mockBriefing(page);
   await page.goto(process.env.OPENING_BELL_TEST_URL);
-  await expect(page.getByRole('heading', { name: 'Your session, in focus.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview',exact:true })).toBeVisible();
   await expect(page.getByRole('tab', { name: /QQQ/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('img', { name: /QQQ Yahoo Finance 4h/ })).toBeVisible();
   await assertNoOverflow();
@@ -64,9 +67,9 @@ try {
   await page.getByLabel('Planned expiration').fill('2026-10-30');
   await page.getByLabel('Premium loss budget · optional ($)').fill('150');
   await page.getByLabel('Your thesis').fill('Wait for a rejection below 707.23. Reassess if price accepts above supply.');
-  await expect(page.getByText('Ready for contract data')).toBeVisible();
+  await expect(page.getByText(/Listed contracts, bid\/ask, IV and Greeks are unverified/)).toBeVisible();
   await snapshot('plan-dialog');
-  await page.getByRole('button', { name: 'Save draft plan' }).click();
+  await page.getByRole('button', { name: 'Save plan' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/#journal\/plans$/);
   await expect(page.getByRole('heading', { name: 'Bearish break & retest' })).toBeVisible();
@@ -106,6 +109,7 @@ try {
 
   await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
   await page.getByLabel('Watchlist export').fill('###FUND,NASDAQ:QQQ,NASDAQ:QQQ,AMEX:SPY');
+  await page.getByRole('button',{name:'Keep first occurrence of each listing'}).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Import watchlist', exact: true }).click();
   await expect(page.locator('[data-watchlist-id]')).toHaveCount(2);
   await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
@@ -117,12 +121,12 @@ try {
   await nav('Overview').click();await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();
   await expect(page.getByText(/40 instruments · 141 zones/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Search levels' }).fill('NOW');
-  await expect(page.getByText('Gap', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gap', exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: 'Search levels' }).fill('');
   await snapshot('levels');
   await page.getByRole('button', { name: 'Import levels', exact: true }).first().click();
   await page.getByLabel('Level sheet').fill('LVLS 2026-02-30\nQQQ|30min|S 708-707');
-  await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('valid date');
   await page.getByLabel('Level sheet').fill('LVLS 2026-10-26\nQQQ|30min|S 708.14-707.23|D 702.7-700');
   await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
@@ -131,16 +135,17 @@ try {
   await expect(page.locator('.notice')).toContainText('zone comparisons are paused');
   await expect(page.getByRole('button', { name: 'Review QQQ plan' })).toBeDisabled();
   await snapshot('date-mismatch');
-  await page.getByRole('button', { name: 'Import levels', exact: true }).click();
+  await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();
+  await page.getByRole('button', { name: 'Import levels', exact: true }).first().click();
   await page.getByLabel('Level sheet').fill(originalLevels);
-  await page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Import levels', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('older than your saved');
   await page.getByRole('button',{name:'Close dialog',exact:true}).click();
   await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();
   // Restore the baseline only in this isolated QA database for the remaining layout checks.
   const saved=await(await fetch(process.env.OPENING_BELL_TEST_URL+'/api/workspace')).json();
   const restored=await fetch(process.env.OPENING_BELL_TEST_URL+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web',Origin:process.env.OPENING_BELL_TEST_URL},body:JSON.stringify({revision:saved.revision,data:{...saved.data,levelText:originalLevels,levelSourceDates:undefined,levelHistory:[]}})});
-  expect(restored.status).toBe(200);await page.reload();
+  expect(restored.status).toBe(200);await page.goto(process.env.OPENING_BELL_TEST_URL+'/#overview');await page.reload();
   await expect(page.getByRole('button', { name: 'Review QQQ plan' })).toBeEnabled();
   mark('Level library, gap G, invalid/older date rejection, mismatched-date guard and isolated fixture restore');
 
@@ -153,7 +158,6 @@ try {
       if (await page.getByRole('button', { name: 'Dismiss notification' }).count()) await page.getByRole('button', { name: 'Dismiss notification' }).click();
       await expect(page.locator('.sidebar')).toHaveCSS('visibility', 'hidden');
       await snapshot('mobile-web');
-      await page.getByRole('button', { name: 'Open navigation' }).click();
       await openWatchlist(page);
       await assertNoOverflow();
       await expect(page.getByRole('heading', { name: /^Watchlist · \d+ symbols?$/ })).toBeVisible();
@@ -168,7 +172,7 @@ try {
   }
   await page.setViewportSize({width:1488,height:1058});
   await expect(page.getByText('Workspace saved',{exact:true})).toBeVisible();await page.reload();
-  await expect(page.getByRole('heading',{name:'Your session, in focus.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   await snapshot('desktop-final');
   expect(errors).toEqual([]);
   mark('Zero browser console errors and uncaught exceptions');

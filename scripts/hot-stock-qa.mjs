@@ -1,4 +1,5 @@
 if(!process.env.OPENING_BELL_TEST_URL)throw new Error('Use the isolated QA runner.');
+import {testFetch} from '../tests/fixtures/auth.mjs';
 import {chromium,expect} from '@playwright/test';
 import {existsSync,writeFileSync} from 'node:fs';
 import {mockMarket,fixtureQuote,indicatorFixture,NOW} from '../tests/fixtures/market.mjs';
@@ -36,18 +37,19 @@ try{
  await expect(page.getByRole('img',{name:/QQQ Yahoo Finance 4h/})).toBeVisible();mark('Four tabs, independent 2m strategy / 4h chart defaults, and automatic bullish Top');
  await hot.click();await expect(page.getByRole('img',{name:/NVDA Yahoo Finance 4h/})).toBeVisible();
  await expect(page.locator('.retest-panel')).toContainText('Retest confirmed');await expect(page.locator('.setup-checks')).toContainText('Aligned');
- await expect(page.locator('.indicator-toolbar')).toContainText('4 h');
+ await page.getByRole('button',{name:'Levels',exact:true}).click();await expect(page.getByLabel('Chart levels settings')).toContainText('4 h');
  await page.locator('.setup-references summary').click();await expect(page.locator('.setup-references')).toContainText('200 SMA · 1D');
  await page.getByRole('button',{name:'Indicators',exact:true}).click();await expect(page.getByLabel('9 / 21 EMA ribbon')).toBeChecked();
  if(await page.getByRole('button',{name:'Levels',exact:true}).getAttribute('aria-expanded')!=='true')await page.getByRole('button',{name:'Levels',exact:true}).click();await page.getByRole('button',{name:'gunner’s lvls',exact:true}).click();await expect(page.getByRole('link',{name:/Open NVDA chart/})).toHaveAttribute('href',/symbol=NASDAQ%3ANVDA/);await page.keyboard.press('Escape');
  await page.screenshot({path:'docs/qa/hot-stock-desktop.png',fullPage:true});mark('Top uses the correct stock chart, imported levels, default indicators and TradingView identity');
  // Keep the draft tied to NVDA while a completed bearish scan takes over Top.
  await expect(page.getByRole('button',{name:'Review NVDA plan'})).toBeEnabled();await page.getByRole('button',{name:'Review NVDA plan'}).click();
- await expect(page.locator('.plan-scenario-tabs .active')).toContainText('Bullish');mode='conflict';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
- await expect(hot).toContainText('AMD');await expect(page.getByRole('dialog')).toContainText('NVDA session plan');
- await page.getByLabel('Option structure').selectOption('Long call');await page.getByLabel('Planned expiration').fill('2026-10-30');await page.getByRole('button',{name:'Save draft plan'}).click();
+ await expect(page.getByRole('dialog').getByLabel('Setup',{exact:true})).toHaveValue('continuation');mode='conflict';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+ await expect(hot).toContainText('AMD');await expect(page.getByRole('dialog',{name:'Save a plan'}).locator('.plan-observation')).toContainText('NVDA');
+ await page.getByLabel('Option structure').selectOption('Long call');await page.getByLabel('Planned expiration').fill('2026-10-30');await page.getByRole('button',{name:'Save plan'}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
  const saved=await (await page.request.get(url+'/api/workspace')).json();expect(saved.data.plans[0].symbol).toBe('NVDA');expect(saved.data.plans[0].marketKey).toBe('NASDAQ:NVDA');expect(saved.data.plans[0].thesis).toContain('EMA 9/21 and VWAP');
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Overview',exact:true}).click();
  await expect(page.getByRole('img',{name:/AMD Yahoo Finance 4h/})).toBeVisible();await expect(page.locator('.retest-panel')).toContainText('Bearish');
  await page.locator('.scan-details summary').click();await expect(page.locator('.scan-table>div').filter({hasText:'NVDA'})).toContainText('Indicator conflict');await page.locator('.scan-details summary').click();mark('Bearish retests qualify; EMA conflict removes bullish Top, and saved plans retain their original symbol');
  await custom.click();await page.getByLabel('Custom watchlist stock').selectOption('NASDAQ:TSLA');await expect(page.getByRole('img',{name:/TSLA Yahoo Finance 4h/})).toBeVisible();
@@ -72,7 +74,7 @@ try{
  mode='outage';await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect(page.locator('.scan-table>div').filter({hasText:'NVDA'})).toContainText('Data unavailable');await expect(hot).toContainText('No qualifying setup');
  await custom.click();await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
  const state=await (await page.request.get(url+'/api/workspace')).json();state.data.watchText=state.data.watchText.replace('NYSE:TSM,','');
- const response=await page.request.put(url+'/api/workspace',{headers:{origin:url,'x-opening-bell-client':'web'},data:{revision:state.revision,data:state.data}});expect(response.status()).toBe(200);
+ const response=await testFetch(url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({revision:state.revision,data:state.data})});expect(response.status).toBe(200);
  await page.reload();await expect(page.getByLabel('Custom watchlist stock')).toHaveValue('');await expect(page.getByRole('heading',{name:'Choose a watchlist stock'})).toBeVisible();
  await expect(page.getByRole('img',{name:/TSM Yahoo Finance/})).toHaveCount(0);mark('Removing the saved Custom stock from the watchlist clears its chart safely');
  expect(errors).toEqual([]);mark('Failed source requests remain visible as scan gaps with no uncaught exceptions');
