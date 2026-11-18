@@ -8,7 +8,7 @@ const readResource=(path,signal)=>activityRequest(path,undefined,signal);
 export function usePortfolioResource(path,interval=60000,read=readResource){
   const [saved,setSaved]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),active=useRef(false),sequence=useRef(0),controller=useRef(null);
   const refresh=useCallback(async()=>{
-    if(!path){setBusy(false);return;}
+    if(path===null){setBusy(false);return;}
     const seq=++sequence.current;controller.current?.abort();const ac=new AbortController();controller.current=ac;setBusy(true);
     const publish=data=>{if(active.current&&seq===sequence.current){setSaved({path,data});setError('');}};
     try{publish(await read(path,ac.signal,publish));}
