@@ -44,6 +44,7 @@ test('owner activation needs an expiring one-use server token and never stores a
   assert.equal((await a.post('setup',{token,password},{Origin:'https://attacker.example'})).response.status,403);
   assert.equal((await a.post('setup',{token,password:'short'})).response.status,400);
   const activated=await a.post('setup',{token,password});assert.equal(activated.response.status,200);assert.equal(activated.body.user.email,'owner@example.com');assert.equal(activated.body.user.name,'Workspace owner');
+  assert.equal(activated.body.passwordChangedAt,a.now());assert.equal(activated.body.startedAt,a.now());assert.equal(activated.body.recoveryCodesRemaining,0);
   assert.match(activated.response.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);assert.equal(activated.response.headers.get('cache-control'),'no-store');
   assert.equal(await passwordMatches(password,a.auth.owner().password),true);assert.ok(!a.auth.owner().password.includes(password));
   assert.equal((await a.post('setup',{token,password})).response.status,400);
@@ -131,7 +132,7 @@ test('old eight-hour sessions keep their original idle and absolute deadlines an
 test('password change requires current credentials, revokes other sessions and preserves the trading workspace',async t=>{
   const a=await app(t);await a.login();const before=a.workspace.read(),other=a.auth.newSession().token;
   assert.equal((await a.post('password',{password:'incorrect',newPassword:'Another strong private passphrase!'})).response.status,401);
-  const oldCookie=a.cookie;assert.equal((await a.post('password',{password,newPassword:'Another strong private passphrase!'})).response.status,200);
+  const oldCookie=a.cookie;const changed=await a.post('password',{password,newPassword:'Another strong private passphrase!'});assert.equal(changed.response.status,200);assert.equal(changed.body.passwordChangedAt,a.now());
   assert.equal(a.auth.session(other),null);assert.notEqual(a.cookie,oldCookie);assert.deepEqual(a.workspace.read(),before);
   assert.equal((await a.login()).response.status,401);assert.equal((await a.login({password:'Another strong private passphrase!'})).response.status,200);
 });
@@ -144,7 +145,8 @@ test('TOTP enrollment verifies ownership, encrypts the secret, blocks code repla
   assert.match(confirmed.response.headers.get('set-cookie'),/; Max-Age=2592000;/);
   assert.equal((await a.login({code:code()})).response.status,401);a.advance(30000);assert.equal((await a.login({code:code()})).response.status,200);
   assert.equal((await a.login({code:code()})).response.status,401);
-  const recovery=confirmed.body.recoveryCodes[0];assert.equal((await a.login({code:recovery})).response.status,200);assert.equal((await a.login({code:recovery})).response.status,401);
+  assert.equal(confirmed.body.recoveryCodesRemaining,10);
+  const recovery=confirmed.body.recoveryCodes[0],recovered=await a.login({code:recovery});assert.equal(recovered.response.status,200);assert.equal(recovered.body.recoveryCodesRemaining,9);assert.equal((await a.login({code:recovery})).response.status,401);
   assert.ok(!a.auth.db.prepare('SELECT code FROM recovery').all().some(row=>row.code===recovery.replaceAll('-','')));
 });
 

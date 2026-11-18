@@ -1,5 +1,5 @@
 import {createContext,useContext,useEffect,useRef,useState} from 'react';
-import {ChartBar,LockKey,ShieldCheck,Eye,EyeSlash,SignOut,X} from '@phosphor-icons/react';
+import {ChartBar,LockKey,ShieldCheck,Eye,EyeSlash} from '@phosphor-icons/react';
 import {authRequest,setSessionToken,sessionToken} from './auth-client';
 import './auth.css';
 
@@ -7,7 +7,7 @@ const AuthContext=createContext(null);
 export const useAuth=()=>useContext(AuthContext);
 let initialActivation=new URLSearchParams(location.hash.slice(1)).get('activate');
 if(initialActivation)history.replaceState(null,'',location.pathname+location.search+'#overview');
-function Password({label='Password',value,onChange,autoComplete='current-password',id='login-password',...rest}){
+export function Password({label='Password',value,onChange,autoComplete='current-password',id='login-password',...rest}){
   const [show,setShow]=useState(false);
   return <label className="auth-field" htmlFor={id}><span>{label}</span><span className="auth-password"><input id={id} type={show?'text':'password'} autoComplete={autoComplete} value={value} onChange={onChange} {...rest}/><button type="button" className="icon-button" aria-label={show?`Hide ${label.toLowerCase()}`:`Show ${label.toLowerCase()}`} aria-pressed={show} onClick={()=>setShow(v=>!v)}>{show?<EyeSlash size={19}/>:<Eye size={19}/>}</button></span></label>;
 }
@@ -68,36 +68,4 @@ export function AuthGate({children}){
     {everSigned&&<div hidden={!signedIn} inert={!signedIn||undefined}>{children}</div>}
     {!signedIn&&(everSigned?<LockScreen>{form}</LockScreen>:form)}
   </AuthContext.Provider>;
-}
-
-export function AccountSettings({workspace}){
-  const {user,session,accept,signOut}=useAuth();
-  const [password,setPassword]=useState(''),[code,setCode]=useState(''),[nextPassword,setNextPassword]=useState(''),[repeat,setRepeat]=useState(''),[enrollment,setEnrollment]=useState(null),[recovery,setRecovery]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
-  async function action(kind){
-    if(busy)return;setBusy(true);setError('');setNotice('');
-    try{
-      if(kind==='password'&&nextPassword!==repeat)throw Error('The new passwords do not match.');
-      const result=await authRequest(kind,{password,code:code.trim(),...(kind==='password'?{newPassword:nextPassword}:{})});
-      if(kind==='totp/start'){setEnrollment(result);setCode('');}
-      else{if(result.authenticated)accept(result);setEnrollment(null);setRecovery(result.recoveryCodes||null);setPassword('');setCode('');setNextPassword('');setRepeat('');setNotice(kind==='password'?'Password changed. Other sessions have been signed out.':'Two-step verification is enabled. Save your recovery codes below.');}
-    }catch(e){setError(e.message);}finally{setBusy(false);}
-  }
-  async function logout(all){
-    if(workspace.status!=='saved'&&!confirm('There are unsaved changes. Sign out and discard those unsaved changes?'))return;
-    setBusy(true);setError('');try{await signOut(all);}catch(e){setError(e.message);setBusy(false);}
-  }
-  function downloadCodes(){const url=URL.createObjectURL(new Blob([`Trading Desk recovery codes\n${user.email}\nEach code works once with your password. Keep this file private.\n\n${recovery.join('\n')}\n`],{type:'text/plain'})),link=document.createElement('a');link.href=url;link.download='trading-desk-recovery-codes.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  return <section className="panel account-settings" aria-labelledby="account-title">
-    <header className="modal-header"><div><span className="eyebrow">PRIVATE ACCESS</span><h2 id="account-title">Account & security</h2></div></header>
-    <div className="account-profile"><ShieldCheck size={29}/><div><strong>{user.name}</strong><span>{user.email}</span><small>@{user.username}</small></div></div>
-    <p className={`account-security-state ${user.mfaEnabled?'green':'amber'}`}>{user.mfaEnabled?'Two-step verification enabled':'Two-step verification is off'}<small>{user.mfaEnabled?'Your password and an authenticator or recovery code are required at sign-in.':'Enable it before this app goes public.'}</small></p>
-    {notice&&<p className="auth-notice" role="status">{notice}</p>}{error&&<p className="auth-error" role="alert">{error}</p>}
-    {recovery?<section className="account-recovery"><h3>Save these recovery codes</h3><p>Each code works once with your password if you lose your authenticator. These codes are shown only now.</p><div>{recovery.map(code=><code key={code}>{code}</code>)}</div><button className="button primary" onClick={downloadCodes}>Download recovery codes</button><button className="button outline" onClick={()=>{setRecovery(null);setNotice('Recovery codes saved. Keep them somewhere private.');}}>I have saved my codes</button></section>:enrollment?<section className="account-enrollment"><h3>Add Trading Desk to your authenticator</h3><p>Scan this QR code with your authenticator app, then enter its six-digit code.</p><img src={enrollment.qr} width="240" height="240" alt="Authenticator enrollment QR code"/><details><summary>Enter the key manually</summary><code>{enrollment.secret}</code></details><form onSubmit={e=>{e.preventDefault();action('totp/confirm');}}><label className="auth-field"><span>Authenticator code</span><input autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value)}/></label><button className="button primary" type="submit" disabled={busy}>{busy?'Checking…':'Enable two-step verification'}</button><button className="button outline" type="button" onClick={()=>setEnrollment(null)}>Cancel</button></form></section>:<>
-      <section className="account-section"><h3>Verify your identity to make changes</h3><Password id="account-password" label="Current password" value={password} onChange={e=>setPassword(e.target.value)} maxLength={128}/>{user.mfaEnabled&&<label className="auth-field"><span>Authenticator or recovery code</span><input autoComplete="one-time-code" maxLength={50} value={code} onChange={e=>setCode(e.target.value)}/></label>}
-        <div className="account-actions"><button className="button primary" disabled={busy||!password} onClick={()=>action('totp/start')}>{user.mfaEnabled?'Replace authenticator':'Set up two-step verification'}</button>{user.mfaEnabled&&<button className="button outline" disabled={busy||!password} onClick={()=>action('recovery-codes')}>Replace recovery codes</button>}</div>
-      </section>
-      <details className="account-section"><summary>Change password</summary><form onSubmit={e=>{e.preventDefault();action('password');}}><Password id="account-new-password" label="New password" autoComplete="new-password" value={nextPassword} onChange={e=>setNextPassword(e.target.value)} minLength={15} maxLength={128} required/><Password id="account-repeat-password" label="Confirm new password" autoComplete="new-password" value={repeat} onChange={e=>setRepeat(e.target.value)} minLength={15} maxLength={128} required/><button className="button outline" disabled={busy||!password} type="submit">Change password</button><p className="auth-hint">15–128 characters. Other signed-in devices will be signed out.</p></form></details>
-    </>}
-    <section className="account-section"><h3>Sessions</h3><p>{session.sessionCount} active {session.sessionCount===1?'session':'sessions'}. Stay signed in for 30 days from sign-in, including after closing your browser. Signing out or changing account security ends sessions earlier.</p><div className="account-actions"><button className="button outline" disabled={busy} onClick={()=>logout(false)}><SignOut size={18}/>Sign out</button><button className="text-button" disabled={busy} onClick={()=>logout(true)}>Sign out all devices</button></div></section>
-  </section>;
 }

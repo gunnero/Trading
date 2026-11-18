@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {usePortfolioNotifications,PortfolioNotice} from './PortfolioNotifications';
 const PortfolioInsights=React.lazy(()=>import('./PortfolioInsights'));
 const PortfolioActivity=React.lazy(()=>import('./PortfolioActivity'));
@@ -6,7 +7,6 @@ import {PageHeader,PageNavigation} from './PageHeader';
 import {canonicalRoute,routeView,routeGroup,marketTabs,portfolioTabs} from './data/navigation.mjs';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Briefcase, ChartBar, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, Notebook, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
 import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';

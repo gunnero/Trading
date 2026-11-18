@@ -2,7 +2,8 @@ import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {timeZones} from './data/display-time.mjs';
 import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,UserCircle,ArrowRight,DownloadSimple,Clock,SignOut,Tag,ArrowsLeftRight} from '@phosphor-icons/react';
-import {useAuth,AccountSettings} from './Auth';
+import {useAuth} from './Auth';
+import {AccountSettings} from './AccountSettings';
 import {GlobalChartSettings,useChartSettingsStore} from './ChartSettings';
 import {DataConnections} from './DataConnections';
 import {useMinuteClock} from './Feeds';
@@ -14,7 +15,7 @@ export const settingsCategory=route=>{const id=route.split('/')[1];return catego
 export function SettingsPage({briefing,connectionSettingsOpen,onConnectionSettings,category,transfersContent,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
   const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
   const navigation=useSectionNavigation(category);
-  const compactHeader=['transfers','watchlist','charts','connections'].includes(category);
+  const compactHeader=['transfers','watchlist','charts','connections','account'].includes(category);
   const content=<><PageHeader title="Settings" description={compactHeader?undefined:"Manage your watchlist, charts, data connections and account in one place."}/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':category==='connections'?' settings-connections-page':''}`}>
 
     <div className="settings-layout"><nav ref={navigation} className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>

@@ -27,11 +27,13 @@ try{
   await expect(page.getByRole('heading',{name:'Set up your account'})).toBeVisible();expect(page.url()).not.toContain(setup.token);
   await page.getByLabel('Create password',{exact:true}).fill(password);await page.getByLabel('Confirm password',{exact:true}).fill(password);await page.getByRole('button',{name:'Activate account'}).click();
   const account=page.getByRole('region',{name:'Account & security'});await expect(account).toBeVisible();await expect(account).toContainText('Workspace owner');await expect(account).toContainText('owner@example.com');
-  await account.getByLabel('Current password',{exact:true}).fill(password);await account.getByRole('button',{name:'Set up two-step verification'}).click();await expect(account.getByAltText('Authenticator enrollment QR code')).toBeVisible();
+  await account.getByRole('button',{name:'Change password',exact:true}).click();await account.getByLabel('New password',{exact:true}).fill('An unsaved test-only passphrase');await account.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(account.getByLabel('New password',{exact:true})).toHaveCount(0);await expect(account.getByRole('button',{name:'Generate new codes'})).toBeDisabled();
+  await account.getByRole('button',{name:'Set up two-step verification'}).click();await account.getByLabel('Current password',{exact:true}).fill(password);await account.getByRole('button',{name:'Continue to setup'}).click();await expect(account.getByAltText('Authenticator enrollment QR code')).toBeVisible();
   const secret=await account.locator('.account-enrollment code').textContent(),totp=new TOTP({secret:Secret.fromBase32(secret)});
   await account.getByLabel('Authenticator code',{exact:true}).fill(totp.generate());await account.getByRole('button',{name:'Enable two-step verification'}).click();
   await expect(account.getByRole('heading',{name:'Save these recovery codes'})).toBeVisible();const codes=await account.locator('.account-recovery code').allTextContents();expect(codes.length).toBe(10);
-  await account.getByRole('button',{name:'I have saved my codes'}).click();await expect(account).toContainText('Two-step verification enabled');
+  await account.getByRole('button',{name:'I have saved my codes'}).click();await expect(account).toContainText('10 unused codes');
   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Overview',exact:true}).click();await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
   mark('Private one-use activation, exact owner profile, local QR enrollment and recovery-code confirmation work');
   // Existing workspace edits still autosave through the protected API.
@@ -73,5 +75,27 @@ try{
   await expect(reopened.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
   expect((await remembered.cookies()).find(cookie=>cookie.name==='ob_local_session')).toBeUndefined();
   mark('A 30-day HttpOnly cookie survives closing and relaunching the browser; explicit sign-out removes it');
+  const edits=await testRuntime(),editPage=await browser.newPage();
+  try{
+    await prepare(editPage);await editPage.goto(edits.url+'/#settings/account');
+    const security=editPage.getByRole('region',{name:'Account & security'}),fixturePassword='Isolated browser fixture passphrase 2026!';
+    const passwordField=security.getByLabel('Current password',{exact:true}),factorField=security.getByLabel('Authenticator or recovery code');
+    await security.getByRole('button',{name:'Generate new codes'}).click();await expect(passwordField).toBeFocused();
+    await passwordField.fill(fixturePassword);await expect(security.getByRole('button',{name:'Replace recovery codes'})).toBeDisabled();
+    await factorField.fill(edits.authenticatorCode());await security.getByRole('button',{name:'Replace recovery codes'}).click();
+    await expect(security.getByRole('heading',{name:'Save these recovery codes'})).toBeVisible();
+    const replacement=await security.locator('.account-recovery code').first().textContent();
+    const downloading=editPage.waitForEvent('download');await security.getByRole('button',{name:'Download recovery codes'}).click();
+    expect((await downloading).suggestedFilename()).toBe('trading-desk-recovery-codes.txt');
+    await security.getByRole('button',{name:'I have saved my codes'}).click();await expect(security).toContainText('10 unused codes');
+    await security.getByRole('button',{name:'Change password',exact:true}).click();await passwordField.fill(fixturePassword);await factorField.fill(replacement);
+    const newPassword='New isolated browser fixture passphrase!',confirm=security.getByLabel('Confirm new password',{exact:true});
+    await security.getByLabel('New password',{exact:true}).fill(newPassword);await confirm.fill(newPassword+'x');
+    await security.getByRole('button',{name:'Update password'}).click();await expect(security.getByRole('alert')).toContainText('do not match');
+    await confirm.fill(newPassword);await security.getByRole('button',{name:'Update password'}).click();
+    await expect(security).toContainText('Password changed.');await expect(security).toContainText('9 unused codes');
+    await expect(passwordField).toHaveValue('');await editPage.reload();await expect(security).toContainText('9 unused codes');
+    mark('Verified recovery-code rotation and download, password confirmation and change, persisted code counts and cleared credentials');
+  }finally{await editPage.close();await edits.close();}
   expect(errors).toEqual([]);writeFileSync(`${dir}/checks.json`,JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
 }finally{await remembered?.close();await browser.close();rmSync(profile,{recursive:true,force:true});store.close();await runtime.close();}

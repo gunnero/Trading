@@ -94,7 +94,16 @@ export function openAuthStore({directory=process.env.OPENING_BELL_DATA_DIR||file
     db.prepare('DELETE FROM sessions WHERE id NOT IN (SELECT id FROM sessions ORDER BY created DESC,rowid DESC LIMIT 5)').run();
     return {token,row:{id,created,active:created,expires}};
   }
-  function profile(row){const user=owner();return {authenticated:true,user:{email:user.email,username:user.username,name:user.name,mfaEnabled:!!user.totp},csrf:csrf(row.id),idleExpiresAt:row.active+sessionIdleMs(row),expiresAt:row.expires,sessionCount:db.prepare(`SELECT count(*) n FROM sessions WHERE ${sessionDeadlineSql}>?`).get(now()).n};}
+  function profile(row){
+    const user=owner();
+    const passwordEvent=db.prepare("SELECT at FROM events WHERE event IN ('password_changed','owner_activated') ORDER BY id DESC LIMIT 1").get();
+    return {
+      authenticated:true,user:{email:user.email,username:user.username,name:user.name,mfaEnabled:!!user.totp},
+      passwordChangedAt:passwordEvent?.at??null,recoveryCodesRemaining:db.prepare('SELECT count(*) AS n FROM recovery').get().n,
+      csrf:csrf(row.id),startedAt:row.created,idleExpiresAt:row.active+sessionIdleMs(row),expiresAt:row.expires,
+      sessionCount:db.prepare(`SELECT count(*) n FROM sessions WHERE ${sessionDeadlineSql}>?`).get(now()).n
+    };
+  }
   function secondFactor(user,code){
     if(!user.totp)return {kind:'none'};
     if(typeof code!=='string')return null;
