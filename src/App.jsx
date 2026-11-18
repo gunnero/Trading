@@ -150,11 +150,17 @@ function SessionDesk({workspace}) {
   useEffect(() => {
     const canonicalize=()=>{const next=currentRoute();if(window.location.hash.slice(1)!==next)window.history.replaceState(window.history.state,'','#'+next);};
     canonicalize();
-    const syncSection = () => { canonicalize(); setRoute(currentRoute()); setMenuOpen(false); setDialog(null); window.scrollTo(0, 0); };
+    const syncSection = event => {
+      if(!window.dispatchEvent(new Event('desk:before-navigation',{cancelable:true}))){
+        window.history.pushState(window.history.state,'',event.oldURL);return;
+      }
+      canonicalize(); setRoute(currentRoute()); setMenuOpen(false); setDialog(null); window.scrollTo(0, 0); };
     window.addEventListener('hashchange', syncSection);
     return () => window.removeEventListener('hashchange', syncSection);
   }, []);
-  const navigate = destination => { const next=canonicalRoute(destination);window.location.hash = next; setRoute(next); setMenuOpen(false); window.scrollTo(0, 0); };
+  const navigate = destination => { const next=canonicalRoute(destination);
+    if(next!==currentRoute()&&!window.dispatchEvent(new Event('desk:before-navigation',{cancelable:true})))return;
+    window.location.hash = next; setRoute(next); setMenuOpen(false); window.scrollTo(0, 0); };
   const inspect = entry => { setSelectedEntry(entry); setDialog('instrument'); };
   const openLevelSetup=entry=>{setSelectedEntry(entry);setDialog('level-setup');};
   const openLevel=(item,selectedSheet,historical)=>{

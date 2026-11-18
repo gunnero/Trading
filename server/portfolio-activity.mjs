@@ -97,7 +97,7 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
       if(head&&!s.cursor)s.nextAt=now()+60000;
       if(!head){
         s.pages++;s.seen.push(path);s.cursor=page.next;
-        if(!page.next){s.complete=true;s.completedAt=now();s.coveredThrough=s.scanStartedAt||s.startedAt;s.rescanAt=now()+86400000;s.cursor=null;s.pages=0;s.seen=[];s.nextAt=now()+60000;}
+        if(!page.next){s.complete=true;s.completedPages=s.pages;s.completedAt=now();s.coveredThrough=s.scanStartedAt||s.startedAt;s.rescanAt=now()+86400000;s.cursor=null;s.pages=0;s.seen=[];s.nextAt=now()+60000;}
         else if(s.pages>=200){s.error='History exceeds 10,000 records. The imported portion is available; older records need a separate export.';s.nextAt=now()+3600000;s.cursor=null;s.pages=0;s.seen=[];s.complete=false;}
       }
     }catch(e){
@@ -113,11 +113,12 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
     const chosen=list.filter(a=>(!person||a.personId===person)&&(!id||a.id===id));
     const params=[],clauses=chosen.map(a=>{params.push(a.id,identity(a));return '(account_id=? AND identity=?)';});
     let where=clauses.length?'('+clauses.join(' OR ')+')':'0';
+    const accountScope=filters.kind==='journal'?{where,params:[...params]}:null;
     if(stock){where+=" AND (ticker LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')";const q='%'+stock.replace(/[\\%_]/g,'\\$&')+'%';params.push(q,q);}
     let bounds;try{bounds=activityDateBounds(filters.from,filters.to,filters.timeZone);}catch{throw fail(400,'Choose a valid date range and time zone.');}
     if(bounds.from!==null){where+=' AND at>=?';params.push(bounds.from);}
     if(bounds.to!==null){where+=' AND at<?';params.push(bounds.to);}
-    return {where,params,list,root,names,decorate:row=>{const a=list.find(a=>a.id===row.account_id);return {...JSON.parse(row.detail),accountId:a.id,accountLabel:a.label,personId:a.personId,person:names.get(a.personId)||'Unknown person',environment:a.environment,brokerId:a.snapshot.brokerId};}};
+    return {where,params,accountScope,list,root,names,decorate:row=>{const a=list.find(a=>a.id===row.account_id);return {...JSON.parse(row.detail),accountId:a.id,accountLabel:a.label,personId:a.personId,person:names.get(a.personId)||'Unknown person',environment:a.environment,brokerId:a.snapshot.brokerId};}};
   }
   function health(id){const s=tracking(id);return s?{checkedAt:s.checkedAt,error:s.error,historyError:s.historyError,balanceError:s.balanceError,historyPending:s.historyPending}:null;}
   const fillEdge=direction=>db.prepare(`SELECT at FROM portfolio_activity_fills WHERE account_id=? AND identity=? ORDER BY at ${direction} LIMIT 1`);
@@ -127,15 +128,35 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
     const limit=Number(filters.limit??50);
     if(!Number.isInteger(limit)||limit<1||limit>50)throw fail(400,'Choose a page size between 1 and 50.');
     const offset=Number(filters.offset||0);if(!Number.isSafeInteger(offset)||offset<0||offset>1000000)throw fail(400,'Invalid page.');
-    const s=selection(filters);if(kind==='orders'&&(filters.from||filters.to))s.where+=" AND json_extract(detail,'$.createdAt') IS NOT NULL";const total=db.prepare(`SELECT count(*) n FROM ${table} WHERE ${s.where}`).get(...s.params).n;
-    const rows=db.prepare(`SELECT * FROM ${table} WHERE ${s.where} ORDER BY at DESC,${kind==='alerts'?'id':'item_id'} DESC,account_id ASC LIMIT ? OFFSET ?`).all(...s.params,limit,offset);
+    const s=selection(filters);
+    let listings,orderBy=kind==='alerts'?'at DESC,id DESC,account_id ASC':'at DESC,item_id DESC,account_id ASC';
+    if(kind==='journal'){
+      const scope=s.accountScope;
+      listings=db.prepare(`SELECT ticker,MAX(name) AS name FROM portfolio_activity_fills WHERE ${scope.where} GROUP BY ticker ORDER BY ticker`).all(...scope.params);
+      if(filters.ticker){
+        if(typeof filters.ticker!=='string'||filters.ticker.length>160)throw fail(400,'Choose a valid broker listing.');
+        s.where+=' AND ticker=?';
+        s.params.push(filters.ticker);
+      }
+      const fields={date:'at',listing:'ticker COLLATE NOCASE',side:"json_extract(detail,'$.side')",quantity:"json_extract(detail,'$.quantity')",price:"json_extract(detail,'$.price')",realized:"json_extract(detail,'$.realized')"};
+      const sort=filters.sort||'date',direction=filters.direction||'desc';
+      if(!Object.hasOwn(fields,sort)||!['asc','desc'].includes(direction))throw fail(400,'Choose a valid journal sort.');
+      const currencyField=sort==='price'?'priceCurrency':sort==='realized'?'currency':null;
+      const byCurrency=currencyField?`json_extract(detail,'$.${currencyField}') ASC NULLS LAST,`:'';
+      orderBy=sort==='date'?`at ${direction.toUpperCase()},item_id DESC,account_id ASC`:
+        `(${fields[sort]} IS NULL),${byCurrency}${fields[sort]} ${direction.toUpperCase()},at DESC,item_id DESC,account_id ASC`;
+    }
+    if(kind==='orders'&&(filters.from||filters.to))s.where+=" AND json_extract(detail,'$.createdAt') IS NOT NULL";
+    const total=db.prepare(`SELECT count(*) n FROM ${table} WHERE ${s.where}`).get(...s.params).n;
+    const rows=db.prepare(`SELECT * FROM ${table} WHERE ${s.where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...s.params,limit,offset);
     const statuses=s.list.map(a=>{
       const g=credential(a.id)?.generation,key=identity(a),saved=g?state(a.id,g,key):null;
       return {accountId:a.id,accountLabel:a.label,person:s.names.get(a.personId),connected:!!g,environment:a.environment,
         firstExecutionAt:earliest.get(a.id,key)?.at??null,lastExecutionAt:latest.get(a.id,key)?.at??null,
+        ...(kind==='journal'?{coveredThrough:saved?.coveredThrough??null,completedPages:saved?.completedPages??null}:{}),
         checkedAt:saved?.checkedAt||null,complete:!!saved?.complete,pages:saved?.pages||0,nextAt:saved?.nextAt||null,error:saved?.error||null,tracking:g?health(a.id):null};
     });
-    return {kind,total,offset,more:offset+rows.length<total,items:rows.map(row=>({...s.decorate(row),...(kind==='alerts'?{eventId:row.id,at:row.at,read:row.read_at!==null}:{})})),people:s.root.people,accounts:s.list.map(a=>({id:a.id,personId:a.personId,label:a.label,environment:a.environment})),statuses};
+    return {kind,...(listings?{listings}:{}),total,offset,more:offset+rows.length<total,items:rows.map(row=>({...s.decorate(row),...(kind==='alerts'?{eventId:row.id,at:row.at,read:row.read_at!==null}:{})})),people:s.root.people,accounts:s.list.map(a=>({id:a.id,personId:a.personId,label:a.label,environment:a.environment})),statuses};
   }
   function notifications(){
     const s=selection(),unread=db.prepare(`SELECT count(*) n FROM portfolio_activity_events WHERE ${s.where} AND read_at IS NULL`).get(...s.params).n;

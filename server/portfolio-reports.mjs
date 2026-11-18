@@ -67,6 +67,7 @@ export function createPortfolioReports(db,{now,credential,decode,account,account
   function saveNote(input){
     const id=input?.accountId,executionId=input?.executionId,a=account(id);
     if(!Number.isSafeInteger(executionId)||executionId<0||!Number.isSafeInteger(input.revision)||input.revision<0||typeof input.reason!=='string'||input.reason.length>500||typeof input.notes!=='string'||input.notes.length>4000)throw fail(400,'Enter a reason (up to 500 characters) and notes (up to 4,000 characters).');
+    if(input.brokerIdentity!==undefined&&input.brokerIdentity!==identity(a))throw fail(409,'The connected broker account changed. Copy your draft and reload the journal.');
     if(!db.prepare('SELECT 1 FROM portfolio_activity_fills WHERE account_id=? AND identity=? AND item_id=?').get(id,identity(a),executionId))throw fail(404,'Execution not found.');
     if(note(id,executionId).revision!==input.revision)throw fail(409,'These notes changed in another view. Copy your draft and reload the saved notes.');
     db.prepare('INSERT INTO portfolio_execution_notes VALUES(?,?,?,?,?,?,?) ON CONFLICT(account_id,identity,execution_id) DO UPDATE SET revision=excluded.revision,reason=excluded.reason,notes=excluded.notes,updated_at=excluded.updated_at').run(id,identity(a),executionId,input.revision+1,input.reason.trim(),input.notes.trim(),now());

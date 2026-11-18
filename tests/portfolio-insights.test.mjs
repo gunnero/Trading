@@ -125,7 +125,7 @@ test('zone edits use the selected source snapshot and preserve original levels a
 test('broker journal notes belong to an exact execution and account; revisions and imports preserve edits through restart',async t=>{
  const f=await fixture(t);await f.service.activity.sync(f.id);const second=await f.second();await f.service.activity.sync(second);
  assert.equal(f.service.reports.journal({account:f.id}).items[0].note.revision,0);
- const input={accountId:f.id,executionId:1,revision:0,reason:'Breakout',notes:'Waited for confirmation.'};f.service.reports.saveNote(input);assert.throws(()=>f.service.reports.saveNote(input),/changed/);assert.throws(()=>f.service.reports.saveNote({...input,executionId:999}),/not found/);
+ const input={accountId:f.id,executionId:1,revision:0,reason:'Breakout',notes:'Waited for confirmation.'};assert.throws(()=>f.service.reports.saveNote({...input,brokerIdentity:'old:identity'}),/account changed/);f.service.reports.saveNote(input);assert.throws(()=>f.service.reports.saveNote(input),/changed/);assert.throws(()=>f.service.reports.saveNote({...input,executionId:999}),/not found/);
  f.restart();f.advance();await f.service.activity.sync(f.id);assert.equal(f.service.reports.journal({account:f.id}).items[0].note.reason,'Breakout');assert.equal(f.service.reports.journal({account:second}).items[0].note.reason,'');
  f.service.removeAccount(f.id,f.service.read().revision);assert.equal(f.service.reports.journal({account:f.id}).items.length,0);
 });

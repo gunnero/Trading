@@ -1,31 +1,110 @@
+import {useEffect,useId,useState} from 'react';
+import {ArrowsClockwise,CaretLeft,CaretRight,CheckCircle,DownloadSimple,Info,LockKey} from '@phosphor-icons/react';
 import {usePortfolioPrivacy,PortfolioPrivacyControls} from './PortfolioPrivacy';
-import {useEffect,useId,useRef,useState} from 'react';
-import {X,Notebook,DownloadSimple} from '@phosphor-icons/react';
 import {useDisplayTime} from './DisplayTime';
 import {activityRequest} from './PortfolioNotifications';
 import {safeCsv} from './data/portfolio-insights.mjs';
-import {portfolioNumber as number,portfolioTone as tone,usePortfolioResource,downloadPortfolioCsv} from './PortfolioTools';
-import './portfolio-insights.css';
+import {usePortfolioResource,downloadPortfolioCsv} from './PortfolioTools';
+import BrokerJournalTable,{executionKey} from './BrokerJournalTable';
+import BrokerJournalFilters,{emptyFilters} from './BrokerJournalFilters';
+import './broker-journal.css';
+
+function Coverage({statuses}){
+  const {clockDate}=useDisplayTime(),p=usePortfolioPrivacy();
+  if(!statuses.length)return <p className="bj-coverage"><Info/>No broker history in this selection.</p>;
+  const complete=statuses.every(s=>s.complete&&!s.error),offline=statuses.some(s=>!s.connected);
+  const pageCounts=statuses.map(s=>s.complete?s.completedPages:s.pages);
+  const pages=pageCounts.every(Number.isInteger)?pageCounts.reduce((a,b)=>a+b,0):null;
+  const through=complete&&statuses.every(s=>Number.isFinite(s.coveredThrough))?Math.min(...statuses.map(s=>s.coveredThrough)):null;
+  const status=complete?'History imported':statuses.some(s=>s.error)?'Import needs attention':'Partial history';
+  const Icon=complete&&!offline?CheckCircle:Info;
+  return <details className="bj-coverage"><summary><Icon className={complete&&!offline?'green':'amber'}/><span>
+    {pages>0&&<><b>{pages} {pages===1?'page':'pages'} saved</b> · </>}
+    {through?'Complete through '+clockDate(through):status}{offline?' · Includes disconnected accounts':''}</span></summary>
+    {statuses.map(s=><p key={s.accountId}><b>{p.person(s.person)} · {p.label(s.accountLabel,s.accountId)}</b> · {s.error?(p.privateMode?'Check connection':s.error):s.complete?'History imported':'History incomplete'}</p>)}
+  </details>;
+}
 
 export default function PortfolioJournal(){
-  const privacy=usePortfolioPrivacy(),{money,number}=privacy;
-  const {settings,journalStamp}=useDisplayTime(),[filters,setFilters]=useState({person:'',account:'',stock:'',from:'',to:''}),[offset,setOffset]=useState(0),[meta,setMeta]=useState({people:[],accounts:[]}),[editing,setEditing]=useState(null);
-  const query=new URLSearchParams({...filters,offset,timeZone:settings.timeZone}).toString(),view=usePortfolioResource('journal?'+query,15000),data=view.data;
-  useEffect(()=>{if(data)setMeta({people:data.people,accounts:data.accounts});},[data]);
-  const filter=(key,value)=>{setFilters(f=>({...f,[key]:value,...(key==='person'?{account:''}:{})}));setOffset(0);};
-  function exportPage(){downloadPortfolioCsv(safeCsv([['Person','Account','Environment','Executed (UTC)','Stock','Side','Shares','Price','Price currency','Realized P/L','Account currency','Execution ID','Reason','Notes'],...data.items.map(t=>[t.person,t.accountLabel,t.environment,new Date(t.at).toISOString(),t.name,t.side,t.quantity,t.price,t.priceCurrency,t.realized,t.currency,t.id,t.note.reason,t.note.notes])]),'broker-journal-page.csv');}
-  return <section className="panel pi-panel" aria-label="Automatic broker trade journal"><PortfolioPrivacyControls/><header className="pi-heading"><div><h2>Broker trades</h2><p>Each confirmed stock execution is added automatically. Capture your reasoning and review alongside it.</p></div><div className="pi-actions"><button className="button outline" onClick={view.refresh} disabled={view.busy}>Refresh journal</button><button className="button outline" disabled={!data?.items.length||privacy.privateMode} onClick={exportPage}><DownloadSimple size={16}/>Export this page</button></div></header>
-    <form className="pa-filters" onSubmit={e=>e.preventDefault()} aria-label="Broker journal filters"><label>Person<select aria-label="Person" value={filters.person} onChange={e=>filter('person',e.target.value)}><option value="">Everyone</option>{meta.people.map(p=><option key={p.id} value={p.id}>{privacy.person(p.name)}</option>)}</select></label><label>Account<select aria-label="Account" value={filters.account} onChange={e=>filter('account',e.target.value)}><option value="">All accounts</option>{meta.accounts.filter(a=>!filters.person||a.personId===filters.person).map(a=><option key={a.id} value={a.id}>{privacy.person(meta.people.find(p=>p.id===a.personId)?.name)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><label>Stock<input type="search" maxLength={80} value={filters.stock} onChange={e=>filter('stock',e.target.value)} placeholder="Company or ticker"/></label><label>From<input type="date" value={filters.from} onChange={e=>filter('from',e.target.value)}/></label><label>To<input type="date" value={filters.to} onChange={e=>filter('to',e.target.value)}/></label><button type="button" className="text-button" onClick={()=>{setFilters({person:'',account:'',stock:'',from:'',to:''});setOffset(0);}}>Clear filters</button></form>
-    <p className="pi-help">Broker executions stay separate from manually journaled options. A partial fill is its own record. Notes belong to the exact account and execution, and survive history refreshes.</p>
-    {view.error&&<p className="amber" role="alert">{view.error}</p>}{!data?<p role="status">Loading broker journal…</p>:!data.items.length?<p>No imported executions match these filters. History imports automatically for connected accounts with History: Orders permission.</p>:<ul className="pi-journal-list">{data.items.map(t=><li key={t.accountId+':'+t.id}><div><small>{privacy.person(t.person)} · {privacy.label(t.accountLabel,t.accountId)}{t.environment==='demo'?' · DEMO':''} · {journalStamp(t.at)}</small><h3>{t.name} <span className={t.side==='BUY'?'green':'amber'}>{t.side}</span></h3><p>{number(t.quantity)} shares at {money(t.price,t.priceCurrency)} {t.priceCurrency||''} · Execution {t.id}</p><p>Realized P/L <strong className={tone(t.realized)}>{money(t.realized,t.currency)} {t.currency||''}</strong></p>{!privacy.privateMode&&t.note.reason&&<p className="pi-note-text"><b>Reason:</b> {t.note.reason}</p>}{!privacy.privateMode&&t.note.notes&&<p className="pi-note-text">{t.note.notes}</p>}</div><button className="button outline" disabled={privacy.privateMode} onClick={()=>setEditing(t)}><Notebook size={16}/>{t.note.revision?'Edit notes':'Add notes'}</button></li>)}</ul>}
-    {data&&<footer className="pa-pagination"><span>{data.total?`${offset+1}–${Math.min(offset+50,data.total)} of ${data.total}`:'0 records'}</span><div><button className="button outline" disabled={!offset||view.busy} onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</button><button className="button outline" disabled={!data.more||view.busy} onClick={()=>setOffset(offset+50)}>Next</button></div></footer>}
-    {data?.statuses.some(s=>!s.complete||s.error)&&<p className="pi-help amber">Some accounts are still importing history or need History: Orders permission. Open Activity & alerts → Connections & history coverage for details.</p>}
-    {editing&&!privacy.privateMode&&<JournalNotes key={editing.accountId+':'+editing.id} trade={editing} onClose={()=>setEditing(null)} onSaved={async()=>{setEditing(null);await view.refresh();}}/>}
+  const privacy=usePortfolioPrivacy(),{settings,clockDate,clockTime,zoneLabel}=useDisplayTime(),privacyId=useId();
+  const [filters,setFilters]=useState(emptyFilters),[offset,setOffset]=useState(0),[limit,setLimit]=useState(5);
+  const [sort,setSort]=useState({field:'date',direction:'desc'}),[showPrivacy,setShowPrivacy]=useState(false);
+  const [options,setOptions]=useState({people:[],accounts:[],listings:[]});
+  const [editor,setEditor]=useState(null),[saving,setSaving]=useState(false),[noteError,setNoteError]=useState('');
+  const numericSort=privacy.hideBalances&&['price','quantity','realized'].includes(sort.field);
+  const field=numericSort?'date':sort.field,direction=numericSort?'desc':sort.direction;
+  const query=new URLSearchParams({...filters,offset,limit,sort:field,direction,timeZone:settings.timeZone}).toString();
+  const view=usePortfolioResource('journal?'+query,15000);
+  const expanded=editor?.query===query?editor:null;
+  const data=expanded?.page??view.data,trade=editor?.trade;
+  const dirty=!!trade&&(editor.reason!==trade.note.reason||editor.notes!==trade.note.notes);
+  useEffect(()=>{
+    if(view.data)setOptions({people:view.data.people,accounts:view.data.accounts,listings:view.data.listings||[]});
+  },[view.data]);
+  useEffect(()=>{
+    if(!dirty&&!saving)return;
+    const protect=e=>{e.preventDefault();e.returnValue='';};
+    window.addEventListener('beforeunload',protect);
+    const leave=e=>{if(saving||!window.confirm('Discard your unsaved journal notes?'))e.preventDefault();};
+    window.addEventListener('desk:before-navigation',leave);
+    return ()=>{window.removeEventListener('beforeunload',protect);window.removeEventListener('desk:before-navigation',leave);};
+  },[dirty,saving]);
+  function close(){
+    if(saving||(dirty&&!window.confirm('Discard your unsaved journal notes?')))return false;
+    setEditor(null);setNoteError('');return true;
+  }
+  function select(t,notes=false){
+    const key=executionKey(t);
+    if(notes&&editor?.key===key)return;
+    if(!close()||editor?.key===key)return;
+    setEditor({key,query,trade:t,page:data,reason:t.note.reason,notes:t.note.notes,reasonOpen:!!t.note.reason});
+  }
+  async function save(e){
+    e.preventDefault();
+    if(!dirty||privacy.privateMode||saving)return;
+    setSaving(true);setNoteError('');
+    try{
+      const note=await activityRequest('journal/notes',{accountId:trade.accountId,executionId:trade.id,
+        brokerIdentity:trade.brokerId==null?undefined:trade.environment+':'+trade.brokerId,
+        revision:trade.note.revision,reason:editor.reason,notes:editor.notes});
+      const updated={...trade,note};
+      setEditor({...editor,trade:updated,reason:note.reason,notes:note.notes,page:{...data,items:data.items.map(t=>executionKey(t)===editor.key?updated:t)}});
+      await view.refresh();
+    }catch(err){setNoteError(err.message);}finally{setSaving(false);}
+  }
+  function exportPage(){
+    if(privacy.privateMode||!data?.items.length)return;
+    const csv=safeCsv([['Person','Account','Environment','Executed (UTC)','Stock','Side','Shares','Price','Price currency','Realized P/L','Account currency','Execution ID','Reason','Notes','Broker ticker'],...data.items.map(t=>[t.person,t.accountLabel,t.environment,new Date(t.at).toISOString(),t.name,t.side,t.quantity,t.price,t.priceCurrency,t.realized,t.currency,t.id,t.note.reason,t.note.notes,t.ticker])]);
+    downloadPortfolioCsv(csv,'broker-journal-page.csv');
+  }
+  const ids=new Set(data?.accounts.filter(a=>!filters.person||a.personId===filters.person).map(a=>a.id));
+  const statuses=data?.statuses.filter(s=>ids.has(s.accountId)&&(!filters.account||s.accountId===filters.account))||[];
+  const checked=statuses.reduce((last,s)=>Math.max(last,s.checkedAt||0),0);
+  function sortBy(next,order){
+    if(!close())return;
+    const ascending=next===field?direction==='desc':next!=='date';
+    setOffset(0);setSort({field:next,direction:order||(ascending?'asc':'desc')});
+  }
+  return <section className="bj-journal" aria-label="Automatic broker trade journal"><h2 className="sr-only">Broker trades</h2>
+    <BrokerJournalFilters filters={filters} options={options} apply={next=>{if(!close())return false;setFilters(next);setOffset(0);return true;}}/>
+    <div className="bj-source"><p>Trading 212 executions · imported automatically{checked>0&&' · Last checked '+clockDate(checked)+', '+clockTime(checked)+' '+zoneLabel}</p>
+      <div><button className="icon-button" title="Privacy settings" aria-label="Privacy settings" aria-expanded={showPrivacy} aria-controls={privacyId} onClick={()=>setShowPrivacy(!showPrivacy)}><LockKey/></button>
+        <button className="icon-button" aria-label="Refresh journal" title="Refresh journal" disabled={view.busy||saving} onClick={()=>{if(close())view.refresh();}}><ArrowsClockwise/></button>
+        <button className="icon-button" aria-label="Export this page" title="Export this page" disabled={!data?.items.length||privacy.privateMode} onClick={exportPage}><DownloadSimple/></button>
+      </div></div>
+    {showPrivacy&&<div id={privacyId}><PortfolioPrivacyControls/></div>}
+    {view.error&&<p role="alert" className="amber">{view.error}</p>}
+    {!data?!view.error&&<p role="status">Loading broker executions…</p>:<>
+      {data.items.length?<BrokerJournalTable rows={data.items} sort={field} direction={direction} onSort={sortBy} editor={expanded}
+        onSelect={select} onChange={(key,value)=>setEditor(s=>s&&({...s,[key]:value}))} onSave={save} onClose={close} saving={saving} error={noteError}/>:
+        <p className="bj-empty">{Object.values(filters).some(Boolean)?'No imported executions match these filters.':'No broker executions have been imported yet.'}</p>}
+      {(data.total>5||offset>0)&&<div className="bj-pagination">
+        <label>Rows per page <select value={limit} onChange={e=>{if(close()){setLimit(Number(e.target.value));setOffset(0);}}}>{[5,25,50].map(n=><option key={n}>{n}</option>)}</select></label>
+        <span>{data.items.length?(offset+1)+'–'+(offset+data.items.length)+' of '+data.total:data.total+' records'}</span>
+        <button className="icon-button" aria-label="Previous executions" disabled={!offset||view.busy||saving} onClick={()=>{if(close())setOffset(Math.max(0,offset-limit));}}><CaretLeft/></button>
+        <button className="icon-button" aria-label="Next executions" disabled={!data.more||view.busy||saving} onClick={()=>{if(close())setOffset(offset+limit);}}><CaretRight/></button>
+      </div>}
+      <Coverage statuses={statuses}/>
+    </>}
   </section>;
-}
-function JournalNotes({trade:t,onClose,onSaved}){
-  const [reason,setReason]=useState(t.note.reason),[notes,setNotes]=useState(t.note.notes),[error,setError]=useState(''),[busy,setBusy]=useState(false),ref=useRef(),id=useId(),{journalStamp}=useDisplayTime();
-  useEffect(()=>{const trigger=document.activeElement;ref.current.showModal();return()=>{if(trigger?.isConnected)trigger.focus();};},[]);
-  const close=()=>{if(!busy&&(!(reason!==t.note.reason||notes!==t.note.notes)||window.confirm('Discard your unsaved journal notes?')))onClose();};
-  return <dialog ref={ref} className="modal pi-hours-dialog" aria-labelledby={id} onCancel={e=>{e.preventDefault();close();}}><div className="modal-inner"><header className="modal-header"><div><span className="eyebrow">{t.person} · {t.accountLabel}{t.environment==='demo'?' · DEMO':''}</span><h2 id={id}>{t.name} · journal notes</h2></div><button className="icon-button" aria-label="Close journal notes" disabled={busy} onClick={close}><X size={22}/></button></header><p>{t.side} {number(t.quantity)} shares · {journalStamp(t.at)} · Execution {t.id}</p><form className="pm-form" onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{await activityRequest('journal/notes',{accountId:t.accountId,executionId:t.id,revision:t.note.revision,reason,notes});await onSaved();}catch(e){setError(e.message);setBusy(false);}}}><label>Reason for the trade<textarea rows={3} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Setup, thesis, or why you changed this holding"/></label><label>Review notes<textarea rows={6} maxLength={4000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What happened and what you would change"/></label><p className="pi-help">These are your notes. Saving them does not change the broker execution.</p>{error&&<p className="amber" role="alert">{error}</p>}<div className="pi-actions"><button type="button" className="button outline" disabled={busy} onClick={close}>Cancel</button><button className="button primary" disabled={busy}>{busy?'Saving…':'Save notes'}</button></div></form></div></dialog>;
 }

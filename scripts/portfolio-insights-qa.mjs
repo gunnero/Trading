@@ -81,27 +81,48 @@ try{
  await report.locator('.mr-detail>summary').click();await report.locator('.pi-report-details summary').first().click();
  await expect(report.locator('.pi-report-details table').first()).toContainText('Advanced Micro Devices');await expect(report.locator('.pi-report-details table').first()).toContainText('€0.00');
  await page.screenshot({path:dir+'/reports-1488.png',fullPage:true});await page.emulateMedia({media:'print'});expect(await page.locator('.main-shell').evaluate(e=>getComputedStyle(e).marginLeft)).toBe('0px');await expect(page.locator('.sidebar')).toBeHidden();await page.screenshot({path:dir+'/report-print.png',fullPage:true});await page.pdf({path:dir+'/monthly-report.pdf',format:'A4'});await page.emulateMedia({media:'screen'});mark('Monthly reports preserve zero returns and charge currencies, mark partial coverage, filter without stale account rows, export CSV and render print/PDF');
- await page.getByRole('button',{name:'Broker trade journal',exact:true}).click();const journal=page.getByRole('region',{name:'Automatic broker trade journal'});await expect(journal).toContainText('Execution 12');await expect(journal).toContainText('€0.00');await journal.getByRole('button',{name:'Add notes'}).click();let dialog=page.getByRole('dialog',{name:/journal notes/});await dialog.getByLabel('Reason for the trade').fill('Breakout confirmed');await dialog.getByLabel('Review notes').fill('Stayed within the plan.');await dialog.getByRole('button',{name:'Save notes'}).click();await expect(dialog).toHaveCount(0);await expect(journal).toContainText('Breakout confirmed');await page.reload();await expect(journal).toContainText('Stayed within the plan.');
- await journal.getByRole('button',{name:'Edit notes'}).click();dialog=page.getByRole('dialog',{name:/journal notes/});conflict=true;await dialog.getByLabel('Review notes').fill('Unsaved draft');await dialog.getByRole('button',{name:'Save notes'}).click();await expect(dialog.getByRole('alert')).toContainText('Copy your draft');await expect(dialog.getByLabel('Review notes')).toHaveValue('Unsaved draft');page.once('dialog',d=>d.accept());await dialog.getByRole('button',{name:'Cancel',exact:true}).click();conflict=false;await expect(dialog).toHaveCount(0);mark('Broker executions open a separate journal; notes persist through reload and revision conflicts preserve the unsaved draft');
- for(const [route,stem] of [['insights','exposure'],['insights/alerts','alerts'],['insights/reports','reports'],['journal/broker','journal']]){await page.goto(runtime.url+'/#'+route);await page.getByRole('heading',{level:2}).first().waitFor();for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:1100});await page.waitForTimeout(150);expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/${stem}-${width}.png`,fullPage:false});}}
+ await page.getByRole('button',{name:'Broker trade journal',exact:true}).click();
+ const journal=page.getByRole('region',{name:'Automatic broker trade journal'}),editor=journal.getByRole('form',{name:'Execution notes'});
+ await expect(journal.locator('.bj-row')).toContainText(/0\.00 EUR/);
+ await journal.getByRole('button',{name:'Add notes for execution 12'}).click();
+ await editor.getByText('Reason for the trade',{exact:true}).click();
+ await editor.getByLabel('Reason for the trade').fill('Breakout confirmed');
+ await editor.getByLabel('Review notes').fill('Stayed within the plan.');
+ await editor.getByRole('button',{name:'Save note',exact:true}).click();
+ await expect(editor.getByRole('status')).toContainText('Last saved');await page.reload();
+ await journal.getByRole('button',{name:'Edit notes for execution 12'}).click();
+ await expect(editor.getByLabel('Review notes')).toHaveValue('Stayed within the plan.');
+ await expect(editor.getByLabel('Reason for the trade')).toHaveValue('Breakout confirmed');
+ const brokerDownload=page.waitForEvent('download');await journal.getByRole('button',{name:'Export this page'}).click();
+ const journalCsv=readFileSync(await (await brokerDownload).path(),'utf8');expect(journalCsv).toContain(trade.ticker);expect(journalCsv).toContain('Stayed within the plan.');
+ conflict=true;await editor.getByLabel('Review notes').fill('Unsaved draft');
+ const polled=page.waitForResponse(r=>r.url().includes('/api/portfolio/journal?'));
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await polled;
+ await expect(editor.getByLabel('Review notes')).toHaveValue('Unsaved draft');await editor.getByRole('button',{name:'Save note',exact:true}).click();
+ await expect(editor.getByRole('alert')).toContainText('Copy your draft');await expect(editor.getByLabel('Review notes')).toHaveValue('Unsaved draft');
+ page.once('dialog',d=>d.dismiss());await page.getByRole('navigation',{name:'Trade journal sections'}).getByRole('button',{name:'Trades',exact:true}).click();
+ await expect(editor.getByLabel('Review notes')).toHaveValue('Unsaved draft');
+ page.once('dialog',d=>d.accept());await editor.getByRole('button',{name:'Cancel',exact:true}).click();conflict=false;await expect(editor).toHaveCount(0);
+ mark('Inline broker notes preserve the exact execution, survive reload, and retain drafts on revision conflict or canceled navigation');
+ for(const [route,stem] of [['insights','exposure'],['insights/alerts','alerts'],['insights/reports','reports'],['journal/broker','journal']]){await page.goto(runtime.url+'/#'+route);await page.getByRole('heading',{level:2}).first().waitFor({state:'attached'});for(const width of [320,390,820,1488]){await page.setViewportSize({width,height:1100});await page.waitForTimeout(150);expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:`${dir}/${stem}-${width}.png`,fullPage:false});}}
  await page.setViewportSize({width:1488,height:1100});await page.goto(runtime.url+'/#portfolio/account/'+'a1');const hoursButton=page.getByRole('button',{name:'Advanced Micro Devices: Market open. View trading hours'});await expect(hoursButton).toBeVisible();await hoursButton.click();const hours=page.getByRole('dialog',{name:'Advanced Micro Devices',exact:true});await expect(hours).toContainText('After-hours opens');await expect(hours).toContainText('Fixture exchange');await expect(hours).toContainText('Choose the trading session in the order ticket');await page.screenshot({path:dir+'/hours-1488.png'});await page.setViewportSize({width:320,height:1000});expect(await hours.evaluate(e=>e.scrollWidth-e.clientWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:dir+'/hours-320.png'});await page.keyboard.press('Escape');await expect(hours).toHaveCount(0);await expect(hoursButton).toBeFocused();hoursFail=true;await page.reload();await expect(page.getByRole('button',{name:'Advanced Micro Devices: Hours unavailable. View trading hours'})).toBeVisible();mark('Exact-stock schedule dots, extended-session events, local timestamps, mobile modal, Escape/focus return and missing-permission fallback render correctly');
 
  await expect(page.getByRole('img',{name:'Account value history'})).toBeVisible();await page.getByRole('button',{name:'Back to accounts',exact:true}).click();await page.getByRole('button',{name:'Hide both',exact:true}).click();await page.locator('.pm-account-open').first().click();await expect(page.getByRole('img',{name:'Account value history'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Trade / orders',exact:true})).toBeDisabled();
  await page.route('**/api/portfolio/activity?*',route=>route.fulfill({json:{people,accounts,items:[trade],total:1,more:false,statuses:[]}}));
  for(const route of ['insights','insights/alerts','insights/reports','journal/broker','activity']){
   await page.goto(runtime.url+'/#'+route);
-  if(['insights/alerts','insights/reports','activity'].includes(route))await page.getByRole('button',{name:'Privacy settings',exact:true}).click();
+  if(['insights/alerts','insights/reports','activity','journal/broker'].includes(route))await page.getByRole('button',{name:'Privacy settings',exact:true}).click();
   if(route==='insights'){
    await page.getByRole('button',{name:'Portfolio privacy settings'}).click();
    await page.getByRole('table',{name:'USD stock exposure'}).getByRole('button',{name:/Advanced Micro Devices/}).click();
   }
   await expect(page.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
-  const root=page.locator(route==='activity'?'.pa-page':route==='journal/broker'?'.pi-panel':'.pi-page');
+  const root=page.locator(route==='activity'?'.pa-page':route==='journal/broker'?'.bj-journal':'.pi-page');
   if(route==='insights/reports')await expect(root.locator('.pi-report-account')).toHaveCount(3);
-  else await expect(root).toContainText(route==='activity'?'AMD':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'108.00–110.00 USD':'Combined stock exposure');
+  else await expect(root).toContainText(route==='activity'?'AMD':route==='journal/broker'?'Advanced Micro Devices':route==='insights/alerts'?'108.00–110.00 USD':'Combined stock exposure');
   const text=await root.textContent();expect(text).not.toMatch(/Alex Fixture|Sam Fixture|Invest|\$440\.00|€220\.00|€0\.15|Stayed within the plan|Breakout confirmed/);
   if(route==='insights/reports'){await expect(root.getByRole('button',{name:'Export CSV'})).toBeDisabled();await expect(root.getByRole('button',{name:'Print / PDF'})).toBeDisabled();}
-  if(route==='journal/broker')await expect(root.getByRole('button',{name:'Edit notes'})).toBeDisabled();
+  if(route==='journal/broker')await expect(root.getByRole('button',{name:'Private notes'})).toBeDisabled();
  }
  mark('Privacy follows portfolio exposure, alerts, reports, activity and broker journal without leaking names, private notes or balances; sensitive exports and trading require reveal');
  expect(errors).toEqual([]);expect(await read('/api/workspace')).toEqual(before);writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors,brokerRequests:'Mocked only. No real broker credentials or orders.'},null,2)+'\n');

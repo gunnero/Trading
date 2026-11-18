@@ -30,6 +30,24 @@ test('execution data preserves individual fills, missing versus zero, and separa
  for(const item of [execution(1,{id:NaN}),execution(1,{filledAt:'tomorrow'}),execution(1,{quantity:0}),execution(1,{walletImpact:{taxes:[{name:'FEE',quantity:2}]}})])assert.throws(()=>normalizeActivityPage(page([item]),NOW,orderView));
  assert.throws(()=>normalizeActivityPage(page([], 'https://evil.example/steal'),NOW,orderView));
 });
+test('broker journal lists exact scoped tickers and sorts the whole result before pagination',async t=>{
+ const f=fixture(t);
+ const apple=execution(9,{price:90,quantity:1.25});
+ apple.order={...order(9),instrument:{ticker:'AAPL_US_EQ',name:'Apple',currency:'USD'}};
+ f.source.read=async()=>page([execution(2,{price:null}),execution(1,{price:100}),apple]);
+ await f.service.sync('a');
+ const read=extra=>f.service.read({kind:'journal',person:'p0',sort:'price',direction:'asc',limit:1,...extra});
+ assert.deepEqual(read({}).listings.map(l=>l.ticker),['AAPL_US_EQ','AMD_US_EQ']);
+ assert.equal(read({}).items[0].id,9);
+ assert.equal(read({offset:1}).items[0].id,1);
+ assert.equal(read({direction:'desc',offset:2}).items[0].price,null);
+ assert.equal(read({ticker:'AMD_US_EQ'}).total,2);
+ assert.equal(read({ticker:'AMD'}).total,0);
+ assert.equal(read({account:'b'}).listings.length,0);
+ assert.equal(read({}).statuses[0].completedPages,1);
+ assert.equal(read({}).statuses[0].coveredThrough,NOW);
+ assert.throws(()=>read({sort:'unsupported'}),/sort/);
+});
 test('date filters include the whole local day, DST boundaries and exclude the following midnight',()=>{
  for(const [day,hours] of [['2026-03-29',23],['2026-10-25',25]]){const b=activityDateBounds(day,day);assert.equal(b.to-b.from,hours*3600000);}
  const b=activityDateBounds('2026-11-04','2026-11-04');assert.equal(new Date(b.from).toISOString(),'2026-11-03T23:00:00.000Z');assert.equal(new Date(b.to).toISOString(),'2026-11-04T23:00:00.000Z');
