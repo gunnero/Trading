@@ -32,7 +32,7 @@ async function setup(page){
 }
 try{
  const read=async()=>await(await testFetch(runtime.url+'/api/workspace')).json(),initial=await read();
- const saved=await testFetch(runtime.url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({revision:initial.revision,data:{...initial.data,levelText:'LVLS 2026-10-26\nAMD|4h|S 526-525\nQQQ|30min|S 719-718',levelSourceDates:{AMD:'2026-10-26',QQQ:'2026-10-26'},levelHistory:[],journal:{version:1,trades:[...screenshotFixtures(),fixture({id:'open',strike:520,position:'short',entryAt:'2026-10-26T15:19:54.789Z',entryPrice:2.3401,exitAt:null,exitPrice:null,reportedPnl:null})]}}})});expect(saved.ok).toBe(true);const before=await read();
+ const saved=await testFetch(runtime.url+'/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json','X-Opening-Bell-Client':'web'},body:JSON.stringify({revision:initial.revision,data:{...initial.data,levelText:'LVLS 2026-10-26\nAMD|4h|S 526-525',levelSourceDates:{AMD:'2026-10-26'},levelHistory:[],journal:{version:1,trades:[...screenshotFixtures(),fixture({id:'open',strike:520,position:'short',entryAt:'2026-10-26T15:19:54.789Z',entryPrice:2.3401,exitAt:null,exitPrice:null,reportedPnl:null})]}}})});expect(saved.ok).toBe(true);const before=await read();
  const page=await browser.newPage({viewport:{width:1488,height:1100}});await setup(page);await page.goto(runtime.url+'/#journal');await expect(page.locator('.journal-trades tbody tr')).toHaveCount(4);expect(requests).toHaveLength(0);
  await page.getByRole('button',{name:'AMD 530 Call',exact:true}).click();const dialog=page.getByRole('dialog'),chart=dialog.locator('.journal-trade-canvas');await expect(chart.locator('canvas')).toBeVisible();await expect(dialog.getByRole('button',{name:'2m',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(chart).toHaveAttribute('aria-label',/entry at 2026-10-26 · 16:19:54 Skopje marked.*exit at 2026-10-26 · 16:22:42 Skopje marked/);await expect(dialog.locator('.review-metrics')).toContainText('$2.42');await expect(dialog.locator('.review-metrics')).toContainText('$2.96');expect(requests[0]).toEqual({symbol:'NASDAQ:AMD',interval:'2m',from:'2026-10-19',to:'2026-10-26'});
@@ -64,6 +64,35 @@ try{
  mode='gap';await page.getByRole('button',{name:'AMD 530 Call',exact:true}).click();await expect(dialog.getByText(/Entry time has no covering source candle/)).toBeVisible();await expect(chart).toHaveAttribute('aria-label',/entry .*has no covering candle.*exit .*marked/);await dialog.getByText('Automatic strategy review',{exact:true}).click();await expect(dialog.locator('.journal-auto-review')).toBeVisible();await dialog.screenshot({path:dir+'/missing-candle.png'});
  mode='stale';await dialog.getByRole('button',{name:'Refresh history',exact:true}).click();await expect(dialog.getByText('Cached reading · source refresh unavailable.',{exact:true})).toBeVisible();mode='unavailable';await dialog.getByRole('button',{name:'15m',exact:true}).click();await expect(dialog.getByText('Historical chart unavailable',{exact:true})).toBeVisible();await expect(chart).toHaveCount(0);await expect(dialog.locator('.review-metrics')).toContainText('$2.42');await page.keyboard.press('Escape');
  mark('Missing candles withhold only their own markers; stale history is labeled; another interval never reuses the previous chart during an outage');
+ mode='ok';
+ const qqqRow=page.locator('.jt-results tr').filter({has:page.getByRole('button',{name:'QQQ 714 Call',exact:true})});
+ await qqqRow.getByRole('button',{name:'Notes',exact:true}).click();
+ const evidence=dialog.getByRole('region',{name:'Automatic strategy review'}),detailTab=dialog.getByRole('button',{name:'Details & notes',exact:true});
+ await expect(detailTab).toHaveAttribute('aria-pressed','true');
+ await expect(evidence.locator('[data-result=unknown]')).toHaveCount(4);
+ await expect(evidence.getByText(/No stock\/ETF zones for QQQ/)).toHaveCount(1);
+ await expect(evidence).toContainText('2 of 6 evaluated');
+ await expect(chart).toHaveCount(0);
+ await dialog.getByLabel('Review notes').fill('Waited for the next close.');
+ await dialog.getByLabel('Separate retest held the broken zone').selectOption('true');
+ await expect(evidence.locator('[data-rule=retest]')).toHaveAttribute('data-result','unknown');
+ await dialog.getByRole('button',{name:'Replay',exact:true}).click();
+ await expect(chart.locator('canvas')).toBeVisible();
+ await detailTab.click();
+ await dialog.getByRole('button',{name:'Edit execution details',exact:true}).click();
+ await dialog.getByRole('button',{name:'Return to details & notes',exact:true}).click();
+ await expect(detailTab).toHaveAttribute('aria-pressed','true');
+ await expect(dialog.getByLabel('Separate retest held the broken zone')).toHaveValue('true');
+ await expect(dialog.getByLabel('Review notes')).toHaveValue('Waited for the next close.');
+ mode='stale';await evidence.getByRole('button',{name:'Recheck strategy'}).click();
+ await expect(evidence.getByText('Cached history',{exact:true})).toBeVisible();
+ mode='unavailable';await evidence.getByRole('button',{name:'Recheck strategy'}).click();
+ await expect(evidence.locator('[data-result=unknown]')).toHaveCount(6);
+ await expect(evidence.getByText(/Historical 2m candles are unavailable/)).toHaveCount(1);
+ await expect(dialog.locator('.review-fills tbody tr')).toHaveCount(2);
+ page.once('dialog',prompt=>prompt.accept());await dialog.getByRole('button',{name:'Close trade dialog'}).click();
+ expect((await read()).revision).toBe(before.revision);
+ mark('Notes opens the entry evidence directly. Unknown rules share their source explanation, manual grades and draft notes survive view changes, and refresh handles cached and unavailable history without a workspace write');
  mode='ok';for(const width of [320,390,820]){
   const mobile=await browser.newPage({viewport:{width,height:900},hasTouch:true,isMobile:true});await setup(mobile);await mobile.goto(runtime.url+'/#journal');await mobile.getByRole('button',{name:'QQQ 714 Call',exact:true}).tap();const md=mobile.getByRole('dialog'),canvas=md.locator('.journal-trade-canvas');await expect(canvas.locator('canvas')).toBeVisible();expect(await md.evaluate(n=>n.scrollWidth-n.clientWidth)).toBeLessThanOrEqual(1);await expect(canvas).toHaveCSS('touch-action','pan-y');await md.getByText('Chart controls & indicators',{exact:true}).tap();await md.getByRole('button',{name:'Interact',exact:true}).tap();await expect(canvas).toHaveCSS('touch-action','none');await md.getByRole('button',{name:'Done interacting',exact:true}).tap();await expect(canvas).toHaveCSS('touch-action','pan-y');await md.locator('.journal-trade-canvas-wrap').screenshot({path:`${dir}/markers-${width}.png`});await md.getByText('Automatic strategy review',{exact:true}).tap();await expect(md.locator('.journal-auto-checks')).toBeVisible();await md.locator('.journal-auto-review').screenshot({path:`${dir}/review-${width}.png`});await md.getByText('Automatic strategy review',{exact:true}).tap();await md.getByText('Chart controls & indicators',{exact:true}).tap();await md.evaluate(n=>n.scrollTop=0);await md.screenshot({path:`${dir}/trade-${width}.png`});await md.evaluate(n=>n.scrollTop=n.scrollHeight);await expect(md.getByRole('button',{name:'Close trade dialog'})).toBeInViewport();await mobile.close();
  }

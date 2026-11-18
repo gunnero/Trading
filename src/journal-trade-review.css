@@ -120,3 +120,32 @@
 .review-readings i { width:11px; height:2px; }
 
 .trade-review .journal-trade-chart-tools i.entry,.trade-review .journal-trade-chart-tools i.exit { background:var(--primary); }
+
+.review-heading,.review-fills>header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.review-heading { flex-wrap:wrap; margin-bottom:12px; }
+.review-heading .review-identity p { margin-bottom:0; }
+.review-view-switch { display:inline-flex; padding:3px; border:1px solid var(--border); border-radius:7px; background:var(--panel); }
+.review-view-switch button { display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:4px; font-size:12px; font-weight:550; color:var(--muted); }
+.review-view-switch button[aria-pressed=true] { background:var(--selection); color:var(--primary); }
+.trade-review>.journal-listing-choice { margin:10px 0; }
+.details-columns { align-items:start; }
+.review-notebook-heading { display:flex; align-items:center; gap:8px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.review-notebook-heading svg { color:var(--primary); }
+.details-columns .review-inspector { gap:13px; }
+.details-columns .review-inspector .review-assessment { border-top:1px solid var(--border); padding-top:6px; gap:0; }
+.details-columns .review-assessment legend { padding:0 8px 0 0; font-size:13px; }
+.details-columns .review-assessment label { display:grid; grid-template-columns:minmax(0,1fr) minmax(95px,.68fr); align-items:center; column-gap:8px; padding:5px 0; }
+.details-columns .review-assessment select { font-size:12px; padding:5px 6px; }
+.details-columns .review-inspector footer { border-top:1px solid var(--border); padding-top:10px; }
+.review-note-shortcut { display:none; }
+.review-fills>header { margin-bottom:7px; flex-wrap:wrap; }
+.review-fills>header h3 { margin:0; }
+.review-fills>header button { min-height:30px; padding:4px 8px; font-size:12px; }
+.review-contract-facts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:0 0 10px; padding:9px 0; border-top:1px solid var(--border); }
+.review-contract-facts dt { font-size:11px; color:var(--muted); }
+.review-contract-facts dd { margin:3px 0 0; font-size:13px; font-weight:600; }
+@media(max-width:760px) {
+  .review-note-shortcut { display:inline-flex; margin-top:8px; font-size:12px; }
+  .review-contract-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .review-view-switch button { min-height:35px; }
+}

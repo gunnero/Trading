@@ -22,12 +22,20 @@ function JournalModal({title,children,onClose,review=false}){
   const {zoneLabel,formatLabel}=useDisplayTime();
   const ref=useRef(),id=useId();
   useEffect(()=>{const node=ref.current,trigger=document.activeElement,overflow=document.body.style.overflow;document.body.style.overflow='hidden';node.showModal();return()=>{node.close();document.body.style.overflow=overflow;if(trigger?.isConnected)trigger.focus({preventScroll:true});};},[]);
+  const previousTitle=useRef(title);
+  useEffect(()=>{
+    if(review&&title!==previousTitle.current){
+      ref.current.scrollTop=0;
+      ref.current.querySelector('.journal-dialog-title h2')?.focus({preventScroll:true});
+    }
+    previousTitle.current=title;
+  },[review,title]);
   function backdropClick(e){
     if(e.target!==e.currentTarget)return;
     const box=e.currentTarget.getBoundingClientRect();
     if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)onClose();
   }
-  return <dialog ref={ref} className={`modal wide journal-modal ${review?'journal-review-modal':''}`} aria-labelledby={id} onCancel={e=>{e.preventDefault();onClose();}} onClick={backdropClick}><div className="modal-inner"><header className="modal-header"><div className="journal-dialog-title">{review?<button type="button" className="icon-button" aria-label="Back to journal" onClick={onClose}><ArrowLeft size={20}/></button>:<span className="eyebrow">TRADE JOURNAL · {zoneLabel} / {formatLabel}</span>}<h2 id={id}>{title}</h2></div><button className="icon-button" aria-label="Close trade dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
+  return <dialog ref={ref} className={`modal wide journal-modal ${review?'journal-review-modal':''}`} aria-labelledby={id} onCancel={e=>{e.preventDefault();onClose();}} onClick={backdropClick}><div className="modal-inner"><header className="modal-header"><div className="journal-dialog-title">{review?<button type="button" className="icon-button" aria-label="Back to journal" onClick={onClose}><ArrowLeft size={20}/></button>:<span className="eyebrow">TRADE JOURNAL · {zoneLabel} / {formatLabel}</span>}<h2 id={id} tabIndex={review?-1:undefined}>{title}</h2></div><button className="icon-button" aria-label="Close trade dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
 }
 function toForm(trade){const now=localStamp(new Date());return trade?{...trade,entryAt:localStamp(trade.entryAt),exitAt:trade.exitAt?localStamp(trade.exitAt):'',status:trade.exitAt?'closed':'open',fees:trade.fees??'',risk:trade.risk??'',reportedPnl:trade.reportedPnl??''}:{id:crypto.randomUUID(),firm:'Vanquish',account:'Main',symbol:'QQQ',expiration:now.slice(0,10),optionType:'CALL',position:'long',strike:'',quantity:1,multiplier:100,entryPrice:'',exitPrice:'',entryAt:now,exitAt:now,status:'closed',fees:'',risk:'',reportedPnl:'',review:Object.fromEntries(REVIEW_ITEMS.map(([key])=>[key,null])),tags:[],notes:'',source:'manual',sourceLabel:'Manual entry',entryOrderId:'',exitOrderId:''};}
 function fromForm(form,saved){
@@ -37,7 +45,8 @@ function fromForm(form,saved){
 function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts,workspace,workspaceStatus}){
   const [form,setForm]=useState(()=>toForm(trade)),initial=useRef(JSON.stringify(form)),[error,setError]=useState('');
   const [view,setView]=useState(trade?initialView:'details');
-  const replay=useJournalReplay(trade,workspace,view!=='edit');
+  const priorView=useRef(view);
+  const replay=useJournalReplay(trade,workspace,view==='chart'||view==='chart-notes');
   const edit=(key,value)=>{setError('');setForm(v=>({...v,[key]:value}));};
   const close=()=>{if(JSON.stringify(form)!==initial.current&&!confirm('Discard the unsaved changes to this trade?'))return;onClose();};
   let result=null;try{result=tradeResult(fromForm(form,trade));}catch{}
@@ -47,10 +56,10 @@ function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts
   const editing=!trade||view==='edit';
   return <JournalModal title={trade?(editing?'Edit trade':'Trade review'):'Add a trade'} onClose={close} review={!!trade}>
     {trade&&!editing&&<JournalTradeReview trade={trade} replay={replay} form={form} edit={edit}
-      notesOpen={view==='details'} onTab={notes=>setView(notes?'details':'chart')} onEdit={()=>setView('edit')}
+      view={view} onView={setView} onEdit={()=>{priorView.current=view;setView('edit');}}
       dirty={JSON.stringify(form)!==initial.current} save={save} error={error} workspaceStatus={workspaceStatus}/>}
     {editing&&<form className="journal-form" onSubmit={e=>{e.preventDefault();save();}}>
-    {trade&&<button type="button" className="text-button review-editor-back" onClick={e=>{if(e.currentTarget.form.reportValidity())setView('chart');}}><ArrowLeft size={16}/>Return to replay</button>}
+    {trade&&<button type="button" className="text-button review-editor-back" onClick={e=>{if(e.currentTarget.form.reportValidity())setView(priorView.current);}}><ArrowLeft size={16}/>{priorView.current==='details'?'Return to details & notes':'Return to replay'}</button>}
     <p className="journal-help">One option entry and its matched exit per record. For partial exits, record each matched quantity separately. Entry fields use Europe/Skopje, 24-hour time; premiums are per underlying share in USD.</p>
     <div className="journal-form-grid">{input('firm','Prop firm / broker','text',{required:true,maxLength:60})}{input('account','Trading account','text',{required:true,maxLength:80,list:'journal-accounts'})}<label>Position status<select value={form.status} onChange={e=>edit('status',e.target.value)}><option value="closed">Closed</option><option value="open">Open</option></select></label></div>
     <datalist id="journal-accounts">{accounts.map(a=><option key={a} value={a}/>)}</datalist>
@@ -127,7 +136,7 @@ function JournalTrades({workspace,tradeId,onClearTrade,nav,missing}){
       onDay={value=>{setDay(value);setAllTime(false);}}/>
     <JournalResults trades={filtered} stats={stats} hasTrades={!!trades.length} onOpen={(trade,view)=>setEditor({trade,view})}
       onAdd={()=>setEditor({trade:null})}/>
-    {editor&&<TradeEditor trade={editor.trade} initialView={editor.view} workspace={workspace.data} workspaceStatus={workspace.status} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
+    {editor&&<TradeEditor key={editor.trade?.id??'new'} trade={editor.trade} initialView={editor.view} workspace={workspace.data} workspaceStatus={workspace.status} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
     {importing&&<ImportTrades prepared={importing.prepared} existing={trades} onImport={importRows} onClose={()=>setImporting(null)}/>}
   </div>;
 }
