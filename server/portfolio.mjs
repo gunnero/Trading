@@ -89,7 +89,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
   }
   function removePerson(id,revision){return change(data=>{if(data.accounts.some(a=>a.personId===id))throw fail(400,'Remove this person’s accounts first.');if(!data.people.some(p=>p.id===id))throw fail(404,'Person not found.');data.people=data.people.filter(p=>p.id!==id);},revision);}
   function removeAccount(id,revision){find(id);trading.assertIdle(id);const result=change(data=>{data.accounts=data.accounts.filter(a=>a.id!==id);},revision);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);db.prepare('DELETE FROM portfolio_retry WHERE id=?').run(id);history.remove(id);trading.remove(id);activity.remove(id);rebuild.remove(id);metadata.remove(id);reports.remove(id);alerts.remove(id);planning.remove(id);return result;}
-  function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
+  function importSnapshot(id,raw,revision){find(id);if(credential(id))throw fail(400,'Disconnect the automatic feed before replacing it with a manual snapshot.');const snapshot=normalizePortfolioSnapshot(raw);return change(data=>{const a=data.accounts.find(a=>a.id===id);Object.assign(a,{snapshot:{...snapshot,importedAt:new Date(now()).toISOString()},connectedAt:null,disconnectedAt:null,lastSuccess:null,lastAttempt:null,error:null,environment:'live'});},revision);}
   async function request(path,secret,{onReadResponse}={}){
     const validator=path.startsWith('/equity/history/orders?')?orderHistoryPath:path.startsWith('/equity/history/transactions?')?fundingHistoryPath:path.startsWith('/equity/history/dividends?')?dividendHistoryPath:null,historical=!!validator;
     if((!PATHS.includes(path)&&(!validator||validator(path)!==path))||!BASES[secret.environment])throw Error('Invalid broker endpoint.');
@@ -139,7 +139,7 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
       db.exec('BEGIN IMMEDIATE');
       try{
         db.prepare('INSERT INTO portfolio_credentials VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET credential=excluded.credential,generation=excluded.generation').run(id,encrypted,generation);
-        change(data=>{Object.assign(data.accounts.find(a=>a.id===id),{snapshot,environment,lastSuccess:snapshot.fetchedAt,lastAttempt:snapshot.fetchedAt,error:null});},revision);
+        change(data=>{Object.assign(data.accounts.find(a=>a.id===id),{snapshot,environment,connectedAt:snapshot.fetchedAt,disconnectedAt:null,lastSuccess:snapshot.fetchedAt,lastAttempt:snapshot.fetchedAt,error:null});},revision);
         history.record(id,snapshot);
         db.exec('COMMIT');
       }catch(error){db.exec('ROLLBACK');throw error;}
@@ -161,7 +161,22 @@ export function createPortfolioService(auth,directory,{fetcher=fetch,now=Date.no
     }finally{if(pending.get(id)===token)pending.delete(id);}
     return closed?null:read();
   }
-  function disconnect(id,revision){find(id);trading.assertIdle(id);if(read().revision!==revision)throw fail(409,'Portfolio Manager changed. Reload and retry.');pending.delete(id);db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);return change(data=>{data.accounts.find(a=>a.id===id).error=null;},revision);}
+  function disconnect(id,revision){
+    find(id);trading.assertIdle(id);
+    if(read().revision!==revision)throw fail(409,'Portfolio Manager changed. Reload and retry.');
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      const removed=db.prepare('DELETE FROM portfolio_credentials WHERE id=?').run(id);
+      const result=change(data=>{
+        const a=data.accounts.find(a=>a.id===id);
+        a.error=null;
+        if(removed.changes)a.disconnectedAt=new Date(now()).toISOString();
+      },revision);
+      db.exec('COMMIT');
+      pending.delete(id);
+      return result;
+    }catch(error){db.exec('ROLLBACK');throw error;}
+  }
   async function middleware(req,res,next){
     const url=new URL(req.url,'http://localhost'),path=url.pathname;
     if(path!=='/api/portfolio'&&!path.startsWith('/api/portfolio/'))return next();

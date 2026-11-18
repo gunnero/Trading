@@ -16,3 +16,23 @@ export function usePortfolioResource(path,interval=60000){
   return {data:saved?.path===path?saved.data:null,error,busy,refresh};
 }
 export function downloadPortfolioCsv(csv,name){const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+export function usePortfolioSettings(account,refresh){
+  const [draft,setDraft]=useState(account.settings),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  useEffect(()=>{if(!dirty)setDraft(account.settings);},[account.settings,dirty]);
+  const edit=(key,value)=>{setDirty(true);setDraft(d=>({...d,[key]:value}));};
+  async function save(patch){
+    setBusy(true);setError('');
+    try{
+      const result=await activityRequest('insights/planning',{accountId:account.id,revision:draft.revision,...patch});
+      setDraft(result.accounts.find(a=>a.id===account.id).settings);
+      await refresh();
+      setDirty(false);
+    }catch(e){
+      setError(e.message);
+      await refresh();
+    }finally{setBusy(false);}
+  }
+  const reload=()=>{setDraft(account.settings);setDirty(false);setError('');};
+  return {draft,edit,save,busy,error,dirty,reload};
+}

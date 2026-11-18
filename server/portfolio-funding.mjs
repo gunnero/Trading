@@ -38,6 +38,13 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     db.prepare('INSERT OR IGNORE INTO portfolio_valuations VALUES(?,?,?,?,?)').run(id,Math.floor(at/900000),at,snapshot.currency,snapshot.accountValue);
     db.prepare(`DELETE FROM portfolio_valuations WHERE account_id=? AND at<? AND at<>(SELECT min(at) FROM portfolio_valuations WHERE account_id=?) AND at NOT IN (SELECT max(at) FROM portfolio_valuations WHERE account_id=? GROUP BY cast(at/86400000 AS INTEGER))`).run(id,now()-90*86400000,id,id);
   }
+  function recentSnapshotTimes(a){
+    if(a.snapshot?.source!=='api')return [];
+    const saved=state(a.id);
+    if(saved.brokerId!==a.snapshot.brokerId||saved.environment!==a.environment)return [];
+    return db.prepare('SELECT at FROM portfolio_valuations WHERE account_id=? AND currency=? ORDER BY slot DESC LIMIT 4')
+      .all(a.id,a.snapshot.currency).map(row=>row.at);
+  }
   function read(id,range){
     const a=account(id),snap=a.snapshot,s=state(id),connected=!!credential(id),broker=snap?.source==='api',currency=snap?.currency;
     const valuations=broker?db.prepare('SELECT at,value FROM portfolio_valuations WHERE account_id=? AND currency=? ORDER BY at').all(id,currency):[];
@@ -90,5 +97,5 @@ export function createPortfolioFunding(db,{now,request,credential,decode,account
     values.push(...historicalValues(id).filter(v=>v.at<first).map(v=>({...v,currency:snap.currency,estimated:true})));
     return {complete:!!s.completedScan,coveredThrough:s.coveredThrough||null,error:s.error||null,values,flows:s.completedScan?db.prepare('SELECT reference AS id,at,amount,currency,type FROM portfolio_cashflows WHERE account_id=? AND scan=? ORDER BY at').all(id,s.completedScan):[]};
   }
-  return {record,read,sync,remove,ledger};
+  return {record,read,sync,remove,ledger,recentSnapshotTimes};
 }

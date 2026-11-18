@@ -32,6 +32,20 @@ test('settings persist per broker account, reject invalid targets and preserve r
  for(const patch of [{maxOrderValue:-1},{maxOrderValue:'100'},{staleMinutes:5},{healthEnabled:'true'},{targets:{AMD_US_EQ:70}},{targets:{__bad:100}},{targets:[100]},{concentrationPercent:101}])assert.throws(()=>f.save(patch));
  assert.equal(f.calls.filter(c=>c.method!=='GET').length,0);f.service.removeAccount(f.id,f.service.read().revision);assert.equal(f.service.planning.read().accounts.length,0);
 });
+test('monitor history uses recorded observations and connection transitions for the selected account',async t=>{
+ const f=await fixture(t),history=()=>f.service.planning.read().accounts[0].connectionHistory;
+ assert.deepEqual(history().map(e=>e.kind),['connected']);
+ for(let i=0;i<3;i++){f.advance(16*60000);await f.service.sync(f.id);}
+ const rows=history();assert.deepEqual(rows.map(e=>e.kind),['synced','snapshot','snapshot','connected']);
+ assert.ok(rows.every((row,i)=>!i||row.at<rows[i-1].at));
+ f.restart();assert.deepEqual(history(),rows);
+ f.advance(16*60000);f.fail(true);await f.service.sync(f.id);
+ assert.equal(history()[0].kind,'failed');
+ f.advance();f.service.disconnect(f.id,f.service.read().revision);
+ assert.equal(history()[0].kind,'disconnected');
+ f.advance();f.service.importSnapshot(f.id,{version:1,currency:'EUR',holdings:[]},f.service.read().revision);
+ assert.deepEqual(history().map(e=>e.kind),['imported']);
+});
 test('health and concentration notify once per incident across restarts, recover and re-arm on fresh data only',async t=>{
  const f=await fixture(t);f.save({concentrationPercent:15});f.service.planning.check();assert.equal(f.service.activity.notifications().unread,1);assert.equal(f.service.activity.notifications().items[0].kind,'concentration');
  f.restart();f.service.planning.check();assert.equal(f.service.activity.notifications().unread,1);

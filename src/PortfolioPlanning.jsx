@@ -1,42 +1,20 @@
 import {useEffect,useId,useState,useRef} from 'react';
 import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useDisplayTime} from './DisplayTime';
+import PortfolioMonitor from './PortfolioMonitor';
 import {activityRequest} from './PortfolioNotifications';
-import {usePortfolioResource,portfolioPercent as percent,portfolioTone as tone,downloadPortfolioCsv} from './PortfolioTools';
+import {usePortfolioResource,usePortfolioSettings,portfolioPercent as percent,portfolioTone as tone,downloadPortfolioCsv} from './PortfolioTools';
 import {reportCsv,safeCsv} from './data/portfolio-insights.mjs';
 import {annualTotals} from './data/portfolio-planning.mjs';
 
-function useSettings(account,refresh){
-  const [draft,setDraft]=useState(account.settings),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  useEffect(()=>{if(!dirty)setDraft(account.settings);},[account.settings,dirty]);
-  const edit=(key,value)=>{setDirty(true);setDraft(d=>({...d,[key]:value}));};
-  async function save(patch){setBusy(true);setError('');try{const result=await activityRequest('insights/planning',{accountId:account.id,revision:draft.revision,...patch});setDraft(result.accounts.find(a=>a.id===account.id).settings);setDirty(false);await refresh();}catch(e){setError(e.message);}finally{setBusy(false);}}
-  const reload=()=>{setDraft(account.settings);setDirty(false);setError('');};
-  return {draft,edit,save,busy,error,dirty,reload};
-}
-export default function PortfolioPlanning({tab}){
+export default function PortfolioPlanning({tab,navigation,onJournal}){
   const privacy=usePortfolioPrivacy(),view=usePortfolioResource('insights/planning'),[selected,setSelected]=useState(privacy.account||'');
   const accounts=view.data?.accounts||[],a=accounts.find(a=>a.id===selected)||accounts[0];
-  return <section className="panel pi-panel" aria-label="Portfolio planning"><div className="pi-report-filters"><label>Planning account<select aria-label="Planning account" value={a?.id||''} onChange={e=>setSelected(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><button className="button outline" disabled={view.busy} onClick={view.refresh}>Refresh account view</button></div>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!view.data?<p role="status">Loading accounts…</p>:!a?<p>Add an account in Portfolio Manager to get started.</p>:<div key={a.id+':'+tab}>{tab==='monitor'?<Monitor account={a} refresh={view.refresh}/>:tab==='allocation'?<Allocation account={a} refresh={view.refresh}/>:tab==='calendar'?<HoldingsCalendar account={a}/>:<Performance account={a}/>}</div>}</section>;
-}
-function Monitor({account:a,refresh}){
-  const privacy=usePortfolioPrivacy(),{journalStamp}=useDisplayTime(),s=useSettings(a,refresh),d=s.draft;
-  return <><h2>Connection health & account limits</h2><p className={a.health==='Healthy'?'green':'amber'}>{a.health}{a.lastSuccess?` · last successful sync ${journalStamp(a.lastSuccess)}`:''}</p>{a.error&&<p className="amber">{a.error}</p>}
-    <p className="pi-help">Connection warnings appear in Activity & alerts and the notification bell. Checks continue on the server. A warning fires once per incident, and a recovery notice appears when syncing resumes.</p>
-    {privacy.privateMode?<p>Reveal names and balances to edit account limits.</p>:<form className="pi-alert-form pi-planning-form" onSubmit={e=>{e.preventDefault();s.save({healthEnabled:d.healthEnabled,staleMinutes:Number(d.staleMinutes),concentrationPercent:d.concentrationPercent===''?null:d.concentrationPercent===null?null:Number(d.concentrationPercent),maxOrderValue:d.maxOrderValue===''?null:d.maxOrderValue===null?null:Number(d.maxOrderValue)});}}>
-      <label className="pi-check"><input type="checkbox" checked={d.healthEnabled} onChange={e=>s.edit('healthEnabled',e.target.checked)}/>Connection health alerts</label>
-      <label>Warn after no sync (minutes)<input type="number" min="20" max="1440" required value={d.staleMinutes} onChange={e=>s.edit('staleMinutes',e.target.value)}/></label>
-      <label>Concentration threshold (%)<input type="number" min="0.01" max="100" step="any" placeholder="Off" value={d.concentrationPercent??''} onChange={e=>s.edit('concentrationPercent',e.target.value)}/></label>
-      <label>Maximum order value · {a.currency||'account currency'}<input type="number" min="0.01" max="1000000000000" step="any" placeholder="No limit" value={d.maxOrderValue??''} onChange={e=>s.edit('maxOrderValue',e.target.value)}/></label>
-      <button className="button primary" disabled={s.busy||!s.dirty}>Save account limits</button>{s.dirty&&<button type="button" className="button outline" onClick={s.reload}>Discard edits / load saved</button>}
-    </form>}{s.error&&<p className="amber" role="alert">{s.error}</p>}
-    <p className="pi-help">Background snapshots run every 15 minutes; a 30-minute stale threshold allows for that cadence. Concentration is each holding’s value divided by the whole account value, including cash. Only fresh, reconciled snapshots can trigger concentration alerts.</p>
-    <p className="pi-help">The order limit applies to both buys and sells placed here. It is checked against the limit price or a fresh broker price at review and submission. Market fills and charges can exceed the estimate. Existing broker orders are unchanged. Blank limits are off.</p>
-    <h3>Above the saved concentration threshold</h3>{a.concentrations.length?<ul className="pi-ledger">{a.concentrations.map(h=><li key={h.key}><strong>{h.name}</strong><span>{percent(h.weight).replace('+','')} of account</span><b>{privacy.money(h.value,a.currency)}</b></li>)}</ul>:<p>{a.settings.concentrationPercent?`No confirmed breaches${a.health!=='Healthy'?' · waiting for a fresh snapshot':''}.`:'Choose a concentration threshold to start monitoring.'}</p>}
-  </>;
+  if(tab==='monitor')return <PortfolioMonitor accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
+  return <>{navigation}<section className="panel pi-panel" aria-label="Portfolio planning"><div className="pi-report-filters"><label>Planning account<select aria-label="Planning account" value={a?.id||''} onChange={e=>setSelected(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><button className="button outline" disabled={view.busy} onClick={view.refresh}>Refresh account view</button></div>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!view.data?<p role="status">Loading accounts…</p>:!a?<p>Add an account in Portfolio Manager to get started.</p>:<div key={a.id+':'+tab}>{tab==='allocation'?<Allocation account={a} refresh={view.refresh}/>:tab==='calendar'?<HoldingsCalendar account={a}/>:<Performance account={a}/>}</div>}</section></>;
 }
 function Allocation({account:a,refresh}){
-  const privacy=usePortfolioPrivacy(),{journalStamp}=useDisplayTime(),s=useSettings(a,refresh),targets=s.draft.targets,plan=a.plan;
+  const privacy=usePortfolioPrivacy(),{journalStamp}=useDisplayTime(),s=usePortfolioSettings(a,refresh),targets=s.draft.targets,plan=a.plan;
   const sum=Object.values(targets).reduce((n,v)=>n+(Number(v)||0),0);
   const csv=()=>safeCsv([['Allocation review plan',privacy.person(a.person),a.label,a.id,a.currency,a.observedAt],['Holding','Current value','Weight %','Target %','Value difference','Estimated shares'],...plan.rows.map(r=>[r.name,r.value,r.weight,r.target,r.delta,r.shares]),['Estimates only. No orders placed. Check available shares, cash, pending orders, price and fees before reviewing each trade.']]);
   return <><h2>Target allocations</h2><p>Set targets for the holdings in this account and cash. Saving targets prepares a plan for review.</p><p className="pi-help">Snapshot {a.observedAt?journalStamp(a.observedAt):'unavailable'} · {a.health}. Shares in pies or pending orders may be unavailable. Plan values use the whole account; trades use available cash and shares.</p>

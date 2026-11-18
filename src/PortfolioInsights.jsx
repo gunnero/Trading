@@ -2,7 +2,7 @@ import {usePortfolioPrivacy,PortfolioPrivacyControls} from './PortfolioPrivacy';
 import {useEffect,useState} from 'react';
 import {DownloadSimple,Printer,Plus} from '@phosphor-icons/react';
 import PortfolioExposure from './PortfolioExposure';
-import {PageHeader} from './PageHeader';
+import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {activityRequest} from './PortfolioNotifications';
 import {reportCsv} from './data/portfolio-insights.mjs';
@@ -12,13 +12,16 @@ import PortfolioPlanning,{AnnualReport} from './PortfolioPlanning';
 
 export default function PortfolioInsights({watchlist,tab='exposure',onTab,onPortfolios,onJournal}){
   const exposure=tab==='exposure';
-  return <div className={exposure?'pi-page pi-exposure-page':'pi-page'}>
-    <PageHeader title={exposure?'Portfolio Manager':'Portfolio insights'}
-      description={exposure?undefined:'Account monitoring, allocation plans, performance and reports.'}
-      actions={!exposure&&<><button className="button outline" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="button outline" onClick={onPortfolios}>Portfolios</button>}</>}/>
-    {!exposure&&<PortfolioPrivacyControls/>}
-    <nav className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>
-    {['monitor','allocation','performance','calendar'].includes(tab)?<PortfolioPlanning tab={tab}/>:tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<PortfolioExposure watchlist={watchlist} onJournal={onJournal} onPortfolios={onPortfolios}/>}
+  const monitor=tab==='monitor',planning=['monitor','allocation','performance','calendar'].includes(tab);
+  const tabNav=useSectionNavigation(tab);
+  const tabs=<nav ref={tabNav} className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>;
+  const navigation=monitor?tabs:<><PageHeader title={exposure?'Portfolio Manager':'Portfolio insights'}
+    description={exposure?undefined:'Account monitoring, allocation plans, performance and reports.'}
+    actions={!exposure&&<><button className="button outline" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="button outline" onClick={onPortfolios}>Portfolios</button>}</>}/>
+    {!exposure&&<PortfolioPrivacyControls/>}{tabs}</>;
+  return <div className={'pi-page'+(exposure?' pi-exposure-page':monitor?' monitor-page':'')}>
+    {planning?<PortfolioPlanning tab={tab} navigation={navigation} onJournal={onJournal}/>:<>{navigation}
+      {tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<PortfolioExposure watchlist={watchlist} onJournal={onJournal} onPortfolios={onPortfolios}/>}</>}
   </div>;
 }
 function PriceAlerts(){

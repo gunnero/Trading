@@ -25,13 +25,30 @@ export function createPortfolioPlanning(db,{now,account,accounts,credential,acti
     next.revision++;db.prepare('INSERT INTO portfolio_planning VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET identity=excluded.identity,detail=excluded.detail').run(a.id,identity(a),JSON.stringify(next));
     return read();
   }
-  function read(){const root=accounts();return {people:root.people,accounts:root.accounts.map(a=>{
+  function connectionHistory(a){
+    const events=[];
+    const add=(kind,date)=>{
+      const at=Date.parse(date);
+      if(Number.isFinite(at))events.push({kind,at});
+    };
+    if(a.snapshot?.source==='api'){
+      add('connected',a.connectedAt);
+      if(a.lastSuccess!==a.connectedAt)add('synced',a.lastSuccess);
+      add('disconnected',a.disconnectedAt);
+      if(a.error)add('failed',a.lastAttempt);
+      for(const at of funding.recentSnapshotTimes(a)){
+        if(!events.some(event=>event.at===at))events.push({kind:'snapshot',at});
+      }
+    }else add('imported',a.snapshot?.importedAt);
+    return events.sort((a,b)=>b.at-a.at).slice(0,4);
+  }
+  function read({includeHistory=true}={}){const root=accounts();return {people:root.people,accounts:root.accounts.map(a=>{
     const s=settings(a.id),plan=allocationPlan(a.snapshot,s.targets),last=Date.parse(a.lastSuccess),fresh=Number.isFinite(last)&&now()-last<=s.staleMinutes*60000;
     const health=!a.connected?'Disconnected':a.error?'Sync failed':!fresh?'Sync overdue':'Healthy';
-    return {id:a.id,person:root.people.find(p=>p.id===a.personId)?.name||'Unknown person',label:a.label,environment:a.environment,currency:a.snapshot?.currency,connected:a.connected,lastSuccess:a.lastSuccess,error:a.error,health,settings:s,plan,concentrations:s.concentrationPercent&&fresh&&!a.error?plan.rows.filter(r=>r.key!=='CASH'&&r.weight>s.concentrationPercent):[],observedAt:a.snapshot?.fetchedAt||a.snapshot?.observedAt||null};
+    return {id:a.id,person:root.people.find(p=>p.id===a.personId)?.name||'Unknown person',label:a.label,environment:a.environment,currency:a.snapshot?.currency,connected:a.connected,lastSuccess:a.lastSuccess,error:a.error,health,settings:s,plan,...(includeHistory?{connectionHistory:connectionHistory(a)}:{}),concentrations:s.concentrationPercent&&health==='Healthy'?plan.rows.filter(r=>r.key!=='CASH'&&r.weight>s.concentrationPercent):[],observedAt:a.snapshot?.fetchedAt||a.snapshot?.observedAt||null};
   })};}
   function check(){
-    for(const a of read().accounts){
+    for(const a of read({includeHistory:false}).accounts){
       const g=credential(a.id)?.generation;if(!g)continue;
       const key=identity(account(a.id)),stored=db.prepare('SELECT * FROM portfolio_monitor_state WHERE account_id=?').get(a.id),old=stored?.identity===key?JSON.parse(stored.detail):{};
       const active={};
