@@ -1,0 +1,54 @@
+.modal.company-modal:has(.company-detail[data-tab="news"]) { --company-dialog-width: 1040px; }
+.company-detail[data-tab="news"] .company-identity p { font-size: 12px; }
+.company-detail[data-tab="news"] .company-mark { background: var(--selection); }
+.company-detail[data-tab="news"] .company-use { border-color: var(--primary); color: var(--primary); background: var(--panel); }
+.company-detail[data-tab="news"] .company-use:hover { background: var(--selection); }
+
+.company-news-heading, .company-news-note, .company-news-notice, .company-news-pagination {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.company-news-heading { flex-wrap: wrap; padding-top: 8px; }
+.company-news-heading h2 { margin: 0 4px 0 0; font-size: 30px; line-height: 1.2; letter-spacing: -.7px; }
+.company-news-heading .icon-button { color: var(--primary); }
+.company-news-heading > span { padding-inline-start: 12px; border-inline-start: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.company-news-note { margin: 8px 0 12px; color: var(--muted); font-size: 13px; }
+.company-news-note svg, .company-news-notice svg { flex: none; }
+.company-news-list { margin: 0; padding: 0; list-style: none; }
+.company-news-list li { border-bottom: 1px solid var(--border); }
+.company-news-article { display: flex; align-items: center; gap: 16px; padding: 12px 3px; color: var(--text); text-decoration: none; }
+.company-news-copy { flex: 1; min-width: 0; }
+.company-news-copy h3 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 650; overflow-wrap: anywhere; }
+.company-news-copy p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.company-news-article > svg { flex: none; color: var(--primary); }
+.company-news-article:hover h3, .company-news-article:focus-visible h3 { color: var(--primary); }
+.company-news-article .news-image { width: 76px; height: 48px; }
+.company-news-lead { padding: 9px 3px 16px; gap: 20px; }
+.company-news-lead .news-image { width: 28%; height: auto; aspect-ratio: 2 / 1; }
+.company-news-lead .news-lead-label { display: inline-block; padding: 2px 7px; margin: 0 0 6px; border-radius: 4px; background: var(--selection); color: var(--primary); font-size: 12px; font-weight: 600; line-height: 1.4; text-transform: none; letter-spacing: 0; }
+.company-news-lead h3 { font-size: 27px; line-height: 1.2; letter-spacing: -.5px; }
+.company-news-pagination { justify-content: space-between; margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.company-news-pagination .button { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+.company-news-notice { margin: 14px 0; padding: 12px 14px; border-radius: 6px; background: var(--selection); font-size: 13px; }
+.company-news-notice button { color: var(--primary); text-decoration: underline; }
+.company-news-sources { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.company-news-sources summary, .company-news-sources .company-footer, .company-news-sources .company-footer a { font-size: 12px; }
+
+@media (min-width: 701px) {
+  .company-detail[data-tab="news"] .company-mark { width: 56px; height: 56px; flex-basis: 56px; }
+  .modal.company-modal:has(.company-detail[data-tab="news"]) .modal-inner { padding-inline: 26px; }
+}
+@media (max-width: 599px) {
+  .company-news-heading { gap: 4px; }
+  .company-news-heading h2 { font-size: 22px; }
+  .company-news-heading > span { padding-inline-start: 7px; font-size: 11px; }
+  .company-news-note { align-items: flex-start; font-size: 12px; }
+  .company-news-article { gap: 9px; }
+  .company-news-copy h3 { font-size: 15px; }
+  .company-news-article .news-image { width: 52px; height: 42px; }
+  .company-news-lead { flex-wrap: wrap; }
+  .company-news-lead .news-image { width: 100%; height: auto; aspect-ratio: 2.4 / 1; }
+  .company-news-lead h3 { font-size: 20px; }
+  .company-news-pagination .button, .company-news-notice button { min-height: 40px; }
+}

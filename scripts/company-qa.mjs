@@ -10,12 +10,15 @@ if(existsSync(executable))launch.executablePath=executable;if(existsSync(libs))l
 const browser=await chromium.launch(launch),page=await browser.newPage({viewport:{width:1488,height:1058},reducedMotion:'reduce'}),url=process.env.OPENING_BELL_TEST_URL;
 const errors=[],checks=[];page.on('pageerror',e=>{errors.push(e.message);console.error('BROWSER ERROR',e.stack);});const mark=s=>{checks.push(s);console.log('PASS '+s);};
 const dialog=page.getByRole('dialog'),tab=name=>dialog.getByRole('tab',{name,exact:true}),before=await(await fetch(url+'/api/workspace')).json();
-let mode='ok',release;const held=new Promise(r=>release=r);
+let mode='ok',newsMode='ok',release;const held=new Promise(r=>release=r);
 try{
  await mockMarket(page);
  await page.route('**/api/market/chart?*',route=>{const u=new URL(route.request().url());return route.fulfill({json:indicatorFixture(u.searchParams.get('symbol'),u.searchParams.get('interval'))});});
  await page.route('**/api/company?*',async route=>{const key=new URL(route.request().url()).searchParams.get('symbol');if(mode==='pending'&&key==='NASDAQ:NVDA')await held;return route.fulfill({json:mode==='unavailable'?{symbol:key,status:'unavailable',message:'Test company source outage.'}:{...companyFixture(key),status:mode==='stale'?'stale':'ok',...(mode==='stale'?{message:'Cached during test outage.'}:{})}});});
- await page.route('**/api/news?symbols=NVDA',route=>route.fulfill({json:{status:'ok',fetchedAt:'2026-10-24T23:00Z',data:{articles:[{id:'news-1',title:'NVIDIA company headline for test',publisher:'Example publisher',publishedAt:'2026-10-24T20:00Z',url:'https://example.com/story'}]}}}));
+ await page.route('**/api/news?symbols=NVDA',route=>{
+  const articles=Array.from({length:7},(_,i)=>({id:`news-${i}`,title:`NVIDIA company headline for test ${i+1}`,publisher:'Example publisher',publishedAt:'2026-10-24T20:00:00Z',url:`https://example.com/story-${i}`}));
+  return route.fulfill({json:{status:newsMode,fetchedAt:newsMode==='unavailable'?null:'2026-10-24T23:00:00Z',data:newsMode==='unavailable'?null:{articles}}});
+ });
  await page.goto(url);await page.getByRole('button',{name:'NVDA',exact:true}).click();await expect(dialog).toContainText('NVIDIA Corporation');await expect(dialog.getByRole('img',{name:/NVDA Yahoo Finance 4h/})).toBeVisible();
  const chart=dialog.locator('.company-chart .price-chart');
  await expect(dialog.getByRole('region',{name:'Account holding'})).toHaveCount(0);
@@ -68,7 +71,22 @@ try{
  await dialog.getByLabel('Fiscal year',{exact:true}).selectOption('2025');await expect(earningsTable.locator('tbody tr')).toHaveCount(4);await expect(dialog.locator('.company-chart-empty')).toContainText('No reported revenue');await expect(earningsTable).not.toContainText('Q2 2027');await dialog.getByLabel('Fiscal year',{exact:true}).selectOption('all');await expect(dialog.getByRole('img',{name:/Reported revenue by fiscal/})).toBeVisible();
  for(const width of [820,390,320]){await page.setViewportSize({width,height:900});await dialog.evaluate(el=>el.scrollTop=0);await expect.poll(()=>dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await expect(tab('Earnings')).toBeVisible();await page.screenshot({path:`docs/qa/company-earnings-${width}.png`});}
  expect(await(await fetch(url+'/api/workspace')).json()).toEqual(beforeEarnings);await page.setViewportSize({width:1488,height:1058});mark('Earnings tab supports keyboard navigation, all available quarters, separate accounting bases, year filters, chart and mobile tables');
- await tab('News').click();await expect(dialog.getByRole('heading',{name:'NVDA headlines'})).toBeVisible();await expect(dialog).toContainText('NVIDIA company headline for test');await expect(dialog.getByRole('combobox',{name:'News symbol'})).toHaveCount(0);mark('Company news stays scoped to the selected symbol');
+ await tab('News').click();
+ const headlines=dialog.getByRole('region',{name:'NVDA news'}),stories=headlines.locator('.company-news-article');
+ await expect(headlines.getByRole('heading',{name:'NVDA headlines'})).toBeVisible();
+ await expect(stories).toHaveCount(5);
+ await expect(stories.first()).toContainText('Latest headline');
+ await expect(stories.first()).toHaveAttribute('href','https://example.com/story-0');
+ await headlines.getByRole('button',{name:'Show more'}).click();await expect(stories).toHaveCount(7);
+ newsMode='stale';await headlines.getByRole('button',{name:'Refresh headlines'}).click();
+ await expect(headlines).toContainText('Showing cached headlines');await expect(stories).toHaveCount(7);
+ newsMode='unavailable';await headlines.getByRole('button',{name:'Retry'}).click();
+ await expect(stories).toHaveCount(0);await expect(headlines).toContainText('Headlines temporarily unavailable');
+ newsMode='ok';await headlines.getByRole('button',{name:'Retry'}).click();
+ await expect(stories).toHaveCount(7);await expect(headlines.getByRole('button',{name:'Retry'})).toHaveCount(0);
+ await headlines.getByRole('button',{name:'Show less'}).click();await expect(stories).toHaveCount(5);
+ await expect(dialog.getByRole('combobox',{name:'News symbol'})).toHaveCount(0);
+ mark('Company News preserves ticker scope, publisher links, headline pagination, cached timestamps and retry recovery');
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.getByRole('button',{name:'NVDA',exact:true})).toBeFocused();
  await expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');const afterDetail=await(await fetch(url+'/api/workspace')).json();expect(afterDetail.data.preferences).toEqual(before.data.preferences);expect(afterDetail.data.levelText).toEqual(before.data.levelText);expect(afterDetail.data.plans).toEqual(before.data.plans);expect(afterDetail.data.chartSettings.intervals['NASDAQ:NVDA']).toBe('2m');mark('Closing returns keyboard focus; company chart settings persist without changing the selected trading instrument');
  mode='pending';await page.getByRole('button',{name:'NVDA',exact:true}).click();await expect(dialog).toContainText('Loading company snapshot');await page.keyboard.press('Escape');await page.getByRole('textbox',{name:'Search watchlist'}).fill('AMD');await page.getByRole('button',{name:'AMD',exact:true}).click();release();await expect(dialog).toContainText('Advanced Micro Devices');await expect(dialog).not.toContainText('NVIDIA Corporation');await page.keyboard.press('Escape');mark('Late company responses cannot leak into a different ticker');
