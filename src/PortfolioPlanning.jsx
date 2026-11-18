@@ -1,30 +1,19 @@
 import {useEffect,useId,useState,useRef} from 'react';
 import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useDisplayTime} from './DisplayTime';
+import PortfolioAllocation from './PortfolioAllocation';
 import PortfolioMonitor from './PortfolioMonitor';
 import {activityRequest} from './PortfolioNotifications';
-import {usePortfolioResource,usePortfolioSettings,portfolioPercent as percent,portfolioTone as tone,downloadPortfolioCsv} from './PortfolioTools';
-import {reportCsv,safeCsv} from './data/portfolio-insights.mjs';
+import {usePortfolioResource,portfolioPercent as percent,portfolioTone as tone,downloadPortfolioCsv} from './PortfolioTools';
+import {reportCsv} from './data/portfolio-insights.mjs';
 import {annualTotals} from './data/portfolio-planning.mjs';
 
 export default function PortfolioPlanning({tab,navigation,onJournal}){
   const privacy=usePortfolioPrivacy(),view=usePortfolioResource('insights/planning'),[selected,setSelected]=useState(privacy.account||'');
   const accounts=view.data?.accounts||[],a=accounts.find(a=>a.id===selected)||accounts[0];
   if(tab==='monitor')return <PortfolioMonitor accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
-  return <>{navigation}<section className="panel pi-panel" aria-label="Portfolio planning"><div className="pi-report-filters"><label>Planning account<select aria-label="Planning account" value={a?.id||''} onChange={e=>setSelected(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><button className="button outline" disabled={view.busy} onClick={view.refresh}>Refresh account view</button></div>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!view.data?<p role="status">Loading accounts…</p>:!a?<p>Add an account in Portfolio Manager to get started.</p>:<div key={a.id+':'+tab}>{tab==='allocation'?<Allocation account={a} refresh={view.refresh}/>:tab==='calendar'?<HoldingsCalendar account={a}/>:<Performance account={a}/>}</div>}</section></>;
-}
-function Allocation({account:a,refresh}){
-  const privacy=usePortfolioPrivacy(),{journalStamp}=useDisplayTime(),s=usePortfolioSettings(a,refresh),targets=s.draft.targets,plan=a.plan;
-  const sum=Object.values(targets).reduce((n,v)=>n+(Number(v)||0),0);
-  const csv=()=>safeCsv([['Allocation review plan',privacy.person(a.person),a.label,a.id,a.currency,a.observedAt],['Holding','Current value','Weight %','Target %','Value difference','Estimated shares'],...plan.rows.map(r=>[r.name,r.value,r.weight,r.target,r.delta,r.shares]),['Estimates only. No orders placed. Check available shares, cash, pending orders, price and fees before reviewing each trade.']]);
-  return <><h2>Target allocations</h2><p>Set targets for the holdings in this account and cash. Saving targets prepares a plan for review.</p><p className="pi-help">Snapshot {a.observedAt?journalStamp(a.observedAt):'unavailable'} · {a.health}. Shares in pies or pending orders may be unavailable. Plan values use the whole account; trades use available cash and shares.</p>
-    {plan.reason?<p className="amber">{plan.reason}</p>:null}
-    {!privacy.privateMode&&<form onSubmit={e=>{e.preventDefault();s.save({targets:Object.fromEntries(Object.entries(targets).map(([k,v])=>[k,Number(v)]))});}}>
-      <div className="pi-target-grid">{(plan.rows.length?plan.rows:[...Object.keys(targets).map(key=>({key,name:key}))]).map(r=><label key={r.key}>{r.name} · target %<input type="number" min="0" max="100" step="any" value={targets[r.key]??''} placeholder="0" onChange={e=>s.edit('targets',{...targets,[r.key]:e.target.value})}/></label>)}</div>
-      <div className="pi-actions"><span className={Math.abs(sum-100)<1e-6?'green':'amber'}>Targets total {sum.toFixed(2)}% / 100%</span><button className="button primary" disabled={s.busy||Math.abs(sum-100)>1e-6}>Save targets & prepare plan</button><button type="button" className="button outline" disabled={s.busy} onClick={()=>s.save({targets:{}})}>Clear targets</button>{s.dirty&&<button type="button" className="text-button" onClick={s.reload}>Discard edits / load saved</button>}</div>
-    </form>}{s.error&&<p role="alert" className="amber">{s.error}</p>}{privacy.privateMode&&<p>Reveal names and balances to change targets or export a plan.</p>}
-    {plan.configured&&<><h3>Saved rebalance plan · review only</h3><div className="pi-report-table"><table><thead><tr><th>Holding</th><th>Current / target</th><th>Value difference</th><th>Indicative action</th></tr></thead><tbody>{plan.rows.map(r=><tr key={r.key}><td>{r.name}</td><td>{percent(r.weight).replace('+','')} / {r.target}%</td><td>{privacy.money(r.delta,a.currency)}</td><td>{r.key==='CASH'?'Cash target':Math.abs(r.delta)<.01?'On target':`${r.delta>0?'Buy':'Sell'} ${privacy.number(r.shares)} shares`}{r.key!=='CASH'&&r.shares===null&&<small>Share estimate unavailable across currencies</small>}</td></tr>)}</tbody></table></div><button className="button outline" disabled={privacy.privateMode} onClick={()=>downloadPortfolioCsv(csv(),'allocation-review.csv')}>Export review plan</button><p className="pi-help">Each trade must be checked and confirmed separately in Trade / orders. Prices can move; fees, available cash and account limits may require a smaller order.</p></>}
-  </>;
+  if(tab==='allocation')return <PortfolioAllocation accounts={accounts} account={a} selectAccount={setSelected} view={view} navigation={navigation} onJournal={onJournal}/>;
+  return <>{navigation}<section className="panel pi-panel" aria-label="Portfolio planning"><div className="pi-report-filters"><label>Planning account<select aria-label="Planning account" value={a?.id||''} onChange={e=>setSelected(e.target.value)}>{accounts.map(a=><option key={a.id} value={a.id}>{privacy.person(a.person)} · {privacy.label(a.label,a.id)}{a.environment==='demo'?' · DEMO':''}</option>)}</select></label><button className="button outline" disabled={view.busy} onClick={view.refresh}>Refresh account view</button></div>{view.error&&<p role="alert" className="amber">{view.error}</p>}{!view.data?<p role="status">Loading accounts…</p>:!a?<p>Add an account in Portfolio Manager to get started.</p>:<div key={a.id+':'+tab}>{tab==='calendar'?<HoldingsCalendar account={a}/>:<Performance account={a}/>}</div>}</section></>;
 }
 function Performance({account:a}){
   const privacy=usePortfolioPrivacy(),{journalStamp}=useDisplayTime(),[range,setRange]=useState('1Y'),[benchmark,setBenchmark]=useState('SPY');

@@ -67,7 +67,7 @@ function MonitorHistory({account}){
 export default function PortfolioMonitor({accounts,account:a,selectAccount,view,navigation,onJournal}){
   const privacy=usePortfolioPrivacy(),{displayDay,clockTime,clockStamp,zoneLabel}=useDisplayTime(),id=useId(),privacyButton=useRef(null);
   const [showPrivacy,setShowPrivacy]=useState(false);
-  return <section className="mon-view" aria-label="Portfolio planning">
+  return <section className="planning-view mon-view" aria-label="Portfolio planning">
     <PageHeader title="Connection health & account limits" description={a&&<span className={a.health==='Healthy'?'green':'amber'}>
       <Circle size={12} weight="fill"/> {a.health}{a.lastSuccess&&' · last sync '+(displayDay(a.lastSuccess)===displayDay(Date.now())?clockTime(a.lastSuccess):clockStamp(a.lastSuccess))+' '+zoneLabel}</span>}
       actions={<select className="mon-select" aria-label="Planning account" value={a?.id||''} disabled={!accounts.length} onChange={e=>selectAccount(e.target.value)}>

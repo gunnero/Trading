@@ -1,14 +1,14 @@
-.pi-page.monitor-page {display:block; min-width:0;}
+.pi-page.compact-planning-page {display:block; min-width:0;}
 .mon-view {color:var(--text); min-width:0;}
-.app-shell .mon-view header.page-header {padding:25px 0 10px; margin:0; min-height:0; background:transparent; border:0; align-items:center;}
-.app-shell .mon-view .page-header h1 {font-size:clamp(28px,2.55vw,39px); line-height:1.15; letter-spacing:-1.2px;}
+.app-shell .planning-view header.page-header {padding:25px 0 10px; margin:0; min-height:0; background:transparent; border:0; align-items:center;}
+.app-shell .planning-view .page-header h1 {font-size:clamp(28px,2.55vw,39px); line-height:1.15; letter-spacing:-1.2px;}
 .mon-view .page-header-description {margin:4px 0 0; font-weight:600;}
 .mon-view .page-header-description svg {vertical-align:-1px;}
 .mon-view .mon-select {width:clamp(210px,21vw,342px); min-height:40px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text); font:inherit; font-weight:600;}
-.app-shell .mon-view .section-tabs {margin:0; padding:0;}
-.mon-view .pi-tabs {display:flex; gap:5px; flex-wrap:nowrap; overflow-x:auto; padding:8px 0; margin:0; border:0; scrollbar-width:thin;}
-.mon-view .pi-tabs button {flex:1 0 auto; min-height:34px; padding:5px 12px; font-size:13px;}
-.mon-view .pi-tabs button[aria-current=page] {background:var(--selection); color:var(--primary); font-weight:650;}
+.app-shell .planning-view .section-tabs {margin:0; padding:0;}
+.planning-view .pi-tabs {display:flex; gap:5px; flex-wrap:nowrap; overflow-x:auto; padding:8px 0; margin:0; border:0; scrollbar-width:thin;}
+.planning-view .pi-tabs button {flex:1 0 auto; min-height:34px; padding:5px 12px; font-size:13px;}
+.planning-view .pi-tabs button[aria-current=page] {background:var(--selection); color:var(--primary); font-weight:650;}
 .mon-columns {display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:18px; margin:16px 0;}
 .mon-card {min-width:0; border:1px solid var(--border); border-radius:10px; background:var(--panel);}
 .mon-settings,.mon-notes,.mon-private {padding:0 18px;}
@@ -63,7 +63,7 @@
  .mon-notes>div {gap:8px;}
 }
 @media(max-width:760px){
- .app-shell .mon-view header.page-header {align-items:stretch; flex-direction:column; padding-top:17px; gap:9px;}
+ .app-shell .planning-view header.page-header {align-items:stretch; flex-direction:column; padding-top:17px; gap:9px;}
  .mon-view .page-header-actions,.mon-view .mon-select {width:100%; max-width:none;}
  .mon-columns {grid-template-columns:1fr; margin-top:10px;}
  .mon-history th,.mon-history td {padding:7px 6px;}

@@ -68,6 +68,13 @@ test('settings cannot change during an in-flight order review',async t=>{
 });
 test('allocation refuses incomplete or unreconciled values and never mixes price currencies',()=>{
  const s={accountValue:1000,cash:800,currency:'USD',holdings:[{ticker:'A',name:'A',value:200,price:100,instrumentCurrency:'USD'}]};
+ const positioned={...s,source:'api',availableCash:500,holdings:[{...s.holdings[0],quantity:2}]};
+ const rebalance=allocationPlan(positioned,{A:50,CASH:50});
+ assert.equal(rebalance.rows[0].quantity,2);assert.equal(rebalance.rows[0].targetShares,5);
+ assert.equal(rebalance.rows[0].changeShares,3);assert.equal(rebalance.rows[1].targetValue,500);
+ assert.equal(rebalance.availableCash,500);assert.equal(rebalance.source,'Trading 212');
+ assert.equal(allocationPlan(positioned,{CASH:100}).rows[0].changeShares,-2);
+ assert.equal(allocationPlan({...positioned,holdings:[{...positioned.holdings[0],instrumentCurrency:'EUR'}]},{A:50,CASH:50}).rows[0].targetShares,null);
  assert.equal(allocationPlan(s,{A:50,CASH:50}).rows[0].shares,3);assert.match(allocationPlan({...s,cash:0}).reason,/reconcile/);assert.ok(allocationPlan({...s,holdings:[{value:null}]}).reason);
  assert.equal(allocationPlan({...s,holdings:[{...s.holdings[0],instrumentCurrency:'EUR'}]},{A:50,CASH:50}).rows[0].shares,null);
  assert.match(allocationPlan(s,{REMOVED:100}).reason,/no longer held/);

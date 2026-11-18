@@ -2,16 +2,31 @@
 // valuations are required; deposits must never masquerade as investment gains.
 const day=86400000,finite=Number.isFinite;
 export function allocationPlan(snapshot,targets={}){
-  const empty={rows:[],reason:'A complete positive account value, cash balance and holding values are required.'};
+  const source=snapshot?(snapshot.source==='api'?'Trading 212':'Manual snapshot'):'—';
+  const metadata={source,availableCash:finite(snapshot?.availableCash)?snapshot.availableCash:null};
+  const empty={...metadata,rows:[],reason:'A complete positive account value, cash balance and holding values are required.'};
   if(!snapshot||!(snapshot.accountValue>0)||!finite(snapshot.cash)||snapshot.cash<0||snapshot.holdings.some(h=>!finite(h.value)||h.value<0))return empty;
   const sum=snapshot.cash+snapshot.holdings.reduce((n,h)=>n+h.value,0);
   if(Math.abs(sum-snapshot.accountValue)>Math.max(1,snapshot.accountValue*.005))return {...empty,reason:'Holdings and cash do not reconcile with account value. Refresh the broker snapshot before planning.'};
-  const entries=[...snapshot.holdings.map(h=>({key:h.ticker,name:h.name,value:h.value,price:h.price,currency:h.instrumentCurrency})),{key:'CASH',name:'Cash',value:snapshot.cash}];
+  const entries=[...snapshot.holdings.map(h=>({key:h.ticker,name:h.name,value:h.value,price:h.price,quantity:h.quantity,currency:h.instrumentCurrency})),{key:'CASH',name:'Cash',value:snapshot.cash}];
   if(Object.keys(targets).some(key=>!entries.some(e=>e.key===key)))return {...empty,reason:'A saved target is no longer held. Update the targets before preparing a plan.'};
   const configured=Object.keys(targets).length>0;
-  return {reason:null,configured,total:snapshot.accountValue,currency:snapshot.currency,rows:entries.map(e=>{
-    const target=configured?(Object.hasOwn(targets,e.key)?targets[e.key]:0):null,delta=target===null?null:snapshot.accountValue*target/100-e.value;
-    return {...e,weight:e.value/snapshot.accountValue*100,target,delta,shares:e.key!=='CASH'&&delta!==null&&e.price>0&&e.currency===snapshot.currency?Math.floor(Math.abs(delta)/e.price*1e8)/1e8:null};
+  return {...metadata,reason:null,configured,total:snapshot.accountValue,currency:snapshot.currency,rows:entries.map(e=>{
+    const target=configured?(Object.hasOwn(targets,e.key)?targets[e.key]:0):null;
+    const targetValue=target===null?null:snapshot.accountValue*target/100;
+    const delta=targetValue===null?null:targetValue-e.value;
+    let changeShares=null,targetShares=null;
+    if(e.key!=='CASH'&&delta!==null&&e.price>0&&e.currency===snapshot.currency){
+      const estimate=Math.floor(Math.abs(delta)/e.price*1e8)/1e8;
+      changeShares=Math.sign(delta)*estimate;
+      if(finite(e.quantity)){
+        if(target===0)changeShares=-e.quantity;
+        else changeShares=Math.max(-e.quantity,changeShares);
+        targetShares=e.quantity+changeShares;
+      }
+    }
+    return {...e,weight:e.value/snapshot.accountValue*100,target,targetValue,delta,changeShares,targetShares,
+      shares:changeShares===null?null:Math.abs(changeShares)};
   })};
 }
 export function contributionBreakdown(snapshot,executions){
