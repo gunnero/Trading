@@ -11,15 +11,11 @@
 .pi-target-grid label {display:grid;gap:8px;font-size:13px;}
 .pi-target-grid input {width:100%;min-width:0;}
 .pi-planning-form {grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
-.pi-comparison svg {display:block;width:100%;height:auto;min-height:180px;}
-.pi-comparison input {width:100%;}
-.pi-comparison {margin:20px 0;}
 .pi-report-table small {display:block;color:var(--muted);}
 .pi-tabs {flex-wrap:wrap;}
 .pi-panel h3 {margin-top:24px;}
 
 .pi-planning-form .pi-check {display:flex;align-items:center;justify-content:flex-start;gap:10px;align-self:center;}
 .pi-planning-form .pi-check input {width:18px;height:18px;min-height:18px;flex:0 0 18px;accent-color:var(--primary);}
-.pi-comparison input[type=range] {accent-color:var(--primary);}
 
 }
