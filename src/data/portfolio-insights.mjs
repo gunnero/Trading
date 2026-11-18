@@ -58,7 +58,14 @@ export function reportCsv(report){
     add('Return rate',a.performance.end?.at,'Calculated MWRR (%)',a.currency,a.performance.ratePercent,null,null,'',a.performance.coverage);
     for(const edge of ['start','end'])if(a.performance[edge])add('Valuation',a.performance[edge].at,edge,a.currency,a.performance[edge].value,null,null,'',a.performance[edge].estimated?'Reconstructed estimate':'Recorded');
     for(const f of a.funding)add('Cash movement',f.at,f.type,f.currency,f.amount,null,null,'',a.fundingComplete?'Complete import':'Partial import');
-    for(const f of a.trades){add('Execution',f.at,f.name,f.currency,f.netValue,f.quantity,f.price,f.priceCurrency,`${f.side} · execution ${f.id} · ${a.tradesComplete?'History imported':'Partial history'}`);if(f.realized!==null)add('Realized P/L',f.at,f.name,f.currency,f.realized);for(const c of f.charges||[])add('Execution charge',f.at,c.name,c.currency,c.amount);}
+    for(const f of a.trades){
+      const notes=[f.side,'execution '+f.id,a.tradesComplete?'History imported':'Partial history'];
+      if(report.year&&f.side==='SELL'&&(!Number.isFinite(f.realized)||!f.currency))notes.push('Realized result or its currency unavailable');
+      if(report.year&&!Array.isArray(f.charges))notes.push('Execution charges unavailable');
+      add('Execution',f.at,f.name,f.currency,f.netValue,f.quantity,f.price,f.priceCurrency,notes.join(' · '));
+      if(Number.isFinite(f.realized))add('Realized P/L',f.at,f.name,f.currency,f.realized);
+      for(const c of f.charges||[])add('Execution charge',f.at,c.name,c.currency,c.amount);
+    }
     for(const d of a.income)add('Distribution',d.at,d.type,d.currency,d.amount,null,null,'',`${d.name} · ${a.incomeComplete?'Complete import':'Partial import'}`);
     for(const kind of ['funding','trades','income'])add('Coverage checkpoint',a.coverage?.[kind],kind,null,null,null,null,'',a[kind+'Complete']?'Complete through selected period':'Partial or not current');
     for(const warning of a.warnings)add('Coverage',null,'',null,null,null,null,'',warning);

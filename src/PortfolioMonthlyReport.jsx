@@ -1,12 +1,12 @@
-import {useEffect,useId,useMemo,useRef,useState} from 'react';
+import {useId,useMemo,useRef,useState} from 'react';
 import {ArrowsClockwise,CalendarBlank,DownloadSimple,Info,LockKey,Printer,Stack,User} from '@phosphor-icons/react';
 import {PortfolioPrivacyControls,usePortfolioPrivacy} from './PortfolioPrivacy';
 import {PageHeader} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
-import {activityRequest} from './PortfolioNotifications';
+import {usePortfolioReport} from './usePortfolioReport';
 import {reportCsv} from './data/portfolio-insights.mjs';
 import {monthlyActivity} from './data/monthly-report.mjs';
-import {portfolioPercent as percent,portfolioTone as tone,usePortfolioResource,downloadPortfolioCsv} from './PortfolioTools';
+import {portfolioPercent as percent,portfolioTone as tone,downloadPortfolioCsv} from './PortfolioTools';
 import MonthlyResultsChart from './MonthlyResultsChart';
 import './portfolio-monthly.css';
 
@@ -63,29 +63,13 @@ export default function PortfolioMonthlyReport({navigation,onJournal,onPortfolio
   const currentMonth=displayDay(Date.now()).slice(0,7);
   const [month,setMonth]=useState(currentMonth),[person,setPerson]=useState(''),[account,setAccount]=useState(''),[bucketKey,setBucketKey]=useState('');
   const [showPrivacy,setShowPrivacy]=useState(false),privacyId=useId(),details=useRef(null);
-  const [importing,setImporting]=useState(false),[syncError,setSyncError]=useState(''),[reload,setReload]=useState(0);
-  const filters=usePortfolioResource('insights/reports?view=filters');
-  const query=new URLSearchParams({month,person,account,timeZone:settings.timeZone}).toString();
   const validMonth=/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(month)&&month<=currentMonth;
-  const view=usePortfolioResource(validMonth?'insights/reports?'+query:null),data=view.data;
+  const {view,people,accounts,importing,error,refresh}=usePortfolioReport({month,person,account,timeZone:settings.timeZone},validMonth),data=view.data;
   const activity=useMemo(()=>data?monthlyActivity(data):null,[data]);
   const bucket=activity?.buckets.find(b=>b.key===bucketKey)||activity?.buckets[0];
-  const available=(filters.data?.accounts||[]).filter(a=>!person||a.personId===person);
-  const people=filters.data?.people||data?.people||[];
+  const available=accounts.filter(a=>!person||a.personId===person);
   const selectedPerson=people.find(p=>p.id===person);
   const monthName=validMonth?new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T12:00:00Z')):'Select a month';
-  useEffect(()=>{
-    let active=true,running=false;setSyncError('');setImporting(false);
-    if(!validMonth)return;
-    async function update(){
-      if(document.hidden||running)return;
-      running=true;setImporting(true);
-      try{await activityRequest('insights/reports/refresh',Object.fromEntries(new URLSearchParams(query)));if(active){setSyncError('');await view.refresh();}}
-      catch(e){if(active)setSyncError(e.message);}
-      finally{running=false;if(active)setImporting(false);}
-    }
-    update();const timer=setInterval(update,60000);return()=>{active=false;clearInterval(timer);};
-  },[query,reload,validMonth,view.refresh]);
   function print(){
     if(!data||privacy.privateMode)return;
     const items=[...(details.current?.querySelectorAll('details')||[])],opened=items.map(el=>el.open);
@@ -100,7 +84,7 @@ export default function PortfolioMonthlyReport({navigation,onJournal,onPortfolio
       <label>Person<span><User size={18}/><select aria-label="Person" value={person} onChange={e=>{setPerson(e.target.value);setAccount('');}}><option value="">Everyone</option>{people.map(p=><option key={p.id} value={p.id}>{privacy.person(p.name)}</option>)}</select></span></label>
       <label>Account<span><Stack size={18}/><select aria-label="Account" value={account} onChange={e=>setAccount(e.target.value)}><option value="">All accounts</option>{available.map(a=><option key={a.id} value={a.id}>{accountName({...a,person:people.find(p=>p.id===a.personId)?.name},privacy)}</option>)}</select></span></label></div>
     <p className="mr-print-scope">{selectedPerson?privacy.person(selectedPerson.name):'Everyone'} · {account?privacy.label(available.find(a=>a.id===account)?.label,account):'All accounts'} · {zoneLabel}</p>
-    {(view.error||syncError||filters.error)&&<p className="amber" role="alert">{view.error||syncError||filters.error}</p>}
+    {error&&<p className="amber" role="alert">{error}</p>}
     {!validMonth?<p role="status">Choose the current month or an earlier month.</p>:!data?<p role="status">{view.error?'Monthly report unavailable.':'Loading monthly report…'}</p>:!data.accounts.length?<p className="mr-empty">No accounts in this report.</p>:<>
       {activity.buckets.length>1&&<label className="mr-currency">Activity summary<select aria-label="Activity summary currency" value={bucket.key} onChange={e=>setBucketKey(e.target.value)}>{activity.buckets.map(b=><option key={b.key} value={b.key}>{b.currency}{b.scope==='demo'?' · DEMO':''}</option>)}</select></label>}
       {bucket&&<HeadlineFigures bucket={bucket}/>}<AccountTable accounts={data.accounts}/>
@@ -110,7 +94,7 @@ export default function PortfolioMonthlyReport({navigation,onJournal,onPortfolio
         {bucket?.partial&&<p>Partial history · Totals include supplied records. Dashes indicate unavailable amounts or counts.</p>}{activity.unassigned>0&&<p>{activity.unassigned} executions without a wallet currency are excluded from currency summaries.</p>}
       </div></footer>
       <div ref={details}><details className="mr-detail"><summary>Account details &amp; coverage</summary>{data.accounts.map(a=><AccountReport key={a.id} account={a}/>)}</details></div></>}
-    <div className="mr-tools pi-no-print"><button className="text-button" disabled={importing||view.busy||!validMonth} onClick={()=>{filters.refresh();view.refresh();setReload(i=>i+1);}}><ArrowsClockwise size={15}/>{importing?'Updating broker history…':'Refresh report'}</button>
+    <div className="mr-tools pi-no-print"><button className="text-button" disabled={importing||view.busy||!validMonth} onClick={refresh}><ArrowsClockwise size={15}/>{importing?'Updating broker history…':'Refresh report'}</button>
       <button className="text-button" aria-controls={privacyId} aria-expanded={showPrivacy} onClick={()=>setShowPrivacy(!showPrivacy)}><LockKey size={14}/>Privacy settings</button>
       <button className="text-button" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="text-button" onClick={onPortfolios}>Portfolios</button>}</div>
     <div className="pi-no-print" id={privacyId} hidden={!showPrivacy}>{showPrivacy&&<PortfolioPrivacyControls/>}</div>

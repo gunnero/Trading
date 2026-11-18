@@ -81,10 +81,4 @@ export function benchmarkComparison(ledger,currency,prices,from=0,now=Date.now()
   const byTime=new Map(matched.map(p=>[p.at,p])),first=byTime.get(index.start),points=index.points.map(p=>({...p,benchmark:(byTime.get(p.at).benchmarkPrice/first.benchmarkPrice)*100,benchmarkAt:byTime.get(p.at).benchmarkAt}));
   return {...index,points,benchmarkPercent:points.at(-1).benchmark-100,benchmarkStart:first.benchmarkAt,benchmarkEnd:points.at(-1).benchmarkAt};
 }
-export function annualTotals(account){
-  const totals=new Map(),add=(currency,key,value)=>{if(!finite(value)||!currency)return;if(!totals.has(currency))totals.set(currency,{currency,realized:0,distributions:0,charges:0,interest:0,cashFees:0});totals.get(currency)[key]+=value;};
-  for(const f of account.trades){add(f.currency,'realized',f.realized);for(const c of f.charges||[])add(c.currency,'charges',c.amount);}
-  for(const d of account.income)add(d.currency,'distributions',d.amount);
-  for(const f of account.funding){if(['INTEREST_ON_FREE_CASH','LENDING_INTEREST'].includes(f.type))add(f.currency,'interest',f.amount);if(f.type==='FEE')add(f.currency,'cashFees',f.amount);}
-  return {currencies:[...totals.values()],missingResults:account.trades.filter(f=>f.side==='SELL'&&!finite(f.realized)).length,missingCharges:account.trades.filter(f=>f.charges===null).length};
-}
+export {annualTotals} from './annual-report.mjs';

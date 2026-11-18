@@ -1,3 +1,4 @@
+import {annualCoverage} from '../src/data/annual-report.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -127,6 +128,8 @@ test('annual report covers all execution pages and local year boundaries, keeps 
  f.source.orders=url=>new URL(url).searchParams.has('cursor')?{items:rows.slice(50),nextPagePath:null}:{items:rows.slice(0,50),nextPagePath:'/api/v0/equity/history/orders?limit=50&cursor=123'};
  await f.service.activity.sync(f.id);f.advance(31000);await f.service.activity.sync(f.id);await f.service.funding.sync(f.id);await f.service.reports.syncIncome(f.id);
  const report=f.service.reports.read({year:'2026',timeZone:'Europe/Skopje'}),a=report.accounts[0];assert.equal(a.trades.length,56);assert.equal(a.trades.some(t=>t.id===101),false);assert.ok(a.warnings.length);assert.match(reportCsv(report),/Annual accountant export/);assert.match(reportCsv(report),/Execution charge/);assert.match(reportCsv(report),/Account ID/);
+ assert.equal(f.service.reports.read({year:'2026',account:f.id,person:a.personId}).accounts[0].trades.length,56);
+ assert.equal(f.service.reports.read({year:'2026',account:'unknown'}).accounts.length,0);
  const totals=annualTotals(a);assert.equal(totals.currencies.find(c=>c.currency==='USD').realized,560);assert.equal(totals.currencies.find(c=>c.currency==='EUR').charges,28);
  for(const filters of [{year:'no'},{year:'2026',month:'2026-01'},{year:'2027'}])assert.throws(()=>f.service.reports.read(filters));
 });
@@ -136,3 +139,19 @@ test('performance refresh resumes funding history and compares only supported ma
 });
 
 test('empty initial account observations start the comparison at the first positive valuation',()=>{const l=ledger([0,100,110]);const p=performanceIndex(l,'USD');assert.equal(p.start,2*day);assert.ok(Math.abs(p.ratePercent-10)<1e-8);const c=benchmarkComparison(l,'USD',{currency:'USD',points:[{at:day,value:40},{at:2*day,value:50},{at:3*day,value:55}]});assert.equal(c.benchmarkStart,2*day);assert.ok(Math.abs(c.benchmarkPercent-10)<1e-8);});
+
+test('annual coverage distinguishes absent fields from zero and preserves source dates and currencies',()=>{
+ const a={id:'annual',currency:'USD',tradesComplete:true,incomeComplete:true,fundingComplete:true,
+  trades:[{at:10,side:'SELL',currency:'USD',realized:0,charges:null},{at:25,side:'SELL',currency:'EUR',realized:null,charges:[{amount:.4,currency:'EUR'}]}],
+  funding:[{at:4,type:'DEPOSIT',amount:7,currency:'GBP'},{at:6,type:'INTEREST_ON_FREE_CASH',amount:.3,currency:'EUR'},{at:19,type:'FEE',amount:-1,currency:'USD'}],
+  income:[],coverage:{trades:30,funding:40,income:35},warnings:[],performance:{}};
+ const result=annualCoverage([a]);assert.deepEqual(result.rows.map(r=>[r.count,r.status]),[[2,'Partial'],[1,'Complete'],[0,'Complete'],[1,'Complete'],[2,'Partial']]);
+ assert.deepEqual([result.rows[4].from,result.rows[4].to,result.missingResults,result.missingCharges,result.checkedThrough],[19,25,1,1,30]);
+ const [usd,eur,gbp]=annualTotals(a).currencies;
+ assert.deepEqual([usd.realized,usd.charges,usd.cashFees,eur.realized,eur.charges,eur.interest,gbp.currency,gbp.distributions],[0,null,-1,null,.4,.3,'GBP',0]);
+ const csv=reportCsv({year:'2026',generatedAt:40,accounts:[a]});
+ assert.match(csv,/Execution charges unavailable/);assert.match(csv,/Realized result or its currency unavailable/);
+ const noImports={currency:'USD',trades:[],funding:[],income:[]};
+ assert.ok(annualCoverage([noImports]).rows.every(r=>r.status==='Unavailable'));assert.equal(annualCoverage([a,noImports]).checkedThrough,null);
+ assert.equal(annualTotals(noImports).currencies[0].interest,null);
+});
