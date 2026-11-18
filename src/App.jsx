@@ -26,7 +26,7 @@ import {MarketContextChart} from './MarketContextChart';
 import EconomicCalendar from './EconomicCalendar';
 const NewsPage=React.lazy(()=>import('./NewsPage'));
 import {MarketGroups} from './MarketGroups';
-import {marketGroups,CONTEXT_INSTRUMENTS} from './data/market-context.mjs';
+import {marketGroups,CONTEXT_INSTRUMENTS,CONTEXT_TITLES} from './data/market-context.mjs';
 import {LEVEL_FRAMES} from './data/zone-roles.mjs';
 import {useZoneRoles,ZoneRoleStatus} from './ZoneRoles';
 import {useMarketQuotes, useMarketChart} from './useMarketData';
@@ -67,7 +67,7 @@ export function App() {
   return <DisplayTimeProvider workspace={workspace}><ChartSettingsProvider workspace={workspace}><DrawingProvider workspace={workspace}><SessionDesk workspace={workspace}/></DrawingProvider></ChartSettingsProvider></DisplayTimeProvider>;
 }
 function SessionDesk({workspace}) {
-  const {quoteStamp,zoneLabel}=useDisplayTime();
+  const {quoteStamp,zoneLabel,settings:displayTime}=useDisplayTime();
   const [route, setRoute] = useState(currentRoute);
   const section=routeView(route),group=routeGroup(route),category=settingsCategory(route),watchlistOpen=section==='settings'&&category==='watchlist';
   const saveNeedsAttention=workspace.status==='error'||workspace.status==='conflict';
@@ -257,12 +257,12 @@ function SessionDesk({workspace}) {
       </main></PageNavigation.Provider>
     </div>
       {dialog === 'grid-chart' && selectedEntry && <Modal title={`${selectedEntry.symbol} chart`} subtitle={`${selectedEntry.exchange} · full chart and saved drawing tools`} onClose={()=>setDialog(null)} wide className="market-chart-modal"><GridDetail entry={selectedEntry} sheet={sheet} interval={gridConfig.interval} setup={scan.byKey[quoteKey(selectedEntry)]}/></Modal>}
-      {dialog === 'macro-chart' && <Modal title={`${macro.find(([key])=>key===macroSymbol)?.[1]} chart`} subtitle="Market context · source history" onClose={()=>setDialog(null)} wide className="market-chart-modal"><MarketContextChart key={macroSymbol} symbol={macroSymbol} quotes={quotes} sheet={viewedSheet} historical={!!levelView?.historical} onSelect={setMacroSymbol}/></Modal>}
+      {dialog === 'macro-chart' && <Modal title={CONTEXT_TITLES[macroSymbol]||macroSymbol} onClose={()=>setDialog(null)} wide className={`market-chart-modal context-market-modal${macroSymbol==='US2Y'?' treasury-chart-modal':''}`}><MarketContextChart symbol={macroSymbol} quotes={quotes} sheet={viewedSheet} historical={!!levelView?.historical} onSelect={setMacroSymbol}/></Modal>}
     {dialog === 'level-setup' && selectedEntry && <Modal title={`${selectedEntry.symbol} ${levelView?.historical?'historical levels':'setup'}`} subtitle={levelView?.historical?`Saved list · ${formatDate(viewedSheet.date)}`:"Your levels, chart and break & retest checks"} onClose={()=>setDialog(null)} wide className="level-setup-modal"><LevelSetup key={selectedEntry.id} entry={selectedEntry} sheet={viewedSheet} historical={!!levelView?.historical} result={quotes[quoteKey(selectedEntry)]} initialInterval={setupInterval} onPlan={snapshot=>{setPlanSnapshot(snapshot);setDialog('plan');}}/></Modal>}
     {dialog === 'level-link' && selectedLevel && <LevelLinkDialog instrument={selectedLevel} destination={levelDestination(selectedLevel,watchlist)} historical={!!levelView?.historical} onChoose={openLevelSetup} onAdd={()=>setDialog('level-add')} onClose={()=>setDialog(null)}/>}
     {dialog === 'level-add' && selectedLevel && <AddSymbolDialog watchlist={watchlist} initialSymbol={selectedLevel.symbol} onClose={()=>setDialog(null)} onAdd={entry=>{workspace.update(current=>addWatchEntry(current,entry));openLevelSetup(entry);setToast(`${entry.id} added to your watchlist.`);}}/>}
     {dialog === 'market-data' && <Modal title="Market data" subtitle="Yahoo Finance · interim personal data source" onClose={()=>setDialog(null)}><div className="market-source-details"><p>Prices and candles come from Yahoo Finance and refresh automatically every minute while this app is visible. Quotes show their original observation time in {zoneLabel}.</p><p>SPY, QQQ and U.S. stocks use available Yahoo pre-market and after-hours chart prices during those sessions. Their timestamps are source bar times; changes compare with the last regular close. If no extended-hours observation is available, the last regular-session quote stays labeled with its original date.</p><p>ES/NQ are Yahoo’s selected futures contracts with a 10-minute source delay. VIX and the 10-year yield have a 15-minute source delay. U.S. stock delivery can vary; this connection is not a guaranteed real-time feed.</p><p>The 2-year rate is the U.S. Treasury’s daily par yield, refreshed hourly. It is a daily reference, not an intraday quote.</p><p>Charts, zone-flip confirmation and break-and-retest signals use regular-session candles only. Pre-market prices provide level context; strategy confirmation starts at the regular open. 4-hour candles aggregate actual hourly bars from the U.S. session open; the final bar is shorter. W/M aggregate daily history. Cached readings are labeled; unavailable symbols stay blank. Options bid/ask and Greeks still need an options feed.</p><a className="text-button" href="https://help.yahoo.com/kb/SLN2310.html" target="_blank" rel="noopener noreferrer">Yahoo data sources & delays<ArrowUpRight size={16}/></a></div></Modal>}
-    {dialog === 'market-hours' && <Modal title="Market hours" subtitle="U.S. stocks & ETFs · your local session clock" onClose={()=>setDialog(null)}><MarketHours/></Modal>}
+    {dialog === 'market-hours' && <Modal title={`Session hours · ${displayTime.timeZone}`} className="market-hours-modal" onClose={()=>setDialog(null)}><MarketHours/></Modal>}
     {dialog === 'tradingview' && <TradingViewDialog symbol={symbol||primarySymbol} marketKey={marketKey} timeframe={timeframe} levelText={levelText} sheet={sheet} onClose={() => setDialog(null)}/>}
     {dialog === 'import' && <ImportDialog kind="levels" initial={levelText} sourceDates={levelSourceDates} onClose={() => setDialog(null)} onImport={(merged,text) => { workspace.update(current=>importLevelList(current,text)); setDialog(null); setToast(`${merged.updated.length} updated · ${merged.added.length} added · ${merged.carried.length} carried forward for ${formatDate(merged.date)}.`); }}/ >}
     {dialog === 'watch-add' && <AddSymbolDialog watchlist={watchlist} onClose={()=>setDialog(null)} onAdd={addSymbol}/>}

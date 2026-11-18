@@ -1,0 +1,98 @@
+.modal.context-market-modal { width: min(1060px, calc(100% - 32px)); }
+.modal.treasury-chart-modal { width: min(760px, calc(100% - 32px)); }
+.modal.market-hours-modal { width: min(680px, calc(100% - 32px)); }
+.context-market-modal .modal-inner, .market-hours-modal .modal-inner { padding: 20px 24px; }
+.context-market-modal .modal-header, .market-hours-modal .modal-header { align-items: center; margin: 0 0 8px; padding: 0; }
+.context-market-modal .context-chart-symbols {
+  display: flex; flex-wrap: nowrap; gap: 3px; margin: 0; border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: thin;
+}
+.context-market-modal .context-chart-symbols button {
+  flex: 0 0 auto; min-height: 38px; border: 0; border-bottom: 2px solid transparent;
+  border-radius: 0; padding: 6px 12px; color: var(--muted); font-size: 13px; white-space: nowrap;
+}
+.context-market-modal .context-chart-symbols button.selected { color: var(--primary); border-color: var(--primary); background: transparent; font-weight: 650; }
+.context-market-modal .context-chart-symbols button:hover { background: var(--selection); }
+.context-market-modal .context-chart-symbols button:focus-visible { outline-offset: -3px; }
+.context-quote { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 14px 0; font-variant-numeric: tabular-nums; }
+.context-quote strong { font-size: 28px; line-height: 1.15; letter-spacing: -.6px; }
+.context-quote b { font-size: 17px; }
+.context-quote span, .context-quote small { font-size: 12px; color: var(--muted); }
+.context-quote small { margin-inline-start: auto; }
+.context-market-modal .context-chart-panel { border: 0; background: transparent; overflow: visible; }
+.context-market-modal .compact-chart-header {
+  height: auto; padding: 5px 0; min-height: 42px; flex-wrap: wrap; gap: 5px 10px;
+  border-block: 1px solid var(--border); background: transparent;
+}
+.context-market-modal .chart-identity small { font-size: 11px; }
+.context-market-modal .chart-footnote { height: auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 6px 0; font-size: 12px; color: var(--muted); }
+.context-market-modal .drawing-chart-frame > .price-chart { height: clamp(320px, 36dvh, 430px); flex: none; }
+.treasury-chart-modal .chart-header-icons { margin-left: auto; }
+.treasury-chart-modal .compact-chart-header .chart-identity { display: none; }
+.treasury-chart-modal .drawing-chart-frame > .price-chart { height: 320px; }
+.context-market-modal .context-chart-note { margin: 10px 0 0; }
+.context-imports { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.context-imports header { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.context-imports h3 { margin: 0; font-size: 17px; }
+.context-imports header span, .context-imports p { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.context-imports p { margin: 4px 0; }
+.context-level-grid { margin-top: 8px; max-width: 100%; overflow-x: auto; }
+.context-level-grid table, .market-hours-modal table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.context-level-grid th, .context-level-grid td, .market-hours-modal table th, .market-hours-modal table td {
+  padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; line-height: 1.4;
+}
+.context-level-grid thead, .market-hours-modal thead { background: var(--panel-hover); color: var(--muted); font-size: 12px; }
+.context-level-grid tbody th { font-weight: 600; }
+.context-level-grid td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.context-zone { display: inline-block; padding: 2px 6px; font-size: 12px; font-weight: 600; border-radius: 4px; color: var(--zone-color); background: var(--zone-tint); }
+.zone-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-inline-end: 7px; background: var(--zone-color); }
+.context-imports .zone-S { --zone-color: var(--red); --zone-tint: var(--negative-tint); }
+.context-imports .zone-D { --zone-color: var(--green); --zone-tint: var(--positive-tint); }
+.context-imports .zone-G { --zone-color: var(--amber); --zone-tint: var(--warning-tint); }
+
+.hours-status, .hours-status > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+.hours-status { justify-content: space-between; padding-top: 3px; }
+.hours-status strong { font-size: 14px; color: var(--session-color); }
+.hours-status span, .hours-transition { font-size: 12px; color: var(--muted); }
+.hours-transition { margin: 5px 0 12px; }
+.hours-transition strong { color: var(--text); }
+.market-hours-modal .market-hours-sessions { white-space: normal; margin: 14px 0 12px; border: 0; border-top: 1px solid var(--border); }
+.market-hours-modal caption { text-align: left; font-size: 13px; font-weight: 600; padding-bottom: 6px; }
+.market-hours-modal tbody th, .context-level-grid tbody th { font-weight: 600; color: var(--text); }
+.market-hours-modal table td:nth-child(2) { font-weight: 600; }
+.market-hours-modal table td { font-variant-numeric: tabular-nums; }
+.market-hours-modal table td:last-child { font-size: 12px; color: var(--muted); }
+.market-hours-modal tr.market-hours-options { display: table-row; background: transparent; border: 0; }
+.market-hours-modal th small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.hours-attribution { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+.hours-attribution > svg { flex: none; color: var(--muted); }
+.hours-attribution p, .hours-attribution small { color: var(--muted); line-height: 1.5; margin: 3px 0; font-size: 12px; }
+.hours-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 2px; }
+.market-hours .hours-links a { color: var(--primary); }
+.hours-conversion { margin-top: 14px; padding: 12px 14px; border-radius: 6px; background: var(--selection); }
+.hours-conversion h3 { display: flex; gap: 7px; align-items: center; margin: 0 0 6px; font-size: 14px; }
+.hours-conversion svg { color: var(--primary); flex: none; }
+.hours-conversion dl { margin: 0; font-size: 13px; }
+.hours-conversion dl > div { display: flex; gap: 8px 16px; justify-content: space-between; padding-block: 2px; }
+.hours-conversion dt { color: var(--muted); overflow-wrap: anywhere; }
+.hours-conversion dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (min-width: 1100px) {
+  .context-market-modal .chart-header-icons { border-inline-start: 1px solid var(--border); padding-inline-start: 6px; }
+  .context-market-modal .chart-header-icons button { width: auto; padding: 4px 6px; gap: 4px; }
+  .context-market-modal .chart-tool-label { display: inline; font-size: 11px; }
+}
+@media (max-width: 700px) {
+  .modal.context-market-modal, .modal.market-hours-modal { width: 100%; max-width: 100%; }
+  .context-market-modal .modal-inner, .market-hours-modal .modal-inner { padding: 14px; }
+  .context-market-modal .modal-header h2, .market-hours-modal .modal-header h2 { font-size: 21px; overflow-wrap: anywhere; }
+  .context-market-modal .context-chart-symbols { flex-wrap: wrap; column-gap: 0; }
+  .context-market-modal .context-chart-symbols button { min-height: 44px; padding-inline: 10px; }
+  .context-quote { gap: 4px 8px; }
+  .context-quote span { flex-basis: 100%; }
+  .context-quote small { margin: 0; }
+  .context-market-modal .chart-header-icons { gap: 0; }
+  .context-level-grid table { min-width: 560px; }
+  .market-hours-modal table th, .market-hours-modal table td { padding: 6px 4px; }
+  .hours-conversion dl { font-size: 12px; }
+}

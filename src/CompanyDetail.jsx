@@ -4,8 +4,8 @@ import {apiFetch} from './auth-client';
 import {useEffect,useState,useId} from 'react';
 import {ArrowUpRight,CaretRight,ArrowsClockwise,AppleLogo,Buildings,SlidersHorizontal,Tag,ChartBar,Stack,Coins,Note} from '@phosphor-icons/react';
 import {PriceChart} from './Charts';
-import {INDICATORS} from './ChartIndicators';
-import {ChartHeader,ChartLevels,useSavedChart,useSavedTimeframe} from './ChartSettings';
+import {ChartLegend} from './ChartLegend';
+import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 import {useMarketChart,useMarketQuotes} from './useMarketData';
 import {useZoneRoles} from './ZoneRoles';
 import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
@@ -66,16 +66,6 @@ function EarningsCard({data}){
   {!data.fund&&<><p className="small-copy muted">{dates.length?`${e.estimated===true?'Estimated date / window':e.estimated===false?'Source-listed date':'Date estimate status unavailable'} · ${past?'past date; next release not supplied':'exact release time not supplied'}`:'No upcoming earnings date supplied by Yahoo.'}</p><div className="company-mini-metrics"><span>Consensus EPS<strong>{e.epsEstimate===null?'—':number(e.epsEstimate)}</strong></span><span>Consensus revenue<strong>{e.revenueEstimate===null?'—':`${data.financialCurrency||''} ${number(e.revenueEstimate,{notation:'compact'})}`}</strong></span></div><small className="muted">Estimates · {e.period||'period not supplied'} · {e.basis} · EPS per listed share</small></>}
   <div className="company-event-row"><span>Ex-dividend date</span><strong>{data.exDividend?formatDate(data.exDividend):'Not supplied'}</strong></div><div className="company-event-row"><span>Dividend payment</span><strong>{data.dividendDate?formatDate(data.dividendDate):'Not supplied'}</strong></div><p className="small-copy muted">Dates remain as published. Schedules can change.</p>
  </section>;
-}
-function CompanyChartLegend({scope,indicators}){
- const {config}=useSavedChart(scope);
- const readings=INDICATORS.filter(item=>['ema','vwap'].includes(item.key)&&config.enabled[item.key])
-  .flatMap(item=>item.series.map(id=>({id,color:item.color,value:indicators?.series?.[id]?.at(-1)})))
-  .filter(reading=>Number.isFinite(reading.value));
- if(!readings.length)return null;
- return <dl className="company-chart-legend" aria-label="Latest overlay readings">{readings.map(({id,color,value})=>
-  <div key={id}><dt><i style={{borderColor:color}} aria-hidden="true"/>{id==='ema9'?'EMA 9':id==='ema21'?'EMA 21':'VWAP'}</dt><dd>{number(value,{minimumFractionDigits:2})}</dd></div>
- )}</dl>;
 }
 function Profile({data,entry,q}){
  const p=data.profile;
@@ -208,7 +198,7 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
    {position&&<><PortfolioPosition position={position} compact><div className="company-chart-choice segmented" aria-label="Holding chart view"><button aria-pressed={!simpleChart} className={!simpleChart?'selected':''} onClick={()=>setSimpleChart(false)}>Candles & levels</button><button aria-pressed={simpleChart} className={simpleChart?'selected':''} onClick={()=>setSimpleChart(true)}>Price history</button></div>{!simpleChart&&<div className="pm-chart-position"><label><input type="checkbox" checked={showAverage&&!hideBalances} disabled={!averageLine||hideBalances} onChange={e=>setShowAverage(e.target.checked)}/><i/>Average paid {hideBalances?'••••':number(position.holding.averagePrice)} {position.holding.instrumentCurrency}</label><span>{averageLine?`Account reference · ${entry.exchange}:${entry.symbol}`:history.status==='loading'?'Checking chart currency…':'Average line unavailable: chart symbol and currency must match the holding.'}</span></div>}</PortfolioPosition></>}
    {position&&simpleChart?<PortfolioStockChart entry={entry} position={position} instrument={instrument} sheetDate={sheet.date} orderLines={showOrders?orderLines:[]}/>:<section className="context-chart-panel company-chart" aria-label={`${entry.symbol} company chart`}><ChartHeader symbol={entry.symbol} quote={chartQuote} marketKey={key} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles} showToolLabels/><ChartLevels scope={`${key}|${timeframe}`} instrument={instrument} date={sheet.date} roles={roles} quoteDate={chartQuote?.sessionDate}/>
 
-    {history.candles?.length>0&&<CompanyChartLegend scope={`${key}|${timeframe}`} indicators={history.indicators}/>}
+    {history.candles?.length>0&&<ChartLegend scope={`${key}|${timeframe}`} indicators={history.indicators}/>}
     {history.candles?.length?<PriceChart symbol={entry.symbol} drawingKey={key} timeframe={timeframe} candles={history.candles} price={history.quote.price} instrument={instrument} indicators={history.indicators} referenceLine={showAverage&&!hideBalances?averageLine:null} orderLines={chartOrderLines}/>:<div className="empty" role="status"><h3>{history.status==='loading'?'Loading company chart…':'Company chart unavailable'}</h3><p>{history.message||'Fetching regular-session candles.'}</p></div>}
     <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}Regular-session history · Yahoo Finance · {timeframe==='4h'?'4h from hourly bars · ':''}partial candles marked</span><span>{history.quote?.observedAt&&<>Observed {quoteStamp(history.quote)} · </>}Refreshes each minute</span></div>
    </section>}

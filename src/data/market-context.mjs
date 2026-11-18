@@ -9,6 +9,13 @@ export const FUTURES_CONTEXT=[
   {id:'CME_MINI:RTY1!',key:'CME_MINI:RTY1!',label:'RTY'},
 ];
 export const CONTEXT_INSTRUMENTS=[...FUTURES_CONTEXT.map(item=>[item.key,item.label]),...INDICATOR_CONTEXT];
+export const CONTEXT_TITLES={
+  NQ:'Nasdaq 100 futures · NQ', ES:'S&P 500 futures · ES',
+  'NYMEX:CL1!':'Crude oil futures · CL', 'COMEX:GC1!':'Gold futures · GC',
+  'CME_MINI:RTY1!':'Russell 2000 futures · RTY',
+  VIX:'Cboe Volatility Index · VIX', VIX1D:'Cboe 1-Day Volatility Index · VIX1D',
+  DXY:'U.S. Dollar Index · DXY', US10Y:'U.S. 10-year Treasury yield', US2Y:'U.S. 2-year Treasury yield',
+};
 export const EXTRA_FUTURES_CHART_KEYS=FUTURES_CONTEXT.map(item=>item.key).filter(key=>key.includes(':'));
 export function marketGroups(watchlist){
   return [

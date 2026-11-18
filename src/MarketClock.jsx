@@ -1,7 +1,9 @@
 import {useDisplayTime} from './DisplayTime';
 import {useEffect,useMemo,useState} from 'react';
-import {Bell,ArrowUpRight,Circle} from '@phosphor-icons/react';
+import {Bell,ArrowUpRight,Circle,Clock,Info} from '@phosphor-icons/react';
 import {marketSession,until,MARKET_CALENDAR} from './data/market-session.mjs';
+
+import {createDisplayTime} from './data/display-time.mjs';
 
 function useMarketClock() {
   const [now,setNow]=useState(Date.now());
@@ -24,23 +26,44 @@ export function MarketClock({onOpen,compact=false}) {
   </button>;
 }
 export function MarketHours() {
-  const {clockTime,clockDate,zoneLabel,clockStamp,clockRange}=useDisplayTime();
+  const {clockTime,clockDate,zoneLabel,clockStamp,clockRange,displayDay,settings}=useDisplayTime();
+  const ny=useMemo(()=>createDisplayTime({timeZone:'America/New_York',hourCycle:settings.hourCycle}),[settings.hourCycle]);
   const clock=useMarketClock(),schedule=clock.schedule;
+  const currentDay=schedule?.day===clock.today.day;
   const rows=schedule?[
+    [schedule.early?'Regular market · early close':'Regular market',schedule.open,schedule.close,'open'],
     ['Pre-market',schedule.pre,schedule.open,'pre'],
-    [schedule.early?'Regular · early close':'Regular session',schedule.open,schedule.close,'open'],
     ['After-hours',schedule.close,schedule.post,'after'],
+    ['SPY / QQQ options',schedule.open,schedule.optionsClose,'options'],
   ]:[];
   return <div className="market-hours">
-    <div className={`market-hours-now session-${clock.state}`}><span><i/><strong>{clock.label}</strong><small>{clock.detail}</small></span><span><time dateTime={new Date(clock.now).toISOString()}>{clockTime(clock.now,true)}</time><small>{clockDate(clock.now)} · {zoneLabel}</small></span></div>
-    {clock.transition && <p className="market-hours-transition">{clock.transition.label} <strong>{clockStamp(clock.transition.at)}</strong> <span>in {until(clock.transition.at,clock.now)}</span></p>}
-    {schedule ? <>
-      <h3>{schedule.day===clock.today.day?'Current trading day':'Next trading day'} <span>{clockDate(schedule.open)}</span></h3>
-      <p className="small-copy muted">All times are {zoneLabel}. After-hours may finish on the following local day.</p>
-      <div className="market-hours-sessions">{rows.map(([label,start,end,state])=><div className={clock.state===state && schedule.day===clock.today.day?'is-current':''} key={state}><span><i className={`session-dot session-${state}`}/>{label}{clock.state===state && schedule.day===clock.today.day && <b>NOW</b>}</span><strong><time dateTime={start}>{clockRange(start,end)}</time></strong></div>)}</div>
-      <div className="market-hours-options"><strong>SPY / QQQ options · regular hours</strong><span>{clockRange(schedule.open,schedule.optionsClose)} {zoneLabel}</span><p>Eligible exchanges trade these options later than the stock-market close. Morning access and order cutoffs depend on your venue and broker.</p><a href={MARKET_CALENDAR.optionsSource} target="_blank" rel="noopener noreferrer">Options hours<ArrowUpRight size={13}/></a><a href={MARKET_CALENDAR.extendedOptionsSource} target="_blank" rel="noopener noreferrer">Cboe extended sessions<ArrowUpRight size={13}/></a></div>
-    </> : <p className="market-hours-unavailable">The published calendar needs an update before the next session can be shown.</p>}
-    <p className="market-hours-source">Scheduled stock/ETF sessions, including published holidays and early closes. Extended hours follow NYSE Arca. Unscheduled closures and trading halts are not monitored.</p>
-    <div className="market-hours-sources"><a href={MARKET_CALENDAR.source} target="_blank" rel="noopener noreferrer">NYSE calendar & hours<ArrowUpRight size={13}/></a><small>Calendar: 2026–2028 · checked 24 Oct 2026</small></div>
+    <div className={`hours-status session-${clock.state}`}>
+      <div><strong><i className="session-dot"/>{clock.label}</strong><span>{clock.detail}</span></div>
+      <span>{clockStamp(clock.now)} · {zoneLabel}</span>
+    </div>
+    {clock.transition&&<p className="hours-transition">{clock.transition.label} <strong>{clockStamp(clock.transition.at)}</strong> · in {until(clock.transition.at,clock.now)}</p>}
+    {schedule?<table className="market-hours-sessions">
+      <caption>{currentDay?'Current trading day':'Next trading day'} · {clockDate(schedule.open)}</caption>
+      <thead><tr><th scope="col">Session</th><th scope="col">Hours · {zoneLabel}</th><th scope="col">Local date</th></tr></thead>
+      <tbody>{rows.map(([label,start,end,state])=><tr key={state} className={state==='options'?'market-hours-options':currentDay&&state===clock.state?'is-current':undefined}>
+        <th scope="row">{label}{state==='options'&&<small>Regular reference</small>}</th>
+        <td>{clockRange(start,end)}</td><td>{displayDay(start)!==displayDay(end)?`${clockDate(start)} → ${clockDate(end)}`:clockDate(start)}</td>
+      </tr>)}</tbody>
+    </table>:<p className="market-hours-unavailable">The published calendar needs an update before the next session can be shown.</p>}
+    <div className="hours-attribution">
+      <Info size={16} aria-hidden="true"/><div><strong>Trading access depends on your venue and broker.</strong>
+        <p>The clock uses device time and published schedules. Unscheduled closures and halts are unmonitored.</p>
+        <div className="hours-links"><a href={MARKET_CALENDAR.source} target="_blank" rel="noreferrer">NYSE calendar &amp; hours<ArrowUpRight size={12}/></a>
+          <a href={MARKET_CALENDAR.optionsSource} target="_blank" rel="noreferrer">Nasdaq options hours<ArrowUpRight size={12}/></a>
+          <a href={MARKET_CALENDAR.extendedOptionsSource} target="_blank" rel="noreferrer">Cboe extended sessions<ArrowUpRight size={12}/></a></div>
+        <small>NYSE Arca extended hours · Calendar coverage {MARKET_CALENDAR.from.slice(0,4)}–{MARKET_CALENDAR.through.slice(0,4)}</small>
+      </div>
+    </div>
+    {schedule&&<section className="hours-conversion">
+      <h3><Clock size={16} aria-hidden="true"/>Time conversion for {ny.clockDate(schedule.open)}</h3>
+      <dl><div><dt>Regular · New York (ET)</dt><dd>{ny.clockRange(schedule.open,schedule.close)}</dd></div>
+      {settings.timeZone!=='America/New_York'&&<div><dt>Regular · {settings.timeZone}</dt><dd>{clockRange(schedule.open,schedule.close)}</dd></div>}
+      <div><dt>Pre-market opens</dt><dd>{ny.clockTime(schedule.pre)} ET{settings.timeZone!=='America/New_York'&&` → ${clockTime(schedule.pre)} ${zoneLabel}`}</dd></div></dl>
+    </section>}
   </div>;
 }

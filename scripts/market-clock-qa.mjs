@@ -40,6 +40,7 @@ try{
  await expect(dialog.locator('.market-hours-sessions')).toContainText('21:00–01:00 (+1 day)');
  await expect(dialog.locator('.market-hours-options')).toContainText('14:30–21:15');
  await expect(dialog).toContainText('venue and broker');
+ await expect(dialog.locator('.hours-conversion')).toContainText('09:30–16:00');await expect(dialog.locator('.hours-conversion')).toContainText('04:00 ET → 09:00 Skopje');
  await expect(dialog.getByRole('link',{name:'NYSE calendar & hours'})).toHaveAttribute('href','https://www.nyse.com/trade/hours-calendars');
  await snap('market-hours-weekend-fixture');await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);
  mark('Keyboard-accessible session details show local extended hours, next-day rollover and separate options hours');
