@@ -15,3 +15,129 @@
 .transfer-currency-total strong.transfer-net-positive{color:var(--green)}
 
 .transfer-global{margin-bottom:20px}.transfer-global header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.transfer-global header>span{font-size:12px;color:var(--muted)}.transfer-mkd-net>span,.transfer-mkd-net>strong,.transfer-mkd-net>small{display:block}.transfer-mkd-net>strong{margin:8px 0;font-size:22px;overflow-wrap:anywhere}
+
+.settings-transfers-view {min-width:0}
+.app-shell .settings-transfers-view>header.page-header {min-height:0;margin:0;padding:24px 0 5px;border:0}
+.settings-transfers-view .settings-page {padding-top:0}
+.settings-transfers-view .settings-layout {gap:16px}
+.app-shell .settings-transfers-view .settings-nav {gap:8px;align-items:center;padding:4px 0 12px}
+.app-shell .settings-transfers-view .settings-nav a {padding:6px 15px;min-height:34px;border:0;border-radius:5px}
+.settings-transfers-view .settings-nav a>svg {display:none}
+.transfers-desk {gap:14px}
+.ledger-title,.ledger-actions,.ledger-title .ledger-unlocked,.bank-brand,.bank-sources,.bank-facts,.bank-facts>span,.ledger-platforms summary span {display:flex;align-items:center;gap:10px}
+.ledger-title {padding:5px 0;gap:14px}
+.transfers-desk .ledger-title h2 {font-size:clamp(22px,2.3vw,32px);letter-spacing:-.045em;margin:0}
+.ledger-title .button {margin-left:auto}
+.ledger-unlocked,.ledger-category,.ledger-status,.ledger-reserve summary>span {display:inline-flex;align-items:center;width:fit-content;border-radius:5px;padding:3px 9px;font-size:12px;font-weight:600}
+.ledger-unlocked,.ledger-status.confirmed,.ledger-category.withdrawal,.ledger-category.refund {color:#096439;background:#d9f2de}
+.ledger-title svg,.ledger-actions svg,.bank-controls button>svg,.bank-facts svg,.ledger-guide button svg {width:17px;height:17px;flex:none}
+.transfers-desk .panel.transfer-connection {padding:14px 18px 8px}
+.bank-controls {display:grid;grid-template-columns:minmax(118px,.82fr) minmax(140px,1.12fr) minmax(136px,1.17fr) auto auto;align-items:center;gap:12px}
+.bank-brand,.bank-last,.bank-sources {min-width:0}
+.bank-brand>svg {width:40px;height:40px;padding:8px;color:var(--primary);background:var(--selection);border-radius:7px;flex:none}
+.transfers-desk .bank-brand h3 {font-size:17px;margin:0}
+.bank-brand span,.bank-controls small,.bank-last strong,.bank-hourly {font-size:12px}
+.bank-sources,.bank-last {border-left:1px solid var(--border);padding:0 0 0 14px}
+.bank-last strong,.bank-sources small {display:block}
+.bank-controls small {color:var(--muted)}
+.bank-sources {text-align:left;justify-content:space-between;color:var(--text);background:transparent;font-size:14px}
+.bank-sources:enabled:hover,.ledger-group-button:hover,.ledger-table th button:hover {color:var(--primary)}
+.transfers-desk .bank-hourly {flex-direction:row;align-items:center;gap:8px;color:var(--text);cursor:pointer}
+.bank-hourly input {appearance:none;position:relative;flex:none;width:34px;height:20px;margin:0;border-radius:12px;border:1px solid var(--border);background:#b8afc8;cursor:pointer}
+.bank-hourly input:after {content:"";display:block;width:14px;height:14px;border-radius:50%;margin:2px;background:white}
+.bank-hourly input:checked {background:var(--primary);border-color:var(--primary)}
+.bank-hourly input:checked:after {transform:translateX(14px)}
+.bank-hourly input:disabled {opacity:.5;cursor:default}
+.bank-facts {border-top:1px solid var(--border);padding-top:9px;margin-top:13px;gap:10px 18px;flex-wrap:wrap;color:var(--muted);font-size:12px;min-height:32px}
+.bank-facts>span {gap:6px}
+.bank-facts>span+span {border-left:1px solid var(--border);padding-left:12px}
+.bank-facts svg {color:var(--primary)}
+.bank-progress {flex:1 1 200px}
+.bank-progress progress {width:44px;height:6px;accent-color:var(--primary)}
+.ledger-kpis {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.ledger-kpis>div,.ledger-reserve,.ledger-platforms {min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:7px}
+.ledger-kpis>div {padding:13px 18px}
+.ledger-kpis span,.ledger-kpis small {font-size:12px;color:var(--muted)}
+.ledger-kpis strong {display:block;margin-top:3px;font-size:clamp(19px,1.8vw,26px);line-height:1.2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.ledger-platforms summary,.ledger-reserve summary {padding:9px 14px;font-size:13px;cursor:pointer}
+.ledger-platforms summary span {display:inline-flex;margin-inline-start:12px;flex-wrap:wrap;gap:4px 15px;font-variant-numeric:tabular-nums}
+.ledger-platforms summary small,.ledger-reserve small {color:var(--muted)}
+.ledger-platforms[open]>.transfer-overview,.ledger-platforms[open]>p {margin:12px}
+.ledger-platforms .transfer-global {border:0;border-top:1px solid var(--border);border-radius:0}
+.transfers-desk .transfer-ledger {padding:0;overflow:hidden}
+.transfers-desk .transfer-ledger>header {padding:9px 14px;gap:10px;flex-wrap:wrap}
+.transfers-desk .transfer-ledger h3 {margin:0;font-size:16px}
+.transfer-ledger>header>div:first-child {display:flex;align-items:baseline;gap:9px}
+.transfer-ledger>header small {font-size:12px;color:var(--muted)}
+.transfer-ledger .transfer-actions label {flex-direction:row;align-items:center;gap:6px}
+.transfer-ledger .transfer-actions select {padding:4px 6px;min-height:30px}
+.ledger-table {width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;color:var(--text)}
+.ledger-table th,.ledger-table td {padding:9px 7px;text-align:left;vertical-align:middle;border-top:1px solid var(--border);overflow-wrap:anywhere}
+.ledger-table thead {background:var(--panel-hover)}
+.ledger-table th {font-size:12px;font-weight:600}
+.ledger-table th:first-child {width:11%}.ledger-table th:nth-child(2) {width:24%}.ledger-table th:nth-child(3) {width:10%}.ledger-table th:nth-child(4) {width:15%}.ledger-table th:nth-child(5),.ledger-table th:nth-child(6) {width:14%}
+.ledger-table th:first-child,.ledger-table td:first-child {padding-left:14px}
+.ledger-table th button,.ledger-group-button {display:inline-flex;align-items:center;text-align:left;gap:5px;font:inherit}
+.ledger-table th button svg,.ledger-group-button svg {width:14px;height:14px;flex-shrink:0}
+.ledger-group-button {font-weight:600}
+.ledger-table small {display:block;color:var(--muted);font-size:11px;font-weight:400}
+.ledger-table .transfer-row,.ledger-table .transfer-installments {display:table-row;margin:0;padding:0}
+.ledger-amount {font-weight:600;font-variant-numeric:tabular-nums}
+.ledger-installment,.ledger-category.purchase,.ledger-category.deposit,.ledger-reserve summary>span {background:var(--selection)}
+.ledger-table .ledger-installment td:nth-child(2) {padding-left:20px}
+.ledger-category.cost {color:#8f2443;background:#f9dbe6}
+.ledger-category.unknown,.ledger-category.exclude,.ledger-status.excluded,.ledger-status.mixed {color:var(--muted);background:var(--panel-hover)}
+.ledger-status.needs-review {color:#835000;background:#ffe7b3}
+button.ledger-status:hover {text-decoration:underline}
+.ledger-table .ledger-status,.ledger-table .ledger-category {font-size:11px;white-space:normal}
+.ledger-reserve summary>span,.ledger-reserve small {margin-left:10px}
+.ledger-reserve .transfer-tax-reserve {border:0;border-top:1px solid var(--border);border-radius:0}
+.ledger-actions {flex-wrap:wrap}
+.transfers-desk .transfer-tools,.ledger-guide {padding:9px 14px;font-size:13px}
+.ledger-guide summary {cursor:pointer}
+.ledger-guide .transfer-description-filters {margin-block:10px}
+.transfers-desk .transfer-review-form {margin:8px}
+@media(max-width:1120px) {.bank-controls {grid-template-columns:repeat(3,minmax(0,1fr))}.bank-controls>.button {justify-self:start}.bank-hourly {grid-column:span 2}}
+@media(max-width:760px) {
+  .app-shell .settings-transfers-view>header.page-header {padding:17px 0 6px}
+  .ledger-title {gap:7px;flex-wrap:wrap}.ledger-title .button {min-height:36px}
+  .transfers-desk .panel.transfer-connection {padding:12px}
+  .bank-controls {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 8px}
+  .bank-sources {border:0;padding:0}.bank-controls>.button {justify-self:end}
+  .bank-facts {gap:6px 12px}.bank-facts>span+span {border:0;padding:0}.bank-progress {flex-basis:100%;order:1}
+  .ledger-kpis {gap:6px}.ledger-kpis>div {padding:9px}.ledger-kpis strong {font-size:16px}
+  .ledger-platforms summary span {display:flex;margin:5px 0 0}
+  .transfers-desk .transfer-ledger>header {align-items:flex-start;flex-direction:column}
+  .ledger-table,.ledger-table tbody {display:block}
+  .ledger-table thead {display:block}
+  .ledger-table thead tr {display:flex;border-top:1px solid var(--border)}
+  .ledger-table thead th:first-child {width:auto;border:0}
+  .ledger-table thead th:not(:first-child) {position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}
+  .ledger-table tbody tr,.ledger-table tbody .transfer-row,.ledger-table tbody .transfer-installments {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;padding:11px 12px;border-top:1px solid var(--border)}
+  .ledger-table tbody td,.ledger-table tbody td:first-child,.ledger-table .ledger-installment td:nth-child(2) {padding:0;border:0}
+  .ledger-table td:not(.transfer-empty):before {content:attr(data-label);display:block;color:var(--muted);font-size:10px}
+  .ledger-table td:nth-child(2),.ledger-table td:nth-child(4) {grid-column:span 2}
+  .ledger-table .transfer-empty {grid-column:1/-1}
+  .transfer-ledger .transfer-actions {gap:5px 12px;max-width:100%}.transfer-ledger .transfer-actions label {flex-wrap:wrap;min-width:0}
+}
+.app-shell .bank-hourly input {padding:0;box-sizing:border-box;min-height:0}
+.bank-hourly input:after {position:absolute;left:2px;top:2px;margin:0}
+.bank-hourly input:checked:after {transform:translateX(14px)}
+.ledger-table td,.ledger-table th,.ledger-group-button,.ledger-table small {white-space:normal;text-overflow:clip}
+.ledger-group-button {max-width:100%}
+.ledger-group-button span {min-width:0;overflow-wrap:anywhere}
+.ledger-table td:nth-child(2) {overflow-wrap:anywhere}
+@media(min-width:761px) {
+ .app-shell .settings-transfers-view .page-header h1 {font-size:36px}
+ .bank-controls {min-height:59px}
+ .bank-facts {min-height:38px}
+ .bank-controls small,.bank-last strong,.bank-hourly,.bank-brand span {font-size:13px}
+ .ledger-table td {font-size:14px}
+}
+@media(min-width:761px) {
+ .ledger-table td {padding-top:8px;padding-bottom:8px}
+ .ledger-table .ledger-installment td {padding-block:6px}
+ .ledger-table th:first-child {width:9%}
+ .ledger-table th:nth-child(2) {width:28%}
+ .ledger-table th:nth-child(4) {width:13%}
+}

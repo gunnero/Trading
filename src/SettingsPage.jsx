@@ -26,7 +26,7 @@ function Connections(){
 export function SettingsPage({category,transfersContent,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
   const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
   const navigation=useSectionNavigation(category);
-  return <><PageHeader title="Settings" description="Manage your watchlist, charts, data connections and account in one place."/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
+  const content=<><PageHeader title="Settings" description={category==='transfers'?undefined:"Manage your watchlist, charts, data connections and account in one place."}/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
 
     <div className="settings-layout"><nav ref={navigation} className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>
       <div className="settings-content" key={category}>
@@ -39,6 +39,7 @@ export function SettingsPage({category,transfersContent,watchlistContent,workspa
       </div>
     </div>
   </div></>;
+  return category==='transfers'?<div className="settings-transfers-view">{content}</div>:content;
 }
 
 function SessionDisplay({workspace}){
