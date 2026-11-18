@@ -1,6 +1,7 @@
 import {useRef,useState} from 'react';
 import {DeviceMobile,Laptop,LockKey,ShieldCheck} from '@phosphor-icons/react';
-import {Password,useAuth} from './Auth';
+import {useAuth} from './Auth';
+import {Password} from './Password';
 import {authRequest} from './auth-client';
 import {useDisplayTime} from './DisplayTime';
 import './account-security.css';

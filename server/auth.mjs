@@ -189,7 +189,11 @@ export function authMiddleware(store,{config=authConfig(),development=false}={})
           return signedIn(res,result);
         }
         if(path==='/api/auth/login'){
-          store.throttle(ip);const user=store.owner(),identifier=typeof data.identifier==='string'?data.identifier.trim().toLowerCase().slice(0,254):'';
+          const user=store.owner();
+          // This only selects the next form. It does not check either credential or issue a session.
+          if(data.step==='credentials'&&user.totp)return json(res,200,{authenticated:false,next:'verification'});
+          store.throttle(ip);
+          const identifier=typeof data.identifier==='string'?data.identifier.trim().toLowerCase().slice(0,254):'';
           const matches=await costly(()=>passwordMatches(data.password,user.password));
           if(!matches||![user.email.toLowerCase(),user.username.toLowerCase()].includes(identifier)){store.event('login_failed');throw fail(401,'Check your sign-in details and verification code.');}
           const result=store.transaction(()=>{

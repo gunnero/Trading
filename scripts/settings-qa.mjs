@@ -118,7 +118,7 @@ try{
  await page.getByLabel('Default chart timeframe').selectOption('2m');await page.getByRole('button',{name:'Save defaults',exact:true}).click();await expect(page.locator('.workspace-save-status')).toHaveClass(/needs-attention/);
  page.once('dialog',dialog=>dialog.dismiss());await footer.getByRole('button',{name:'Log out',exact:true}).click();await expect(page.locator('.settings-page')).toBeVisible();
  await page.route('**/api/auth/logout',route=>route.fulfill({status:503,json:{message:'Isolated sign-out outage'}}));page.once('dialog',dialog=>dialog.accept());await footer.getByRole('button',{name:'Log out',exact:true}).click();await expect(footer.getByRole('alert')).toHaveText('Isolated sign-out outage');await expect(footer.getByRole('button',{name:'Log out',exact:true})).toBeEnabled();
- await page.unroute('**/api/auth/logout');page.once('dialog',dialog=>dialog.accept());await footer.getByRole('button',{name:'Log out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();expect(await page.locator('.settings-page').count()).toBe(0);
+ await page.unroute('**/api/auth/logout');page.once('dialog',dialog=>dialog.accept());await footer.getByRole('button',{name:'Log out',exact:true}).click();await expect(page.getByRole('heading',{name:'Welcome back'})).toBeVisible();expect(await page.locator('.settings-page').count()).toBe(0);
  mark('Log out respects unsaved-change cancellation, exposes network errors without losing the session, and successfully returns to login');
  expect(errors).toEqual([]);writeFileSync(dir+'/checks.json',JSON.stringify({result:'passed',checks,errors},null,2)+'\n');
 }finally{await browser.close();await runtime.close();}

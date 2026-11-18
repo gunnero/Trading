@@ -84,6 +84,24 @@ test('existing owner identity, credentials, recovery codes, sessions and workspa
   assert.equal(signedIn.response.status,200);assert.equal(signedIn.body.user.email,'custom.owner@example.com');
 });
 
+test('the staged sign-in prompt issues no session and both credentials are checked on verification',async t=>{
+  const a=await app(t);
+  assert.equal((await a.login({step:'credentials'})).body.authenticated,true);
+  await a.post('logout');
+  const secret=new Secret({size:20});
+  a.auth.db.prepare('UPDATE owner SET totp=? WHERE id=1').run(a.auth.encrypt(secret.base32));
+  for(const credentials of [{},{identifier:'unknown',password:'incorrect'}]){
+    const {body,response}=await a.login({step:'credentials',...credentials});
+    assert.equal(response.status,200);
+    assert.deepEqual(body,{authenticated:false,next:'verification'});
+    assert.equal(response.headers.get('set-cookie'),null);
+  }
+  const code=new TOTP({secret}).generate({timestamp:a.now()});
+  assert.equal((await a.login({password:'incorrect',code})).response.status,401);
+  assert.equal((await a.login()).response.status,401);
+  assert.equal((await a.login({code})).body.authenticated,true);
+});
+
 test('sessions rotate on login, are stored as hashes, persist across restart and are revoked on logout',async t=>{
   const a=await app(t);await a.login();const first=a.cookie,token=first.split('=')[1];
   assert.ok(!readFileSync(join(a.directory,'auth.sqlite')).includes(Buffer.from(token)));
