@@ -120,12 +120,21 @@ export function createPortfolioActivity(db,{now,credential,decode,account,accoun
     return {where,params,list,root,names,decorate:row=>{const a=list.find(a=>a.id===row.account_id);return {...JSON.parse(row.detail),accountId:a.id,accountLabel:a.label,personId:a.personId,person:names.get(a.personId)||'Unknown person',environment:a.environment,brokerId:a.snapshot.brokerId};}};
   }
   function health(id){const s=tracking(id);return s?{checkedAt:s.checkedAt,error:s.error,historyError:s.historyError,balanceError:s.balanceError,historyPending:s.historyPending}:null;}
+  const fillEdge=direction=>db.prepare(`SELECT at FROM portfolio_activity_fills WHERE account_id=? AND identity=? ORDER BY at ${direction} LIMIT 1`);
+  const earliest=fillEdge('ASC'),latest=fillEdge('DESC');
   function read(filters={}){
     const kind=filters.kind||'trades',table={trades:'portfolio_activity_fills',journal:'portfolio_activity_fills',orders:'portfolio_activity_orders',alerts:'portfolio_activity_events'}[kind];if(typeof table!=='string')throw fail(400,'Choose Trades, Orders or Alerts.');
+    const limit=Number(filters.limit??50);
+    if(!Number.isInteger(limit)||limit<1||limit>50)throw fail(400,'Choose a page size between 1 and 50.');
     const offset=Number(filters.offset||0);if(!Number.isSafeInteger(offset)||offset<0||offset>1000000)throw fail(400,'Invalid page.');
     const s=selection(filters);if(kind==='orders'&&(filters.from||filters.to))s.where+=" AND json_extract(detail,'$.createdAt') IS NOT NULL";const total=db.prepare(`SELECT count(*) n FROM ${table} WHERE ${s.where}`).get(...s.params).n;
-    const rows=db.prepare(`SELECT * FROM ${table} WHERE ${s.where} ORDER BY at DESC,${kind==='alerts'?'id':'item_id'} DESC LIMIT 50 OFFSET ?`).all(...s.params,offset);
-    const statuses=s.list.map(a=>{const g=credential(a.id)?.generation,key=identity(a),saved=g?state(a.id,g,key):null;return {accountId:a.id,accountLabel:a.label,person:s.names.get(a.personId),connected:!!g,environment:a.environment,checkedAt:saved?.checkedAt||null,complete:!!saved?.complete,pages:saved?.pages||0,nextAt:saved?.nextAt||null,error:saved?.error||null,tracking:g?health(a.id):null};});
+    const rows=db.prepare(`SELECT * FROM ${table} WHERE ${s.where} ORDER BY at DESC,${kind==='alerts'?'id':'item_id'} DESC,account_id ASC LIMIT ? OFFSET ?`).all(...s.params,limit,offset);
+    const statuses=s.list.map(a=>{
+      const g=credential(a.id)?.generation,key=identity(a),saved=g?state(a.id,g,key):null;
+      return {accountId:a.id,accountLabel:a.label,person:s.names.get(a.personId),connected:!!g,environment:a.environment,
+        firstExecutionAt:earliest.get(a.id,key)?.at??null,lastExecutionAt:latest.get(a.id,key)?.at??null,
+        checkedAt:saved?.checkedAt||null,complete:!!saved?.complete,pages:saved?.pages||0,nextAt:saved?.nextAt||null,error:saved?.error||null,tracking:g?health(a.id):null};
+    });
     return {kind,total,offset,more:offset+rows.length<total,items:rows.map(row=>({...s.decorate(row),...(kind==='alerts'?{eventId:row.id,at:row.at,read:row.read_at!==null}:{})})),people:s.root.people,accounts:s.list.map(a=>({id:a.id,personId:a.personId,label:a.label,environment:a.environment})),statuses};
   }
   function notifications(){

@@ -90,7 +90,7 @@ try{
  await page.route('**/api/portfolio/activity?*',route=>route.fulfill({json:{people,accounts,items:[trade],total:1,more:false,statuses:[]}}));
  for(const route of ['insights','insights/alerts','insights/reports','journal/broker','activity']){
   await page.goto(runtime.url+'/#'+route);
-  if(['insights/alerts','insights/reports'].includes(route))await page.getByRole('button',{name:'Privacy settings',exact:true}).click();
+  if(['insights/alerts','insights/reports','activity'].includes(route))await page.getByRole('button',{name:'Privacy settings',exact:true}).click();
   if(route==='insights'){
    await page.getByRole('button',{name:'Portfolio privacy settings'}).click();
    await page.getByRole('table',{name:'USD stock exposure'}).getByRole('button',{name:/Advanced Micro Devices/}).click();
@@ -98,7 +98,7 @@ try{
   await expect(page.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
   const root=page.locator(route==='activity'?'.pa-page':route==='journal/broker'?'.pi-panel':'.pi-page');
   if(route==='insights/reports')await expect(root.locator('.pi-report-account')).toHaveCount(3);
-  else await expect(root).toContainText(route==='activity'?'Advanced Micro Devices':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'108.00–110.00 USD':'Combined stock exposure');
+  else await expect(root).toContainText(route==='activity'?'AMD':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'108.00–110.00 USD':'Combined stock exposure');
   const text=await root.textContent();expect(text).not.toMatch(/Alex Fixture|Sam Fixture|Invest|\$440\.00|€220\.00|€0\.15|Stayed within the plan|Breakout confirmed/);
   if(route==='insights/reports'){await expect(root.getByRole('button',{name:'Export CSV'})).toBeDisabled();await expect(root.getByRole('button',{name:'Print / PDF'})).toBeDisabled();}
   if(route==='journal/broker')await expect(root.getByRole('button',{name:'Edit notes'})).toBeDisabled();

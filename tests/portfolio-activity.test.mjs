@@ -60,6 +60,11 @@ test('filters isolate person/account, search escapes SQL wildcards, local execut
  assert.equal(f.service.read({stock:'AMD'}).total,101);assert.equal(f.service.read({stock:'Advanced Micro'}).total,101);assert.equal(f.service.read({stock:'%'}).total,0);
  assert.equal(f.service.read({from:'2026-11-04',to:'2026-11-04'}).total,101);assert.equal(f.service.read({from:'2026-11-03',to:'2026-11-03'}).total,0);
  const first=f.service.read({account:'a'}),last=f.service.read({account:'a',offset:50});assert.equal(first.items.length,50);assert.equal(first.more,true);assert.equal(last.items.length,1);assert.equal(last.more,false);assert.equal(last.items[0].id,1);
+ const edges=f.service.read().statuses[0];assert.equal(edges.firstExecutionAt,Date.parse('2026-11-03T23:30:00Z'));assert.equal(edges.lastExecutionAt,edges.firstExecutionAt);
+ const one=f.service.read({limit:6}),two=f.service.read({limit:6,offset:6});
+ assert.equal(one.items.length,6);assert.equal(one.total,101);
+ assert.equal(new Set([...one.items,...two.items].map(row=>row.accountId+':'+row.id)).size,12);
+ for(const limit of [0,-1,51,'NaN',1.5])assert.throws(()=>f.service.read({limit}));
  assert.throws(()=>f.service.read({kind:'passwords'}));assert.throws(()=>f.service.read({offset:-1}));assert.throws(()=>f.service.read({from:'nonsense'}));
 });
 test('late partial observations cannot regress a filled order or create an alert; absent fill quantities retain the known amount',t=>{
