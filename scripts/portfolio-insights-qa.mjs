@@ -30,6 +30,7 @@ try{
   if(route.request().method()==='POST'){
    expect(route.request().headers()['x-csrf-token']).toBeTruthy();const b=route.request().postDataJSON();
    if(b.action==='delete')rules=rules.filter(r=>r.id!==b.id);
+   else if(b.action==='edit')rules=rules.map(r=>r.id===b.id?{...r,mode:b.mode,price:b.price,revision:r.revision+1}:r);
    else if(b.action)rules=rules.map(r=>r.id===b.id?{...r,enabled:b.action==='arm',revision:r.revision+1}:r);
    else {const c=choices.find(c=>c.accountId===b.accountId);rules.push({...c,...b,id:String(++nextRule),revision:1,enabled:true,connected:true,accountLabel:c.label,observedAt:null,firedAt:null,...(b.mode==='zone'?{low:108,high:110,levelType:'S',levelDate:'2026-11-04',timeframe:'4 h'}:{})});}
   }
@@ -57,8 +58,22 @@ try{
  accounts[0].snapshot.holdings=[holding];
  mark('Currency totals stay consistent when filtering and grouped holdings expand through to their account owners by keyboard');
 
- await page.getByRole('button',{name:'Price alerts',exact:true}).click();const alerts=page.getByRole('region',{name:'Price alert rules'});await expect(alerts).toBeVisible();await alerts.getByLabel('Holding',{exact:true}).selectOption('a1:AMD_US_EQ');await alerts.getByLabel(/Target price/).fill('120');await alerts.getByRole('button',{name:'Create alert'}).click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);await expect(alerts).toContainText('Waiting for first price');await alerts.getByRole('button',{name:'Pause',exact:true}).click();await expect(alerts.getByRole('button',{name:'Re-arm'})).toBeVisible();await alerts.getByRole('button',{name:'Re-arm'}).click();
- await alerts.getByLabel('Notify when').selectOption('zone');await alerts.getByLabel('Saved level').selectOption('0');await alerts.getByRole('button',{name:'Create alert'}).click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(2);await expect(alerts).toContainText('Supply 108–110 USD · 2026-11-04');await alerts.getByRole('button',{name:'Remove',exact:true}).first().click();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);await page.reload();await expect(alerts.locator('.pi-rule-list li')).toHaveCount(1);
+ await page.getByRole('button',{name:'Price alerts',exact:true}).click();
+ const alerts=page.getByRole('region',{name:'Price alert rules'}),rows=alerts.getByRole('table',{name:'Saved price alerts'}).locator('tbody tr');
+ await expect(alerts).toContainText('No alert rules yet.');
+ await alerts.getByLabel('Holding',{exact:true}).selectOption('a1:AMD_US_EQ');
+ await alerts.getByLabel('Target price').fill('120');await alerts.getByRole('button',{name:'Create alert'}).click();
+ await expect(rows).toHaveCount(1);await expect(rows.first()).toContainText('Awaiting first quote');
+ await rows.first().getByRole('button',{name:'Edit AMD alert'}).click();await alerts.getByLabel('Target price').fill('125');
+ await alerts.getByRole('button',{name:'Save changes'}).click();await expect(rows.first()).toContainText('125.00 USD');
+ await rows.first().getByLabel('More actions for AMD').click();await rows.first().getByRole('button',{name:'Pause',exact:true}).click();
+ await expect(rows.first()).toContainText('Paused');await rows.first().getByRole('button',{name:'Arm',exact:true}).click();
+ await expect(rows.first()).toContainText('Armed');
+ await alerts.getByRole('switch',{name:'Saved zone'}).check();await alerts.getByLabel('Saved level').selectOption({index:1});
+ await alerts.getByRole('button',{name:'Create alert'}).click();await expect(rows).toHaveCount(2);
+ await expect(rows.last()).toContainText('108.00–110.00 USD');await expect(rows.last()).toContainText('2026-11-04');
+ await rows.first().getByLabel('More actions for AMD').click();await rows.first().getByRole('button',{name:'Remove',exact:true}).click();
+ await expect(rows).toHaveCount(1);await page.reload();await expect(rows).toHaveCount(1);
  fail=true;await alerts.getByRole('button',{name:'Refresh alerts'}).click();await expect(alerts.getByRole('alert')).toContainText('Fixture refresh unavailable');fail=false;await alerts.getByRole('button',{name:'Refresh alerts'}).click();await expect(alerts.getByRole('alert')).toHaveCount(0);mark('Price and saved-zone alert creation, pause, re-arm, removal, persistence and outage recovery work without any order request');
  await page.getByRole('button',{name:'Monthly reports',exact:true}).click();const report=page.getByRole('region',{name:'Monthly account reports'});await expect(report.locator('.pi-report-account')).toHaveCount(3);await expect(report).toContainText('Only this recorded portion is included');await expect(report).toContainText('€0.15 EUR');const downloadPromise=page.waitForEvent('download');await report.getByRole('button',{name:'Export CSV'}).click();const download=await downloadPromise,csv=readFileSync(await download.path(),'utf8');expect(csv).toContain('Execution charge');expect(csv).toContain('Calculated MWRR');expect(csv).toContain('Cash movement');expect(csv).toContain('Distribution');
  reportLag=500;await report.getByLabel('Person',{exact:true}).selectOption('p2');await expect(report.locator('.pi-report-account')).toHaveCount(0);await expect(report.locator('.pi-report-account')).toHaveCount(2);reportLag=0;await expect(report.locator('.pi-report-account').first()).toContainText('Sam Fixture');await report.locator('.pi-report-details summary').first().click();await expect(report.locator('table').first()).toContainText('Advanced Micro Devices');await expect(report.locator('table').first()).toContainText('€0.00');
@@ -72,6 +87,7 @@ try{
  await page.route('**/api/portfolio/activity?*',route=>route.fulfill({json:{people,accounts,items:[trade],total:1,more:false,statuses:[]}}));
  for(const route of ['insights','insights/alerts','insights/reports','journal/broker','activity']){
   await page.goto(runtime.url+'/#'+route);
+  if(route==='insights/alerts')await page.getByRole('button',{name:'Privacy settings',exact:true}).click();
   if(route==='insights'){
    await page.getByRole('button',{name:'Portfolio privacy settings'}).click();
    await page.getByRole('table',{name:'USD stock exposure'}).getByRole('button',{name:/Advanced Micro Devices/}).click();
@@ -79,7 +95,7 @@ try{
   await expect(page.getByRole('button',{name:'Hide names',exact:true})).toHaveAttribute('aria-pressed','true');
   const root=page.locator(route==='activity'?'.pa-page':route==='journal/broker'?'.pi-panel':'.pi-page');
   if(route==='insights/reports')await expect(root.locator('.pi-report-account')).toHaveCount(3);
-  else await expect(root).toContainText(route==='activity'?'Advanced Micro Devices':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'Supply 108':'Combined stock exposure');
+  else await expect(root).toContainText(route==='activity'?'Advanced Micro Devices':route==='journal/broker'?'Execution 12':route==='insights/alerts'?'108.00–110.00 USD':'Combined stock exposure');
   const text=await root.textContent();expect(text).not.toMatch(/Alex Fixture|Sam Fixture|Invest|\$440\.00|€220\.00|€0\.15|Stayed within the plan|Breakout confirmed/);
   if(route==='insights/reports'){await expect(root.getByRole('button',{name:'Export CSV'})).toBeDisabled();await expect(root.getByRole('button',{name:'Print / PDF'})).toBeDisabled();}
   if(route==='journal/broker')await expect(root.getByRole('button',{name:'Edit notes'})).toBeDisabled();

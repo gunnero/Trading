@@ -91,6 +91,37 @@ test('saved zone alerts freeze exact levels and stop when disconnected; crossing
  f.service.alerts.create({accountId:f.id,ticker:instrument.ticker,mode:'above',price:120});f.advance();f.setQuote(119);await f.service.alerts.check();f.advance(31*60000);f.setQuote(121);await f.service.alerts.check();assert.equal(f.service.activity.notifications().unread,1);
  f.service.disconnect(f.id,f.service.read().revision);const calls=f.calls.length;f.advance();await f.service.alerts.check();assert.equal(f.calls.length,calls);
 });
+test('editing an alert keeps its identity and state, resets a changed baseline and rejects concurrent edits',async t=>{
+ const f=await fixture(t),alerts=f.service.alerts;
+ const initial=alerts.create({accountId:f.id,ticker:instrument.ticker,mode:'above',price:110}).rules[0];
+ await alerts.check();
+ const edit={id:initial.id,revision:initial.revision,action:'edit',mode:'below',price:95};
+ const edited=alerts.update(edit).rules[0];
+ assert.equal(edited.id,initial.id);assert.equal(edited.observedAt,null);assert.equal(edited.enabled,true);
+ assert.throws(()=>alerts.update(edit),/changed/);
+ f.advance();f.setQuote(94);await alerts.check();assert.equal(f.service.activity.notifications().unread,0);
+ f.advance();f.setQuote(98);await alerts.check();f.advance();f.setQuote(94);await alerts.check();
+ const fired=alerts.read().rules[0];assert.ok(fired.firedAt);assert.equal(fired.enabled,false);
+ assert.throws(()=>alerts.update({...edit,revision:edited.revision}),/changed/);
+ const inactive=alerts.update({...edit,revision:fired.revision,price:90}).rules[0];
+ assert.equal(inactive.firedAt,fired.firedAt);assert.equal(inactive.enabled,false);
+ const paused=alerts.update({id:initial.id,revision:inactive.revision,action:'pause'}).rules[0];
+ const stillPaused=alerts.update({...edit,revision:paused.revision,price:80}).rules[0];
+ f.restart();assert.equal(f.service.alerts.read().rules[0].id,initial.id);assert.equal(stillPaused.enabled,false);assert.equal(stillPaused.firedAt,null);
+});
+test('zone edits use the selected source snapshot and preserve original levels after a sheet change',async t=>{
+ const f=await fixture(t),alerts=f.service.alerts;
+ const zone=alerts.read().choices[0].zones[0],input={accountId:f.id,ticker:instrument.ticker,mode:'zone',zone:zone.id,zoneSnapshot:zone};
+ const original=alerts.create(input).rules[0];
+ f.workspace.levelText='LVLS 2026-11-05\nAMD|4h|D 200-202';
+ assert.throws(()=>alerts.create(input),/zone changed/);
+ const edit={...input,id:original.id,revision:original.revision,action:'edit'};
+ assert.throws(()=>alerts.update(edit),/zone changed/);
+ assert.deepEqual(alerts.update({...edit,zone:'original'}).rules[0],original);
+ const changed=alerts.update({...edit,mode:'above',price:150}).rules[0];
+ assert.equal(changed.price,150);assert.equal(changed.low,undefined);assert.equal(changed.levelDate,undefined);
+ assert.throws(()=>alerts.update({...edit,revision:changed.revision,zone:'original'}),/Choose a saved zone/);
+});
 test('broker journal notes belong to an exact execution and account; revisions and imports preserve edits through restart',async t=>{
  const f=await fixture(t);await f.service.activity.sync(f.id);const second=await f.second();await f.service.activity.sync(second);
  assert.equal(f.service.reports.journal({account:f.id}).items[0].note.revision,0);

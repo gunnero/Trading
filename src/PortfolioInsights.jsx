@@ -1,6 +1,7 @@
 import {usePortfolioPrivacy,PortfolioPrivacyControls} from './PortfolioPrivacy';
 import {useEffect,useState} from 'react';
-import {DownloadSimple,Printer,Plus} from '@phosphor-icons/react';
+import {DownloadSimple,Printer} from '@phosphor-icons/react';
+import PortfolioPriceAlerts from './PortfolioPriceAlerts';
 import PortfolioExposure from './PortfolioExposure';
 import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
@@ -15,31 +16,15 @@ export default function PortfolioInsights({watchlist,tab='exposure',onTab,onPort
   const planning=['monitor','allocation','performance','calendar'].includes(tab);
   const tabNav=useSectionNavigation(tab);
   const tabs=<nav ref={tabNav} className="pi-tabs" aria-label="Portfolio insight sections">{[['exposure','Combined exposure'],['monitor','Monitor'],['allocation','Target allocations'],['performance','Performance'],['calendar','Holdings calendar'],['alerts','Price alerts'],['reports','Monthly reports'],['annual','Annual export']].map(([id,label])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>onTab(id)}>{label}</button>)}</nav>;
+  if(tab==='alerts')return <div className="pi-page compact-planning-page"><PortfolioPriceAlerts navigation={tabs} onJournal={onJournal} onPortfolios={onPortfolios}/></div>;
   const navigation=planning?tabs:<><PageHeader title={exposure?'Portfolio Manager':'Portfolio insights'}
     description={exposure?undefined:'Account monitoring, allocation plans, performance and reports.'}
     actions={!exposure&&<><button className="button outline" onClick={onJournal}>Broker trade journal</button>{onPortfolios&&<button className="button outline" onClick={onPortfolios}>Portfolios</button>}</>}/>
     {!exposure&&<PortfolioPrivacyControls/>}{tabs}</>;
   return <div className={'pi-page'+(exposure?' pi-exposure-page':planning?' compact-planning-page':'')}>
     {planning?<PortfolioPlanning tab={tab} navigation={navigation} onJournal={onJournal}/>:<>{navigation}
-      {tab==='annual'?<AnnualReport/>:tab==='alerts'?<PriceAlerts/>:tab==='reports'?<MonthlyReports/>:<PortfolioExposure watchlist={watchlist} onJournal={onJournal} onPortfolios={onPortfolios}/>}</>}
+      {tab==='annual'?<AnnualReport/>:tab==='reports'?<MonthlyReports/>:<PortfolioExposure watchlist={watchlist} onJournal={onJournal} onPortfolios={onPortfolios}/>}</>}
   </div>;
-}
-function PriceAlerts(){
-  const privacy=usePortfolioPrivacy(),{money,number}=privacy;
-  const view=usePortfolioResource('insights/alerts'),{journalStamp}=useDisplayTime(),[choiceKey,setChoiceKey]=useState(''),[mode,setMode]=useState('above'),[price,setPrice]=useState(''),[zone,setZone]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const choices=view.data?.choices||[],choice=choices.find(c=>c.accountId+':'+c.ticker===choiceKey),rules=view.data?.rules||[];
-  async function mutate(body){setBusy(true);setError('');try{await activityRequest('insights/alerts',body);await view.refresh();return true;}catch(e){setError(e.message);return false;}finally{setBusy(false);}}
-  return <section className="panel pi-panel" aria-label="Price alert rules"><header className="pi-heading"><div><h2>Price & level alerts</h2><p>Receive an in-app alert on the next observed crossing. Each rule fires once; re-arm it when needed.</p></div><button className="button outline" onClick={view.refresh} disabled={view.busy}>Refresh alerts</button></header>
-    <form className="pi-alert-form" onSubmit={async e=>{e.preventDefault();if(await mutate({accountId:choice?.accountId,ticker:choice?.ticker,mode,...(mode==='zone'?{zone}:{price:Number(price)})})){setPrice('');}}}>
-      <label>Holding<select aria-label="Holding" required value={choiceKey} onChange={e=>{setChoiceKey(e.target.value);setZone('');setPrice('');}}><option value="">Choose a connected stock</option>{choices.map(c=><option key={c.accountId+':'+c.ticker} value={c.accountId+':'+c.ticker}>{privacy.person(c.person)} · {privacy.label(c.label,c.accountId)} · {c.name}{c.environment==='demo'?' · DEMO':''}</option>)}</select></label>
-      <label>Notify when<select aria-label="Notify when" value={mode} onChange={e=>setMode(e.target.value)}><option value="above">Price crosses above</option><option value="below">Price crosses below</option><option value="zone">Price enters a saved zone</option></select></label>
-      {mode==='zone'?<label>Saved level<select aria-label="Saved level" required value={zone} onChange={e=>setZone(e.target.value)}><option value="">Choose a zone</option>{choice?.zones.map(z=><option value={z.id} key={z.id}>{({S:'Supply',D:'Demand',G:'Gap'})[z.type]} {z.low}–{z.high} · {z.date} · {z.timeframe}</option>)}</select></label>:<label>Target price {choice?.currency&&`· ${choice.currency}`}<input type="number" required min="0.00000001" max="100000000" step="any" value={price} onChange={e=>setPrice(e.target.value)}/></label>}
-      <button className="button primary" disabled={busy||!choice||privacy.privateMode}><Plus size={16}/>Create alert</button>
-    </form>
-    <p className="pi-help">Checks run on the server every minute using fresh Yahoo quotes, including available pre-market and after-hours quotes. The first reading sets the starting price. Checks resume from a new starting price after gaps longer than 30 minutes. Quotes can be delayed and brief touches between readings can be missed. Alerts appear in Activity & alerts; they never place orders.</p>
-    <p className="pi-help">Saved zones keep their original prices and date when your level sheet changes. Only connected holdings with a verified market listing are offered.</p>
-    {(error||view.error)&&<p className="amber" role="alert">{error||view.error}</p>}{!view.data?<p role="status">Loading alert rules…</p>:!rules.length?<p>No alert rules yet.</p>:<ul className="pi-rule-list">{rules.map(r=><li key={r.id}><div><strong>{r.name}</strong><p>{privacy.person(r.person)} · {privacy.label(r.accountLabel,r.accountId)}{r.environment==='demo'?' · DEMO':''}</p><p>{r.mode==='zone'?`${({S:'Supply',D:'Demand',G:'Gap'})[r.levelType]} ${r.low}–${r.high} ${r.currency} · ${r.levelDate} · ${r.timeframe}`:`Cross ${r.mode} ${money(r.price,r.currency)}`}</p><small>{!r.connected?'Paused · account disconnected':r.firedAt?`Triggered ${journalStamp(r.firedAt)}`:r.enabled?(r.observedAt?'Watching for crossing':'Waiting for first price'):'Paused'}{r.observedAt?` · last ${money(r.lastPrice,r.currency)} at ${journalStamp(r.observedAt)}`:''}</small>{r.error&&<p className="amber">{r.error}</p>}</div><div className="pi-actions"><button className="button outline" disabled={busy||!r.connected&&!r.enabled} onClick={()=>mutate({id:r.id,revision:r.revision,action:r.enabled?'pause':'arm'})}>{r.enabled?'Pause':'Re-arm'}</button><button className="text-button" disabled={busy} onClick={()=>mutate({id:r.id,revision:r.revision,action:'delete'})}>Remove</button></div></li>)}</ul>}
-  </section>;
 }
 function MonthlyReports(){
   const privacy=usePortfolioPrivacy(),{money,number}=privacy;
