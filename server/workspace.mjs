@@ -1,3 +1,4 @@
+import {RETEST_STAGES} from '../src/data/retests.mjs';
 import {validateGrid} from '../src/data/chart-grid.mjs';
 import {validateDisplayTime} from '../src/data/display-time.mjs';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,6 +21,22 @@ export function initialWorkspace() {
 const bad = message => Object.assign(new Error(message),{status:400});
 const validDate = value => typeof value==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
 function bounded(value,name,max=10000) { if(typeof value!=='string'||value.length>max)throw bad(`Invalid ${name}.`);return value; }
+function planSnapshotFields(plan) {
+  const fields={};
+  if(plan.createdAt!==undefined){
+    if(typeof plan.createdAt!=='string'||!Number.isFinite(Date.parse(plan.createdAt)))throw bad('Invalid draft creation time.');
+    fields.createdAt=new Date(plan.createdAt).toISOString();
+  }
+  if(plan.setupSnapshot!==undefined){
+    const snapshot=plan.setupSnapshot;
+    const zone=snapshot?.zone;
+    if(!zone||!['S','D','G'].includes(zone.type)||!Number.isFinite(zone.low)||!Number.isFinite(zone.high)||zone.low>zone.high||
+      ![null,'2m','5m','15m','30m','1h','4h','D'].includes(snapshot.timeframe)||!Object.hasOwn(RETEST_STAGES,snapshot.stage)||
+      ![null,'bullish','bearish'].includes(snapshot.direction))throw bad('Invalid draft setup snapshot.');
+    fields.setupSnapshot={zone:{type:zone.type,low:zone.low,high:zone.high},timeframe:snapshot.timeframe,stage:snapshot.stage,direction:snapshot.direction};
+  }
+  return fields;
+}
 export function validateWorkspace(value) {
   if(!value || value.schemaVersion!==1 || !Array.isArray(value.plans) || value.plans.length>500)throw bad('Invalid workspace format.');
   const levelText=bounded(value.levelText,'level sheet',200000),watchText=bounded(value.watchText,'watchlist',100000);
@@ -48,7 +65,7 @@ export function validateWorkspace(value) {
     if(typeof plan.budget!=='string'||plan.budget.length>20||(plan.budget!==''&&(!Number.isFinite(Number(plan.budget))||Number(plan.budget)<=0)))throw bad('Invalid premium loss budget.');
     let marketQuote;
     if(plan.priceMode==='yahoo'){const q=plan.marketQuote;if(!q||q.provider!=='Yahoo Finance'||typeof q.price!=='number'||!Number.isFinite(q.price)||q.price<=0||typeof q.observedAt!=='string'||!Number.isFinite(Date.parse(q.observedAt)))throw bad('Invalid plan reference quote.');marketQuote={price:q.price,observedAt:new Date(q.observedAt).toISOString(),provider:'Yahoo Finance'};}
-    return {id:plan.id,symbol:plan.symbol,scenario:plan.scenario,scenarioTitle:bounded(plan.scenarioTitle,'scenario title',100),strategy:plan.strategy,expiration:plan.expiration,budget:plan.budget,thesis:bounded(plan.thesis,'thesis'),notes:bounded(plan.notes,'notes'),sessionDate:plan.sessionDate,priceMode:plan.priceMode,...(marketQuote?{marketQuote}:{}),...(plan.marketKey?{marketKey:plan.marketKey}:{})};
+    return {id:plan.id,symbol:plan.symbol,scenario:plan.scenario,scenarioTitle:bounded(plan.scenarioTitle,'scenario title',100),strategy:plan.strategy,expiration:plan.expiration,budget:plan.budget,thesis:bounded(plan.thesis,'thesis'),notes:bounded(plan.notes,'notes'),sessionDate:plan.sessionDate,priceMode:plan.priceMode,...planSnapshotFields(plan),...(marketQuote?{marketQuote}:{}),...(plan.marketKey?{marketKey:plan.marketKey}:{})};
   });
   let manualSentiment=null;
   if(value.manualSentiment!==null){const r=value.manualSentiment;if(!r||typeof r.score!=='number'||!Number.isFinite(r.score)||r.score<0||r.score>100||!['Extreme fear','Fear','Neutral','Greed','Extreme greed'].includes(r.rating)||!validDate(r.date)||r.date>new Date().toISOString().slice(0,10))throw bad('Invalid manual sentiment reading.');manualSentiment={score:r.score,rating:r.rating,date:r.date,observedAt:`${r.date}T12:00:00.000Z`,manual:true};}

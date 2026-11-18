@@ -72,6 +72,7 @@ try {
   await expect(page.getByRole('heading', { name: 'Bearish break & retest' })).toBeVisible();
   await expect(page.getByText('$150.00', { exact: true })).toBeVisible();
   await page.getByLabel('QQQ plan notes').fill('Sample review note. No actual trade taken.');
+  await page.getByRole('button',{name:'Save notes',exact:true}).click();
   await snapshot('saved-plans');
   mark('Options plan draft, budget, saved plans and notes');
 

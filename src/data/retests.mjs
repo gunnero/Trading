@@ -1,7 +1,8 @@
 import {awaitingSessionQuote,isExtendedQuote} from './quotes.mjs';
 import {tradingDay} from './market-session.mjs';
 export const RETEST_WINDOW=12,CONFIRMATION_WINDOW=3;
-export const stageLabel=stage=>({'confirmed':'Retest confirmed','waiting-retest':'Waiting for retest',retesting:'Retesting zone','waiting-break':'Waiting for break','awaiting-session':'Today’s levels ready',extended:'Extended from zone',expired:'Setup expired',invalidated:'Setup invalidated','indicator-conflict':'Indicator conflict','indicators-unavailable':'Indicators unavailable','no-levels':'No supplied levels',dated:'Dated levels',stale:'Cached / old data',loading:'Checking candles',unavailable:'Data unavailable',insufficient:'Incomplete history'}[stage]||'Waiting for data');
+export const RETEST_STAGES=Object.freeze({'confirmed':'Retest confirmed','waiting-retest':'Waiting for retest',retesting:'Retesting zone','waiting-break':'Waiting for break','awaiting-session':'Today’s levels ready',extended:'Extended from zone',expired:'Setup expired',invalidated:'Setup invalidated','indicator-conflict':'Indicator conflict','indicators-unavailable':'Indicators unavailable','no-levels':'No supplied levels',dated:'Dated levels',stale:'Cached / old data',loading:'Checking candles',unavailable:'Data unavailable',insufficient:'Incomplete history'});
+export const stageLabel=stage=>RETEST_STAGES[stage]||'Waiting for data';
 const candidateStages=['confirmed','retesting','waiting-retest'];
 export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
   sheetDate=instrument?.sourceDate||sheetDate;

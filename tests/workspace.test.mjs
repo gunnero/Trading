@@ -39,3 +39,15 @@ test('HTTP save validates origin, content type, revision and response status',as
  assert.equal((await fetch(url,{method:'PUT',body,headers})).status,409);
  const after=await(await fetch(url)).json();assert.deepEqual(after.data.plans,[plan]);assert.equal(after.revision,1);
 });
+
+test('A saved plan keeps its original setup through note edits and rejects malformed snapshots',()=>{
+  const draft={...plan,priceMode:'yahoo',marketKey:'QQQ',marketQuote:{price:705,provider:'Yahoo Finance',observedAt:'2026-10-23T14:45:00.000Z'},
+    createdAt:'2026-10-23T14:52:00.000Z',setupSnapshot:{timeframe:'2m',stage:'waiting-retest',direction:'bullish',zone:{type:'D',low:704,high:705}}};
+  const validate=record=>validateWorkspace({...initialWorkspace(),plans:[record]}).plans[0];
+  assert.deepEqual(validate({...draft,notes:'Reviewed'}),{...draft,notes:'Reviewed'});
+  assert.deepEqual(validate(plan),plan);
+  for(const invalid of [{stage:'bad'}, {timeframe:'1s'}, {direction:'unknown'}, {zone:{type:'D',low:705,high:704}}]){
+    assert.throws(()=>validate({...draft,setupSnapshot:{...draft.setupSnapshot,...invalid}}));
+  }
+  assert.throws(()=>validate({...draft,createdAt:'bad date'}));
+});
