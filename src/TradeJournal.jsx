@@ -2,8 +2,8 @@ import SessionReview from './SessionReview';
 import PortfolioJournal from './PortfolioJournal';
 import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
-import {lazy,Suspense,useEffect,useId,useMemo,useRef,useState} from 'react';
-import {Plus,UploadSimple,DownloadSimple,X,Trash,ArrowUpRight,CheckCircle,ImageSquare,ArrowCounterClockwise} from '@phosphor-icons/react';
+import {useEffect,useId,useMemo,useRef,useState} from 'react';
+import {ArrowLeft,Plus,UploadSimple,DownloadSimple,X,Trash,ArrowUpRight,CheckCircle,ImageSquare,ArrowCounterClockwise} from '@phosphor-icons/react';
 import {apiFetch} from './auth-client';
 import {REVIEW_ITEMS,JOURNAL_TAGS,emptyJournal,validateTrade,validateJournal,localStamp,localToInstant,journalDay,parseJournalImport,planJournalImport,tradeResult,journalStats,money,duration} from './data/journal.mjs';
 import './journal.css';
@@ -13,36 +13,44 @@ import SavedPlans from './SavedPlans';
 import {marketDay} from './data/calendar.mjs';
 
 import {useJournalReplay} from './useJournalReplay';
-import JournalStrategyReview from './JournalStrategyReview';
-const TradeChart=lazy(()=>import('./JournalTradeChart'));
+import JournalTradeReview from './JournalTradeReview';
 const contract=t=>`${t.symbol} ${t.strike} ${t.optionType==='CALL'?'Call':'Put'}`;
 const accountKey=t=>JSON.stringify([t.firm,t.account]);
 const tone=n=>n>0?'green':n<0?'red':'muted';
 function download(trades,label){const blob=new Blob([JSON.stringify({format:'opening-bell-journal-v1',currency:'USD',label,trades})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`opening-bell-trades-${journalDay(new Date())}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function JournalModal({title,children,onClose,chart=false}){
+function JournalModal({title,children,onClose,review=false}){
   const {zoneLabel,formatLabel}=useDisplayTime();
   const ref=useRef(),id=useId();
   useEffect(()=>{const node=ref.current,trigger=document.activeElement,overflow=document.body.style.overflow;document.body.style.overflow='hidden';node.showModal();return()=>{node.close();document.body.style.overflow=overflow;if(trigger?.isConnected)trigger.focus({preventScroll:true});};},[]);
-  return <dialog ref={ref} className={`modal wide journal-modal ${chart?'journal-chart-modal':''}`} aria-labelledby={id} onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}><div className="modal-inner"><header className="modal-header"><div><span className="eyebrow">TRADE JOURNAL · {zoneLabel} / {formatLabel}</span><h2 id={id}>{title}</h2></div><button className="icon-button" aria-label="Close trade dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
+  function backdropClick(e){
+    if(e.target!==e.currentTarget)return;
+    const box=e.currentTarget.getBoundingClientRect();
+    if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)onClose();
+  }
+  return <dialog ref={ref} className={`modal wide journal-modal ${review?'journal-review-modal':''}`} aria-labelledby={id} onCancel={e=>{e.preventDefault();onClose();}} onClick={backdropClick}><div className="modal-inner"><header className="modal-header"><div className="journal-dialog-title">{review?<button type="button" className="icon-button" aria-label="Back to journal" onClick={onClose}><ArrowLeft size={20}/></button>:<span className="eyebrow">TRADE JOURNAL · {zoneLabel} / {formatLabel}</span>}<h2 id={id}>{title}</h2></div><button className="icon-button" aria-label="Close trade dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
 }
 function toForm(trade){const now=localStamp(new Date());return trade?{...trade,entryAt:localStamp(trade.entryAt),exitAt:trade.exitAt?localStamp(trade.exitAt):'',status:trade.exitAt?'closed':'open',fees:trade.fees??'',risk:trade.risk??'',reportedPnl:trade.reportedPnl??''}:{id:crypto.randomUUID(),firm:'Vanquish',account:'Main',symbol:'QQQ',expiration:now.slice(0,10),optionType:'CALL',position:'long',strike:'',quantity:1,multiplier:100,entryPrice:'',exitPrice:'',entryAt:now,exitAt:now,status:'closed',fees:'',risk:'',reportedPnl:'',review:Object.fromEntries(REVIEW_ITEMS.map(([key])=>[key,null])),tags:[],notes:'',source:'manual',sourceLabel:'Manual entry',entryOrderId:'',exitOrderId:''};}
-function fromForm(form){const opt=key=>form[key]===''?null:Number(form[key]);return validateTrade({...form,symbol:form.symbol.trim().toUpperCase(),strike:Number(form.strike),quantity:Number(form.quantity),multiplier:Number(form.multiplier),entryPrice:Number(form.entryPrice),exitPrice:form.status==='open'?null:Number(form.exitPrice),entryAt:localToInstant(form.entryAt),exitAt:form.status==='open'?null:localToInstant(form.exitAt),fees:opt('fees'),risk:opt('risk'),reportedPnl:opt('reportedPnl')});}
-function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts,workspace}){
+function fromForm(form,saved){
+  const opt=key=>form[key]===''?null:Number(form[key]);
+  const instant=key=>saved?.[key]&&form[key]===localStamp(saved[key])?saved[key]:localToInstant(form[key]);
+  return validateTrade({...form,symbol:form.symbol.trim().toUpperCase(),strike:Number(form.strike),quantity:Number(form.quantity),multiplier:Number(form.multiplier),entryPrice:Number(form.entryPrice),exitPrice:form.status==='open'?null:Number(form.exitPrice),entryAt:instant('entryAt'),exitAt:form.status==='open'?null:instant('exitAt'),fees:opt('fees'),risk:opt('risk'),reportedPnl:opt('reportedPnl')});}
+function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts,workspace,workspaceStatus}){
   const [form,setForm]=useState(()=>toForm(trade)),initial=useRef(JSON.stringify(form)),[error,setError]=useState('');
   const [view,setView]=useState(trade?initialView:'details');
-  const replay=useJournalReplay(trade,workspace,view==='chart');
-  const edit=(key,value)=>setForm(v=>({...v,[key]:value}));
+  const replay=useJournalReplay(trade,workspace,view!=='edit');
+  const edit=(key,value)=>{setError('');setForm(v=>({...v,[key]:value}));};
   const close=()=>{if(JSON.stringify(form)!==initial.current&&!confirm('Discard the unsaved changes to this trade?'))return;onClose();};
-  let result=null;try{result=tradeResult(fromForm(form));}catch{}
+  let result=null;try{result=tradeResult(fromForm(form,trade));}catch{}
   const input=(key,label,type='text',extra={})=><label>{label}<input type={type} value={form[key]??''} onChange={e=>edit(key,e.target.value)} {...extra}/></label>;
   const timeInput=(key,label)=>{const [date='',time='']=form[key].split('T'),disabled=key==='exitAt'&&form.status==='open';return <div className="journal-time-field"><span>{label} · Skopje</span><div><label><span className="sr-only">{label} date · Skopje</span><input type="date" required={!disabled} disabled={disabled} value={date} onChange={e=>edit(key,`${e.target.value}T${time}`)}/></label><label><span className="sr-only">{label} time · Skopje · 24h</span><input type="text" required={!disabled} disabled={disabled} placeholder="HH:MM:SS" maxLength={8} pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?" title="24-hour time, for example 16:19:54" value={time} onChange={e=>edit(key,`${date}T${e.target.value}`)}/></label></div></div>;};
-  return <JournalModal title={trade?`Review ${contract(trade)}`:'Add a trade'} onClose={close} chart={view==='chart'}>
-    {trade&&<div className="journal-detail-tabs" role="group" aria-label="Trade review view"><button type="button" aria-pressed={view==='chart'} onClick={()=>setView('chart')}>Trade chart</button><button type="button" aria-pressed={view==='details'} onClick={()=>setView('details')}>Details & notes</button></div>}
-    {trade&&view==='chart'&&<Suspense fallback={<div className="journal-chart-empty">Loading trade chart…</div>}><TradeChart trade={trade} replay={replay}/></Suspense>}
-    {trade&&view==='details'&&replay.listings.length>1&&<label className="journal-listing-choice">Choose the underlying listing<select value={replay.choice} onChange={e=>replay.setChoice(e.target.value)}><option value="">Choose listing</option>{replay.listings.map(row=><option key={row.id} value={row.id}>{row.id}</option>)}</select></label>}
-    {trade&&<JournalStrategyReview trade={trade} replay={replay}/>}
-    {trade&&view==='details'&&<p className="journal-help">Automatic checks use the saved execution. Save any edited trade details to update its review.</p>}
-    <form hidden={view!=='details'} className="journal-form" onSubmit={e=>{e.preventDefault();try{onSave(fromForm(form));}catch(e){setError(e.message);}}}>
+  const save=()=>{try{onSave(fromForm(form,trade));}catch(e){setError(e.message);}};
+  const editing=!trade||view==='edit';
+  return <JournalModal title={trade?(editing?'Edit trade':'Trade review'):'Add a trade'} onClose={close} review={!!trade}>
+    {trade&&!editing&&<JournalTradeReview trade={trade} replay={replay} form={form} edit={edit}
+      notesOpen={view==='details'} onTab={notes=>setView(notes?'details':'chart')} onEdit={()=>setView('edit')}
+      dirty={JSON.stringify(form)!==initial.current} save={save} error={error} workspaceStatus={workspaceStatus}/>}
+    {editing&&<form className="journal-form" onSubmit={e=>{e.preventDefault();save();}}>
+    {trade&&<button type="button" className="text-button review-editor-back" onClick={e=>{if(e.currentTarget.form.reportValidity())setView('chart');}}><ArrowLeft size={16}/>Return to replay</button>}
     <p className="journal-help">One option entry and its matched exit per record. For partial exits, record each matched quantity separately. Entry fields use Europe/Skopje, 24-hour time; premiums are per underlying share in USD.</p>
     <div className="journal-form-grid">{input('firm','Prop firm / broker','text',{required:true,maxLength:60})}{input('account','Trading account','text',{required:true,maxLength:80,list:'journal-accounts'})}<label>Position status<select value={form.status} onChange={e=>edit('status',e.target.value)}><option value="closed">Closed</option><option value="open">Open</option></select></label></div>
     <datalist id="journal-accounts">{accounts.map(a=><option key={a} value={a}/>)}</datalist>
@@ -56,7 +64,7 @@ function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts
     <label>Review notes<textarea value={form.notes} maxLength={2000} rows={4} placeholder="Why did you enter? What did you follow or miss? What will you change next time?" onChange={e=>edit('notes',e.target.value)}/></label>
     <p className="journal-help">Source: {form.sourceLabel||form.source}. {result?.returnPct!=null&&`Gross premium return: ${result.returnPct.toFixed(2)}%. `}Open records are excluded from performance. Blank fees and risk remain unknown.</p>
     {error&&<p role="alert" className="amber">{error}</p>}<footer className="journal-form-actions">{trade&&<button type="button" className="text-button red" onClick={()=>{if(confirm('Delete this trade from the journal? You can undo the removal.'))onDelete(trade.id);}}><Trash size={17}/>Delete trade</button>}<button type="button" className="button outline" onClick={close}>Cancel</button><button type="submit" className="button primary">{trade?'Save trade':'Add trade'}</button></footer>
-  </form></JournalModal>;
+  </form>}</JournalModal>;
 }
 function ImportTrades({prepared,existing,onImport,onClose}){
   const {zoneLabel,journalStamp}=useDisplayTime();
@@ -119,7 +127,7 @@ function JournalTrades({workspace,tradeId,onClearTrade,nav,missing}){
       onDay={value=>{setDay(value);setAllTime(false);}}/>
     <JournalResults trades={filtered} stats={stats} hasTrades={!!trades.length} onOpen={(trade,view)=>setEditor({trade,view})}
       onAdd={()=>setEditor({trade:null})}/>
-    {editor&&<TradeEditor trade={editor.trade} initialView={editor.view} workspace={workspace.data} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
+    {editor&&<TradeEditor trade={editor.trade} initialView={editor.view} workspace={workspace.data} workspaceStatus={workspace.status} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
     {importing&&<ImportTrades prepared={importing.prepared} existing={trades} onImport={importRows} onClose={()=>setImporting(null)}/>}
   </div>;
 }

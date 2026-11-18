@@ -97,5 +97,7 @@ export function journalStats(trades){
   return {closed:closed.length,open:trades.length-closed.length,gross,missingFees,
     fees:closed.length&&!missingFees?roundMoney(fees):null,net:closed.length?cumulativeNet:null,wins:wins.length,losses:losses.length,breakeven:closed.length-wins.length-losses.length,winRate:closed.length?wins.length/closed.length*100:null,profitFactor:losing>0?winning/losing:null,averageHold:closed.length?results.reduce((s,r)=>s+r.seconds,0)/closed.length:null,series,exits};
 }
+const premiumFormat=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:4});
+export const optionPremium=value=>value==null?'—':premiumFormat.format(value);
 export const money=value=>value===null?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
 export function duration(value){if(value===null)return '—';const seconds=Math.round(value);return seconds<60?`${seconds}s`:seconds<3600?`${Math.floor(seconds/60)}m ${seconds%60}s`:`${Math.floor(seconds/3600)}h ${Math.floor(seconds%3600/60)}m`;}

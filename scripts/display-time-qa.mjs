@@ -43,8 +43,8 @@ try{
  await page.goto(runtime.url+'/#news');await expect(page.locator('.news-panel')).toContainText('09:00 PM');await expect(page.locator('.news-panel')).toContainText('Tokyo');
  mark('Timed calendar events and news convert across midnight; untimed events, range labels and U.S. date filters retain published dates');
  await page.goto(runtime.url+'/#journal');await page.getByRole('button',{name:'AMD 530 Call',exact:true}).click();const dialog=page.getByRole('dialog');
- await expect(dialog.locator('.journal-execution-summary')).toContainText('2026-10-27 · 12:19:54 AM');await expect(dialog.locator('.journal-option-fills')).toHaveText(/12:19:54 AM/);
- await dialog.getByRole('button',{name:'Details & notes',exact:true}).click();await expect(dialog.getByLabel('Entry time · Skopje · 24h')).toHaveValue('16:19:54');await dialog.getByRole('button',{name:'Close trade dialog'}).click();
+ await expect(dialog.locator('.review-fills')).toContainText('2026-10-27 · 12:19:54 AM');await expect(dialog.locator('.journal-option-fills')).toHaveText(/12:19:54 AM/);
+ await dialog.getByRole('button',{name:'Edit execution details',exact:true}).click();await expect(dialog.getByLabel('Entry time · Skopje · 24h')).toHaveValue('16:19:54');await dialog.getByRole('button',{name:'Close trade dialog'}).click();
  expect((await read()).data.journal).toEqual(baseline.data.journal);mark('Journal review displays the selected zone/12h with exact seconds; broker-input times and saved executions stay intact');
  await page.goto(runtime.url+'/#settings/workspace');await setZone('Asia/Kathmandu');await expect(page.locator('.session-display-preview strong')).toHaveText('01:45 AM');
  for(const width of [320,390,820,1024]){
