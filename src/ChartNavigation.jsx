@@ -1,6 +1,8 @@
+import {useChartPalette} from './appearance';
 import {useState} from 'react';
 import {MagnifyingGlassPlus,MagnifyingGlassMinus,ArrowCounterClockwise,CaretLeft,CaretRight} from '@phosphor-icons/react';
 export function useChartNavigation(key,count,axes=[0,1],endOfData=100,persist){
+  const palette = useChartPalette();
   const [state,setState]=useState({key,start:0,end:100});
   const view=persist?.view||(state.key===key?state:{key,start:0,end:100}),minSpan=Math.min(100,800/Math.max(1,count));
   function setView(range){
@@ -25,7 +27,7 @@ export function useChartNavigation(key,count,axes=[0,1],endOfData=100,persist){
   const common={xAxisIndex:axes,filterMode:'none',start:view.start,end:view.end,minSpan};
   return {view,setView,zoom,pan,reset,onKeyDown,dataZoom:[
     {...common,id:'inside-zoom',type:'inside',zoomOnMouseWheel:true,moveOnMouseMove:true,moveOnMouseWheel:false,preventDefaultMouseMove:true},
-    {...common,id:'range-zoom',type:'slider',height:18,bottom:7,left:12,right:68,showDetail:false,borderColor:'#d1c4e7',backgroundColor:'#f4f2fa',fillerColor:'#713bdd24',handleStyle:{color:'#b9a1dd',borderColor:'#713bdd'},dataBackground:{lineStyle:{color:'#a894c7'},areaStyle:{color:'#e6ddf9'}},selectedDataBackground:{lineStyle:{color:'#713bdd'},areaStyle:{color:'#e6ddf9'}},brushSelect:false},
+    {...common,id:'range-zoom',type:'slider',height:18,bottom:7,left:12,right:68,showDetail:false,borderColor:palette.chartAxis,backgroundColor:palette.bg,fillerColor:palette.primary + '24',handleStyle:{color:palette.chartEstimate,borderColor:palette.primary},dataBackground:{lineStyle:{color:palette.chartAxis},areaStyle:{color:palette.selection}},selectedDataBackground:{lineStyle:{color:palette.primary},areaStyle:{color:palette.selection}},brushSelect:false},
   ]};
 }
 export function ChartNavigation({navigation,count,label='candles',priceScale,onReset,compact=false}){

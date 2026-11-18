@@ -30,8 +30,8 @@
 .bj-expand svg { width:14px; height:14px; flex:none; }
 .bj-note-link { justify-content:center; min-width:30px; min-height:26px; color:var(--primary); }
 .bj-side { display:inline-block; font-size:12px; font-weight:600; border-radius:5px; padding:2px 8px; }
-.bj-side.buy { background:#dcf2e6; color:var(--green); }
-.bj-side.sell { background:#fce1e7; color:var(--red); }
+.bj-side.buy { background:var(--positive-tint); color:var(--green); }
+.bj-side.sell { background:var(--negative-tint); color:var(--red); }
 .bj-table .bj-expanded>td { background:var(--panel); padding:17px 22px; }
 .bj-detail { display:grid; grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr); gap:25px; }
 .bj-detail h3,.bj-note>label { display:block; margin:0 0 10px; color:var(--text); font-size:15px; font-weight:650; }

@@ -24,9 +24,9 @@
 .connection-row button>svg {width:18px; height:18px; flex:none}
 .connection-row button strong {display:block; font-size:18px; line-height:1.3; letter-spacing:-.3px}
 .connection-row small, .connection-note {display:block; margin-top:3px; font-size:13px; line-height:1.45; font-weight:400; color:var(--muted)}
-.connection-badge {font-size:14px; font-weight:600; line-height:1.25; border-radius:5px; display:inline-flex; gap:7px; align-items:center; padding:3px 9px; background:#e6e2ee; color:#554b64}
-.connection-badge[data-tone=good] {background:#d9f1e4; color:#10613a}
-.connection-badge[data-tone=warn] {background:#ffe5b8; color:#865100}
+.connection-badge {font-size:14px; font-weight:600; line-height:1.25; border-radius:5px; display:inline-flex; gap:7px; align-items:center; padding:3px 9px; background:var(--selection); color:var(--muted)}
+.connection-badge[data-tone=good] {background:var(--positive-tint); color:var(--green)}
+.connection-badge[data-tone=warn] {background:var(--warning-tint); color:var(--amber)}
 .con-mobile-label {display:none}
 .connection-detail-row>td {padding:0 13px 15px}
 .connection-facts {display:grid; grid-template-columns:1fr 1.22fr 1.06fr 1.08fr; gap:0; padding:17px 0; margin:0; background:var(--panel-hover); border-radius:5px}
@@ -37,7 +37,7 @@
 .connection-facts dd.connection-note {font-size:13px; font-weight:400; margin-top:4px}
 .connection-facts a {display:inline-flex; align-items:center; gap:6px; color:var(--primary); text-decoration:underline}
 .connection-facts a svg {flex:none}
-.connection-warning {display:flex; align-items:center; gap:12px; margin-top:12px; padding:8px 13px; background:#fff0de; border-radius:6px}
+.connection-warning {display:flex; align-items:center; gap:12px; margin-top:12px; padding:8px 13px; background:var(--warning-tint); border-radius:6px}
 .connection-warning>svg {color:var(--amber); flex:none}
 .connection-warning p {flex:1; margin:0; font-size:13px; line-height:1.5}
 .connection-warning strong {margin-right:5px}

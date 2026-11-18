@@ -23,10 +23,10 @@
 .alloc-editor tbody td,.alloc-editor tbody th {padding-top:3px; padding-bottom:3px;}
 .alloc-weight {display:flex; align-items:center; gap:10px;}
 .alloc-weight>span {flex:none;}
-.alloc-weight progress {appearance:none; width:68%; height:10px; border:none; border-radius:8px; overflow:hidden; background:#ded5ee; color:#9467de;}
-.alloc-weight progress::-webkit-progress-bar {border-radius:8px; background:#ded5ee;}
-.alloc-weight progress::-webkit-progress-value {background:#9467de; border-radius:8px;}
-.alloc-weight progress::-moz-progress-bar {background:#9467de; border-radius:8px;}
+.alloc-weight progress {appearance:none; width:68%; height:10px; border:none; border-radius:8px; overflow:hidden; background:var(--selection); color:var(--primary);}
+.alloc-weight progress::-webkit-progress-bar {border-radius:8px; background:var(--selection);}
+.alloc-weight progress::-webkit-progress-value {background:var(--primary); border-radius:8px;}
+.alloc-weight progress::-moz-progress-bar {background:var(--primary); border-radius:8px;}
 .alloc-input {display:flex; align-items:center; width:min(100%,132px); background:var(--surface,var(--panel)); border:1px solid var(--border); border-radius:5px;}
 .alloc-input:focus-within {outline:2px solid var(--primary); outline-offset:1px;}
 .alloc-input input[type=number] {width:100%; min-width:0; min-height:29px; padding:3px 7px; border:0; background:transparent; font:inherit; color:var(--text); outline:none;}

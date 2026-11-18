@@ -147,14 +147,14 @@
 .level-nearest-group.demand svg{color:var(--green)}
 .level-nearest-group.gap svg{color:#e8a11b}
 .level-nearest-chip{padding:4px 10px;margin-top:4px;border-radius:4px;font-size:13px;line-height:1.4;font-weight:600;font-variant-numeric:tabular-nums}
-.supply .level-nearest-chip{background:#f8dfe9}.demand .level-nearest-chip{background:#ddf1e5}.gap .level-nearest-chip{background:#fff0d5}
+.supply .level-nearest-chip{background:var(--negative-tint)}.demand .level-nearest-chip{background:var(--positive-tint)}.gap .level-nearest-chip{background:var(--warning-tint)}
 .level-nearest-empty{margin:8px 0;color:var(--muted);font-size:12px;line-height:1.5}
 .level-role-table-wrap{max-width:100%;overflow-x:auto;border:1px solid var(--border);border-radius:6px}
 .level-role-table-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .level-role-table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.4}
 .level-role-table thead,.level-role-table thead tr,.level-role-table tbody tr{background:transparent}
 .level-role-table th,.level-role-table td{text-align:left;padding:4px 9px;border-bottom:1px solid var(--border);vertical-align:middle}
-.level-role-table thead th{font-size:11px;font-weight:600;color:var(--muted);background:#ece6f8;white-space:nowrap}
+.level-role-table thead th{font-size:11px;font-weight:600;color:var(--muted);background:var(--selection);white-space:nowrap}
 .level-role-table tbody th{font-weight:600;color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums}
 .level-role-table tbody tr:last-child>*{border-bottom:0}
 .level-role-table td{white-space:normal}
@@ -162,7 +162,7 @@
 .level-role-table td small{display:block;color:var(--muted);font-size:10px;margin-top:2px;line-height:1.4}
 .level-confirmed-close{font-variant-numeric:tabular-nums}
 .level-role-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;line-height:1.4;font-weight:500;white-space:nowrap}
-.level-role-badge.role-S{background:#f8dfe9;color:#aa2743}.level-role-badge.role-D{background:#ddf1e5;color:#087a4b}.level-role-badge.role-G{background:#fff0d5;color:#8f5900}
+.level-role-badge.role-S{background:var(--negative-tint);color:var(--red)}.level-role-badge.role-D{background:var(--positive-tint);color:var(--green)}.level-role-badge.role-G{background:var(--warning-tint);color:var(--amber)}
 .level-sheet-details{margin-top:14px;border:1px solid var(--border);border-radius:6px;background:var(--panel)}
 .level-sheet-details>summary{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;list-style:none}
 .level-sheet-details>summary::-webkit-details-marker{display:none}

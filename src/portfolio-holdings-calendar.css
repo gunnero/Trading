@@ -31,8 +31,8 @@
 .hc-event b {padding:1px 7px; border:1px solid var(--primary); border-radius:6px; background:var(--panel); font-size:12px; line-height:1.25; font-weight:650;}
 .hc-table .hc-kind {padding-left:29px;}
 .hc-status {display:inline-block; max-width:100%; padding:4px 9px; border-radius:6px; font-weight:650; font-size:13px; line-height:1.2;}
-.hc-estimate {background:#ffe1af; color:#854900;}
-.hc-published {background:#ccefd9; color:#096139;}
+.hc-estimate {background:var(--warning-tint); color:var(--amber);}
+.hc-published {background:var(--positive-tint); color:var(--green);}
 .hc-unknown {background:var(--selection); color:var(--muted);}
 .hc-empty {margin:0; padding:19px 13px; color:var(--muted); font-size:14px;}
 .hc-later {gap:4px; margin:8px 0 0;}
@@ -45,7 +45,7 @@
 .hc-days button {position:relative; width:100%; max-width:43px; min-height:41px; padding:0; background:transparent; border:1px solid transparent; border-radius:6px; color:var(--text); font:inherit; font-size:14px; cursor:pointer;}
 .hc-days button:disabled {color:var(--muted); opacity:.65; cursor:default;}
 .hc-days button[aria-current=date],.hc-days button:not(:disabled):hover {background:var(--selection);}
-.hc-days button[aria-pressed=true] {background:var(--primary); color:white;}
+.hc-days button[aria-pressed=true] {background:var(--primary); color:var(--on-primary);}
 .hc-days .hc-marked::after {content:''; position:absolute; left:calc(50% - 2px); bottom:2px; width:4px; height:4px; border-radius:50%; background:var(--primary);}
 .hc-days .hc-marked[aria-pressed=true]::after {background:white;}
 .hc-unavailable {margin:30px 0 18px;}

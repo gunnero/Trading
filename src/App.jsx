@@ -8,6 +8,7 @@ import {canonicalRoute,routeView,routeGroup,marketTabs,portfolioTabs} from './da
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
 import { Briefcase, ChartBar, LockKey, UserCircle, SignOut, SquaresFour, Tag, SlidersHorizontal, CalendarBlank, Plus, UploadSimple, CaretRight, CaretDown, X, MagnifyingGlass, ArrowUpRight, ArrowDownRight, Minus, FileText, Check, Info, ArrowLeft, DownloadSimple, List, Clock, Notebook, WarningCircle, Gear, Newspaper, Gauge, Copy } from '@phosphor-icons/react';
+import {AppearanceSwitch} from './AppearanceSwitch';
 import {useAuth} from './Auth';
 import {SettingsPage,settingsCategory} from './SettingsPage';
 const SentimentPage=React.lazy(()=>import('./SentimentPage'));
@@ -203,6 +204,7 @@ function SessionDesk({workspace}) {
       <div className="sidebar-account-area">
         <SidebarSentiment briefing={briefing} active={section==='sentiment'} onOpen={()=>navigate('sentiment')}/>{preferences.showTradingNet!==false&&<TransfersNet onOpen={()=>navigate('settings/transfers')}/>}
         <div className="sidebar-profile">
+          <AppearanceSwitch/>
           <button className={`nav-item sidebar-settings ${section==='settings'?'active':''}`} aria-label="Settings" title="Settings" aria-current={section==='settings'?'page':undefined} onClick={()=>navigate('settings')}><Gear size={22}/><span>Settings</span></button>
           <button className="nav-item sidebar-account" aria-label="Account & security" title="Account & security" onClick={()=>navigate('settings/account')}><UserCircle size={20}/><span>{user.username}</span></button>
           <button className="sidebar-logout" aria-label="Log out" title="Log out" disabled={logoutBusy} onClick={logout}><SignOut size={19}/><span>{logoutBusy?'Logging out…':'Log out'}</span></button>

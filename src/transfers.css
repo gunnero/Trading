@@ -22,7 +22,7 @@
 .transfers-desk .ledger-title h2 {font-size:clamp(22px,2.3vw,32px);letter-spacing:-.045em;margin:0}
 .ledger-title .button {margin-left:auto}
 .ledger-unlocked,.ledger-category,.ledger-status,.ledger-reserve summary>span {display:inline-flex;align-items:center;width:fit-content;border-radius:5px;padding:3px 9px;font-size:12px;font-weight:600}
-.ledger-unlocked,.ledger-status.confirmed,.ledger-category.withdrawal,.ledger-category.refund {color:#096439;background:#d9f2de}
+.ledger-unlocked,.ledger-status.confirmed,.ledger-category.withdrawal,.ledger-category.refund {color:var(--green);background:var(--positive-tint)}
 .ledger-title svg,.ledger-actions svg,.bank-controls button>svg,.bank-facts svg,.ledger-guide button svg {width:17px;height:17px;flex:none}
 .transfers-desk .panel.transfer-connection {padding:14px 18px 8px}
 .bank-controls {display:grid;grid-template-columns:minmax(118px,.82fr) minmax(140px,1.12fr) minmax(136px,1.17fr) auto auto;align-items:center;gap:12px}
@@ -36,7 +36,7 @@
 .bank-sources {text-align:left;justify-content:space-between;color:var(--text);background:transparent;font-size:14px}
 .bank-sources:enabled:hover,.ledger-group-button:hover,.ledger-table th button:hover {color:var(--primary)}
 .transfers-desk .bank-hourly {flex-direction:row;align-items:center;gap:8px;color:var(--text);cursor:pointer}
-.bank-hourly input {appearance:none;position:relative;flex:none;width:34px;height:20px;margin:0;border-radius:12px;border:1px solid var(--border);background:#b8afc8;cursor:pointer}
+.bank-hourly input {appearance:none;position:relative;flex:none;width:34px;height:20px;margin:0;border-radius:12px;border:1px solid var(--border);background:var(--chart-axis);cursor:pointer}
 .bank-hourly input:after {content:"";display:block;width:14px;height:14px;border-radius:50%;margin:2px;background:white}
 .bank-hourly input:checked {background:var(--primary);border-color:var(--primary)}
 .bank-hourly input:checked:after {transform:translateX(14px)}
@@ -78,9 +78,9 @@
 .ledger-amount {font-weight:600;font-variant-numeric:tabular-nums}
 .ledger-installment,.ledger-category.purchase,.ledger-category.deposit,.ledger-reserve summary>span {background:var(--selection)}
 .ledger-table .ledger-installment td:nth-child(2) {padding-left:20px}
-.ledger-category.cost {color:#8f2443;background:#f9dbe6}
+.ledger-category.cost {color:var(--red);background:var(--negative-tint)}
 .ledger-category.unknown,.ledger-category.exclude,.ledger-status.excluded,.ledger-status.mixed {color:var(--muted);background:var(--panel-hover)}
-.ledger-status.needs-review {color:#835000;background:#ffe7b3}
+.ledger-status.needs-review {color:var(--amber);background:var(--warning-tint)}
 button.ledger-status:hover {text-decoration:underline}
 .ledger-table .ledger-status,.ledger-table .ledger-category {font-size:11px;white-space:normal}
 .ledger-reserve summary>span,.ledger-reserve small {margin-left:10px}

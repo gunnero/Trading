@@ -28,7 +28,7 @@
 .economic-page .eco-next-details{padding:0 14px 12px;font-size:12px}
 .economic-page .eco-countdown{color:var(--muted);margin:0 0 8px}
 .economic-page .eco-countdown strong{color:var(--text)}
-.economic-page .eco-next-metrics>[role=row]{display:grid;grid-template-columns:minmax(0,1fr) 80px 80px;gap:12px;padding:7px 0;border-top:1px solid #d1c4e7}
+.economic-page .eco-next-metrics>[role=row]{display:grid;grid-template-columns:minmax(0,1fr) 80px 80px;gap:12px;padding:7px 0;border-top:1px solid var(--border)}
 .economic-page .eco-next-metrics>[role=row]>:not(:first-child){text-align:right}
 .economic-page .eco-next-metrics>[role=row]:first-child{color:var(--muted)}
 .economic-page .eco-next-source{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;color:var(--muted);line-height:1.6}

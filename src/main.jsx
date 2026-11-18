@@ -10,6 +10,9 @@ import "./styles.css";
 import "./responsive.css";
 import "./theme.css";
 
+import {initializeAppearance} from './appearance.js';
+
+initializeAppearance();
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthGate><React.Suspense fallback={<div className="workspace-loading">Opening your private desk…</div>}><App /></React.Suspense></AuthGate>

@@ -5,7 +5,7 @@
 .pm-trade-page .pm-trading-account { display:flex; align-items:center; max-width:100%; min-width:0; padding:0; gap:8px; background:none; border:0; }
 .pm-trading-account select { min-width:0; max-width:100%; }
 .pm-trade-page .pm-trading-account strong { white-space:nowrap; letter-spacing:0; padding:3px 7px; border-radius:4px; background:var(--selection); }
-.pm-trade-page .pm-trading-account.pm-live strong { background:#fff0d7; }
+.pm-trade-page .pm-trading-account.pm-live strong { background:var(--warning-tint); }
 .pm-trade-page .section-tabs { margin-bottom:10px; }
 .pm-trade-page .pm-trade-panel { padding:0; background:none; border:0; box-shadow:none; }
 .pm-ticket-status { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:center; font-size:12px; color:var(--muted); }
@@ -61,11 +61,11 @@
 .pm-orders-table tr.pm-pending-order { display:table-row; }
 .pm-orders-table small { display:block; line-height:1.35; font-size:11px; }
 .pm-orders-table td>span:is(.green,.red) { padding:2px 6px; border-radius:4px; font-weight:600; }
-.pm-orders-table td>span.green { color:#00663e; background:#d2efe1; }
-.pm-orders-table td>span.red { color:#a22540; background:#fde3e8; }
+.pm-orders-table td>span.green { color:var(--green); background:var(--positive-tint); }
+.pm-orders-table td>span.red { color:var(--red); background:var(--negative-tint); }
 .pm-orders-table .pm-order-status { display:inline-block; padding:2px 6px; border-radius:4px; background:var(--selection); }
-.pm-orders-table [data-status=Pending]{background:#ffebc5;color:#794800;}
-.pm-orders-table [data-status=Filled]{background:#d2efe1;color:#00663e;}
+.pm-orders-table [data-status=Pending]{background:var(--warning-tint);color:var(--amber);}
+.pm-orders-table [data-status=Filled]{background:var(--positive-tint);color:var(--green);}
 .pm-order-tracking summary { color:var(--muted); font-size:12px; cursor:pointer; }
 @media(max-width:1160px){
   .pm-ticket-choices,.pm-ticket-sizing { gap:8px; }

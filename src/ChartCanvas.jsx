@@ -1,3 +1,4 @@
+import {useChartPalette} from './appearance';
 import {useDisplayTime} from './DisplayTime';
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
@@ -16,7 +17,6 @@ import {useSavedChart} from './ChartSettings';
 import {chartLimitOrders,limitOrderLabel,limitOrderDescription,layoutLimitOrders} from './data/chart-limit-orders.mjs';
 
 echarts.use([LineChart, CandlestickChart, BarChart, CustomChart, GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, DataZoomComponent, CanvasRenderer]);
-const colors = { green: '#087a4b', red: '#bb304a', amber: '#8f5900', muted: '#6f6483' };
 function useChart(option,onZoom) {
   const ref = useRef(null),instance=useRef(null),zoomCallback=useRef(onZoom),[ready,setReady]=useState(null);zoomCallback.current=onZoom;
   useEffect(() => {
@@ -33,12 +33,13 @@ function useChart(option,onZoom) {
   return {ref,chart:ready};
 }
 export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, candles, price, percent = false, indicators, referenceLine, orderLines=[] }) {
+  const palette = useChartPalette();
   const {clockStamp,zoneLabel}=useDisplayTime();
   const scope=`${drawingKey}|${timeframe}`,settings=useSavedChart(scope),{config}=settings;
   const {enabled,fitIndicators,fitLevels}=config;
   const setEnabled=change=>settings.set(current=>({...current,enabled:typeof change==='function'?change(current.enabled):change}));
   const setFitIndicators=fitIndicators=>settings.set({fitIndicators,priceRange:null});
-  const plotted=INDICATORS.filter(item=>enabled[item.key]).flatMap(item=>item.series.filter(key=>indicators?.series?.[key]?.some(validIndicator)).map(key=>({...item,id:key,values:indicators.series[key],name:key==='ema9'?'9 EMA':key==='ema21'?'21 EMA':item.label})));
+  const plotted=INDICATORS.filter(item=>enabled[item.key]).flatMap(item=>item.series.filter(key=>indicators?.series?.[key]?.some(validIndicator)).map(key=>({...item,color:item.key==='vwap'?palette.chartVwap:item.key==='ema'?palette.chartEma:item.color,id:key,values:indicators.series[key],name:key==='ema9'?'9 EMA':key==='ema21'?'21 EMA':item.label})));
   const formatValue=value=>percent?`${value.toFixed(3)}%`:formatPrice(value);
   const data = candles.map(row=>({...row,label:['D','W','M'].includes(timeframe)?row.date.slice(0,timeframe==='M'?7:10):clockStamp(row.timestamp*1000).replace(' · ','\n'),time:['D','W','M'].includes(timeframe)?row.date:clockStamp(row.timestamp*1000)+` ${zoneLabel}`}));
   const labels = [...data.map(row => row.label), ...Array.from({length:Math.ceil(data.length*.25)},()=> '')];
@@ -47,7 +48,7 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
   const fittedZones=config.showLevels&&fitLevels&&instrument?instrument.zones:[];
   const indicatorValues=fitIndicators?plotted.flatMap(item=>item.values.slice(first,last).filter(validIndicator)):[];
   const referenceValues=Number.isFinite(referenceLine?.value)?[referenceLine.value]:[];
-  const orderReferences=chartLimitOrders(orderLines),orderValues=orderReferences.map(line=>line.value);
+  const orderReferences=chartLimitOrders(orderLines,palette),orderValues=orderReferences.map(line=>line.value);
   const low = Math.min(...referenceValues,...orderValues,...visibleData.map(row=>row.ohlc[2]),...fittedZones.map(z=>z.low),...indicatorValues), high = Math.max(...referenceValues,...orderValues,...visibleData.map(row=>row.ohlc[3]),...fittedZones.map(z=>z.high),...indicatorValues);
   const padding = Math.max(percent ? 0.005 : 1.8, (high-low)*.12);
   const scale=percent?1000:1;
@@ -75,10 +76,10 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
   }
   const option = {
     animation: false,
-    textStyle: { fontFamily: 'Inter, sans-serif', color: '#6f6483' },
+    textStyle: { fontFamily: 'Inter, sans-serif', color: palette.muted },
     grid: [{ left: 10, right: 68, top: 5, bottom: 68 }, { left: 10, right: 68, bottom: 68, height: 40 }],
     dataZoom:navigation.dataZoom,
-    tooltip: { showContent:config.panel==='indicators'&&config.hoverValues, className:'chart-hover-details', trigger: 'axis', confine:true, backgroundColor: '#faf8ff', borderColor: '#ddd8ea', textStyle: { color: '#251b3a', fontSize: 12 }, axisPointer: { type: 'cross', label: { backgroundColor: '#d1c4e7' } }, formatter: params => {
+    tooltip: { showContent:config.panel==='indicators'&&config.hoverValues, className:'chart-hover-details', trigger: 'axis', confine:true, backgroundColor: palette.panel, borderColor: palette.border, textStyle: { color: palette.text, fontSize: 12 }, axisPointer: { type: 'cross', label: { color: palette.text, backgroundColor: palette.selection } }, formatter: params => {
       const candle = params.find(p => p.seriesType === 'candlestick');
       if (!candle) return '';
       const row = data[candle.dataIndex];
@@ -87,21 +88,21 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
       return `${symbol} · ${row.time} · Yahoo Finance${row.partial ? ' · Partial bar' : ''}<br/>Open ${formatValue(row.ohlc[0])} &nbsp; Close ${formatValue(row.ohlc[1])}<br/>Low ${formatValue(row.ohlc[2])} &nbsp; High ${formatValue(row.ohlc[3])}${indicatorText}`;
     } },
     xAxis: [
-      { type: 'category', data: labels, boundaryGap: true, axisLine: { lineStyle: { color: '#ddd8ea' } }, axisTick: { show: false }, axisLabel: { show: false }, splitLine: { show: true, interval: tickInterval, lineStyle: { color: '#e9e3f2', width: 1 } } },
-      { gridIndex: 1, type: 'category', data: labels, boundaryGap: true, axisLine: { lineStyle: { color: '#ddd8ea' } }, axisTick: { show: false }, axisLabel: { color: '#6f6483', fontSize: 10, lineHeight: 13, interval: tickInterval, hideOverlap: true } },
+      { type: 'category', data: labels, boundaryGap: true, axisLine: { lineStyle: { color: palette.border } }, axisTick: { show: false }, axisLabel: { show: false }, splitLine: { show: true, interval: tickInterval, lineStyle: { color: palette.chartGrid, width: 1 } } },
+      { gridIndex: 1, type: 'category', data: labels, boundaryGap: true, axisLine: { lineStyle: { color: palette.border } }, axisTick: { show: false }, axisLabel: { color: palette.muted, fontSize: 10, lineHeight: 13, interval: tickInterval, hideOverlap: true } },
     ],
     yAxis: [
-      { min, max, splitNumber: 6, type: 'value', position: 'right', axisLabel: { color: '#6f6483', fontSize: 11, formatter: n => percent?`${n.toFixed(3)}%`:n.toFixed(2) }, splitLine: { lineStyle: { color: '#ddd8ea' } }, axisLine: { show: true, lineStyle: { color: '#c4b7d8' } } },
+      { min, max, splitNumber: 6, type: 'value', position: 'right', axisLabel: { color: palette.muted, fontSize: 11, formatter: n => percent?`${n.toFixed(3)}%`:n.toFixed(2) }, splitLine: { lineStyle: { color: palette.border } }, axisLine: { show: true, lineStyle: { color: palette.chartAxis } } },
       { gridIndex: 1, type: 'value', show: false },
     ],
     series: [
-      { type: 'candlestick', id:'price',name: 'Yahoo price', data: data.map(x => x.ohlc), barMaxWidth: 18, itemStyle: { color: colors.green, color0: '#de6e71', borderColor: colors.green, borderColor0: '#de6e71' },
+      { type: 'candlestick', id:'price',name: 'Yahoo price', data: data.map(x => x.ohlc), barMaxWidth: 18, itemStyle: { color: palette.green, color0: '#de6e71', borderColor: palette.green, borderColor0: '#de6e71' },
         markArea: { silent: true, data: visibleZones.filter(z => z.low !== z.high).map(z => [
-          { name: `${zoneName(z.type)}  ${zoneText(z)}`, yAxis: z.low, itemStyle: { color: z.type === 'S' ? '#ef747324' : z.type === 'D' ? '#29c5b029' : '#8f590024', borderColor: z.type === 'S' ? '#ad5c5966' : z.type === 'D' ? '#288b8066' : '#8f590066', borderWidth: 1 }, label: { show: labeledZones.has(z), position: 'insideTopRight', color: '#45365c', fontSize: 12, padding: [7, 8] } }, { yAxis: z.high }
+          { name: `${zoneName(z.type)}  ${zoneText(z)}`, yAxis: z.low, itemStyle: { color: z.type === 'S' ? '#ef747324' : z.type === 'D' ? '#29c5b029' : '#8f590024', borderColor: z.type === 'S' ? '#ad5c5966' : z.type === 'D' ? '#288b8066' : '#8f590066', borderWidth: 1 }, label: { show: labeledZones.has(z), position: 'insideTopRight', color: palette.text, fontSize: 12, padding: [7, 8] } }, { yAxis: z.high }
         ]) },
-        markLine: { silent: true, symbol: ['none', 'none'], lineStyle: { color: '#713bdd', type: 'dotted', width: 1 }, label: { position: 'end', formatter: formatValue(price), color: '#ffffff', fontWeight: 700, backgroundColor: '#713bdd', padding: [5, 5], borderRadius: 3, fontSize: 11 }, data: [{ yAxis: price },...referenceValues.map(value=>({name:'Account average paid',yAxis:value,lineStyle:{color:'#8858ce',type:'dashed',width:2},label:{show:true,position:'insideStartTop',formatter:`${referenceLine.label} ${formatValue(value)} ${referenceLine.currency}`,color:'#713bdd',backgroundColor:'#ede7f7',fontWeight:500,padding:[4,6]}})),...visibleZones.filter(z=>z.low===z.high).map(z=>({yAxis:z.low,lineStyle:{color:z.type==='S'?colors.red:z.type==='D'?colors.green:colors.amber,type:'solid'},label:{show:labeledZones.has(z),position:'insideEndTop',formatter:`${zoneName(z.type)}  ${formatValue(z.low)}`,color:'#45365c',backgroundColor:'transparent',fontWeight:400}}))] }
+        markLine: { silent: true, symbol: ['none', 'none'], lineStyle: { color: palette.primary, type: 'dotted', width: 1 }, label: { position: 'end', formatter: formatValue(price), color: palette.onPrimary, fontWeight: 700, backgroundColor: palette.primary, padding: [5, 5], borderRadius: 3, fontSize: 11 }, data: [{ yAxis: price },...referenceValues.map(value=>({name:'Account average paid',yAxis:value,lineStyle:{color:palette.primary,type:'dashed',width:2},label:{show:true,position:'insideStartTop',formatter:`${referenceLine.label} ${formatValue(value)} ${referenceLine.currency}`,color:palette.primary,backgroundColor:palette.selection,fontWeight:500,padding:[4,6]}})),...visibleZones.filter(z=>z.low===z.high).map(z=>({yAxis:z.low,lineStyle:{color:z.type==='S'?palette.red:z.type==='D'?palette.green:palette.amber,type:'solid'},label:{show:labeledZones.has(z),position:'insideEndTop',formatter:`${zoneName(z.type)}  ${formatValue(z.low)}`,color:palette.text,backgroundColor:'transparent',fontWeight:400}}))] }
       },
-      { type: 'bar', id:'volume',xAxisIndex: 1, yAxisIndex: 1, data: data.map(x => ({ value: x.volume, itemStyle: { color: x.ohlc[1] >= x.ohlc[0] ? '#087a4b3d' : '#bb304a4a' } })), silent: true, barMaxWidth: 18 },
+      { type: 'bar', id:'volume',xAxisIndex: 1, yAxisIndex: 1, data: data.map(x => ({ value: x.volume, itemStyle: { color: x.ohlc[1] >= x.ohlc[0] ? palette.chartVolumeUp : palette.chartVolumeDown } })), silent: true, barMaxWidth: 18 },
       {type:'custom',id:'ema-ribbon',name:'9 / 21 EMA ribbon',silent:true,clip:true,z:1,data:ribbon.map((_,i)=>[i,0]),renderItem:(params,api)=>{
         const segment=ribbon[params.dataIndex];
         return {type:'polygon',shape:{points:segment.points.map(([x,y])=>{const point=api.coord([Math.floor(x),y]);return [point[0]+(x-Math.floor(x))*api.size([1,0])[0],point[1]];})},style:{fill:segment.bull?'#08998138':'#f2364538'}};
@@ -115,7 +116,7 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
           {type:'line',shape:{x1:grid.x,y1:line.y,x2:grid.x+grid.width,y2:line.y},style:{stroke:line.color,lineWidth:1.5,lineDash:[6,6],lineDashOffset:line.side==='SELL'?6:0,opacity:line.stale ? .65 : 1}},
           ...(line.labelY===null?[]:[
             ...(Math.abs(line.y-line.labelY)>4?[{type:'line',shape:{x1:grid.x+4,y1:line.y,x2:grid.x+4,y2:line.labelY},style:{stroke:line.color,lineWidth:1,opacity:.7}}]:[]),
-            {type:'text',style:{text:limitOrderLabel(line),x:grid.x+8,y:line.labelY,verticalAlign:'middle',font:'500 10px Inter, sans-serif',lineHeight:13,width:Math.max(0,Math.min(260,grid.width-28)),overflow:'truncate',fill:line.color,backgroundColor:'rgba(250,248,255,0.96)',padding:[3,5],borderRadius:3}},
+            {type:'text',style:{text:limitOrderLabel(line),x:grid.x+8,y:line.labelY,verticalAlign:'middle',font:'500 10px Inter, sans-serif',lineHeight:13,width:Math.max(0,Math.min(260,grid.width-28)),overflow:'truncate',fill:line.color,backgroundColor:palette.panel,padding:[3,5],borderRadius:3}},
           ]),
         ])};
       }},
@@ -126,22 +127,24 @@ export function PriceChart({ symbol, drawingKey=symbol, instrument, timeframe, c
 }
 
 export function TreasuryHistoryChart({points}) {
+  const palette = useChartPalette();
   const settings=useSavedChart('US2Y|D'),{config}=settings;
   const navigation=useChartNavigation('US2Y',points.length,[0],100,{view:config.timeRange,onChange:timeRange=>settings.set({timeRange})}),first=Math.floor(navigation.view.start/100*(points.length-1)),last=Math.ceil(navigation.view.end/100*(points.length-1))+1;
   const values=points.map(point=>point.price),visible=values.slice(first,last),low=Math.min(...visible),high=Math.max(...visible),padding=Math.max(.02,(high-low)*.12);
   const priceScale=usePriceScale('US2Y',{min:Math.floor((low-padding)*100)/100,max:Math.ceil((high+padding)*100)/100},{top:18,bottom:62,persist:{range:config.priceRange,onChange:priceRange=>settings.set({priceRange})}});
   const {ref,chart:instance}=useChart({
-    animation:false,textStyle:{fontFamily:'Inter, sans-serif',color:'#6f6483'},grid:{left:12,right:68,top:18,bottom:62},dataZoom:navigation.dataZoom,
-    tooltip:{showContent:config.panel==='indicators'&&config.hoverValues,className:'chart-hover-details',trigger:'axis',backgroundColor:'#faf8ff',borderColor:'#ddd8ea',textStyle:{color:'#251b3a',fontSize:12},formatter:params=>{const point=points[params[0]?.dataIndex];return point?`${point.date} · U.S. Treasury<br/>2-year par yield: ${point.price.toFixed(2)}%`:'';}},
-    xAxis:{type:'category',data:points.map(point=>point.date),boundaryGap:false,axisLine:{lineStyle:{color:'#ddd8ea'}},axisTick:{show:false},axisLabel:{color:'#6f6483',fontSize:10,interval:Math.max(1,Math.floor(points.length/5)),hideOverlap:true}},
-    yAxis:{type:'value',position:'right',...priceScale.range,axisLabel:{color:'#6f6483',fontSize:11,formatter:n=>`${n.toFixed(2)}%`},splitLine:{lineStyle:{color:'#ddd8ea'}}},
-    series:[{type:'line',data:values,showSymbol:points.length===1,symbolSize:6,connectNulls:false,lineStyle:{color:colors.green,width:2},itemStyle:{color:colors.green},areaStyle:{color:'#087a4b12'}}],
+    animation:false,textStyle:{fontFamily:'Inter, sans-serif',color:palette.muted},grid:{left:12,right:68,top:18,bottom:62},dataZoom:navigation.dataZoom,
+    tooltip:{showContent:config.panel==='indicators'&&config.hoverValues,className:'chart-hover-details',trigger:'axis',backgroundColor:palette.panel,borderColor:palette.border,textStyle:{color:palette.text,fontSize:12},formatter:params=>{const point=points[params[0]?.dataIndex];return point?`${point.date} · U.S. Treasury<br/>2-year par yield: ${point.price.toFixed(2)}%`:'';}},
+    xAxis:{type:'category',data:points.map(point=>point.date),boundaryGap:false,axisLine:{lineStyle:{color:palette.border}},axisTick:{show:false},axisLabel:{color:palette.muted,fontSize:10,interval:Math.max(1,Math.floor(points.length/5)),hideOverlap:true}},
+    yAxis:{type:'value',position:'right',...priceScale.range,axisLabel:{color:palette.muted,fontSize:11,formatter:n=>`${n.toFixed(2)}%`},splitLine:{lineStyle:{color:palette.border}}},
+    series:[{type:'line',data:values,showSymbol:points.length===1,symbolSize:6,connectNulls:false,lineStyle:{color:palette.green,width:2},itemStyle:{color:palette.green},areaStyle:{color:'#087a4b12'}}],
   },navigation.setView);
   return <>{config.panel==='indicators'&&<div className="chart-settings-panel">Treasury daily observations · hover the plot to inspect a published yield. Candlestick indicators are not applied.</div>}{config.panel==='navigation'&&<ChartNavigation navigation={navigation} count={visible.length} label="observations" priceScale={priceScale} onReset={settings.reset} compact/>}<TouchChart scope="US2Y|D" panel={config.panel}><DrawingChart scope="US2Y|D" symbol="US 2Y" timeframe="D" times={points.map(point=>Date.parse(point.date)/1000)} instance={instance} formatValue={value=>`${value.toFixed(2)}%`} top={18} bottom={62}><div ref={ref} className="price-chart" role="img" tabIndex={0} {...priceScale.handlers} {...priceScale.attributes} onKeyDown={event=>{if(event.key==='Home'||event.key==='0'){event.preventDefault();settings.reset();}else if(!priceScale.onKeyDown(event))navigation.onKeyDown(event);}} data-view-start={navigation.view.start.toFixed(2)} data-view-end={navigation.view.end.toFixed(2)} aria-label={`US 2Y U.S. Treasury daily yield chart. ${points.length} published observations from ${points[0].date} to ${points.at(-1).date}. Last yield ${points.at(-1).price} percent. Drag the price axis to scale; double-click it to restore auto. Use plus/minus to zoom time, Shift plus/minus to scale price, arrows to pan, Home to reset.`}/></DrawingChart></TouchChart></>;
 }
 
 // Read-only overview: independent of full-chart saved axes, panels and drawings.
 export function GridChart({symbol,timeframe,candles,indicators,instrument,provider}){
+  const palette = useChartPalette();
   const {clockStamp,zoneLabel}=useDisplayTime();
   const singleSession=candles[0].date===candles.at(-1).date;
   const dateFormat=new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',month:'short',...(['W','M'].includes(timeframe)?{year:'2-digit'}:{day:'numeric',...(candles[0].date.slice(0,4)!==candles.at(-1).date.slice(0,4)?{year:'2-digit'}:{})})});
@@ -150,7 +153,7 @@ export function GridChart({symbol,timeframe,candles,indicators,instrument,provid
   const low=Math.min(...candles.map(row=>row.ohlc[2])),high=Math.max(...candles.map(row=>row.ohlc[3]));
   const padding=Math.max((high-low)*.12,high*.001),min=low-padding,max=high+padding;
   const zones=instrument?.zones.filter(zone=>zone.low<=max&&zone.high>=min)||[];
-  const overlays=[['ema9','EMA 9','#6f6483'],['ema21','EMA 21','#6f6483'],['vwap','VWAP','#3b2954']].flatMap(([id,name,color])=>{
+  const overlays=[['ema9','EMA 9',palette.muted],['ema21','EMA 21',palette.muted],['vwap','VWAP',palette.chartVwap]].flatMap(([id,name,color])=>{
     const values=indicators?.series?.[id];if(!values?.some(validIndicator))return [];
     if(id!=='vwap')return [{id,name,type:'line',data:values,showSymbol:false,connectNulls:false,lineStyle:{color,width:1.2},silent:true}];
     const groups=new Map();values.forEach((value,index)=>{const session=indicators.sessions?.[index]||candles[index]?.date;if(!groups.has(session))groups.set(session,Array(candles.length).fill(null));groups.get(session)[index]=value;});
@@ -159,12 +162,12 @@ export function GridChart({symbol,timeframe,candles,indicators,instrument,provid
   const {ref}=useChart({animation:false,textStyle:{fontFamily:'Inter, sans-serif'},grid:[{left:10,right:62,top:14,bottom:78},{left:10,right:62,bottom:32,height:30}],
     tooltip:{show:false},
     xAxis:[{type:'category',data:candles.map(row=>row.timestamp),boundaryGap:true,axisLabel:{show:false},axisTick:{show:false},axisLine:{show:false}},
-      {type:'category',gridIndex:1,data:labels,axisLabel:{color:'#6f6483',fontSize:10,lineHeight:13,hideOverlap:true,interval:Math.max(1,Math.floor(candles.length/4))},axisTick:{show:false},axisLine:{lineStyle:{color:'#ddd8ea'}}}],
-    yAxis:[{type:'value',position:'right',min,max,splitNumber:4,axisLabel:{color:'#6f6483',fontSize:11,formatter:value=>value.toFixed(2)},splitLine:{lineStyle:{color:'#e9e3f2'}}},{type:'value',gridIndex:1,show:false}],
-    series:[{id:'candles',type:'candlestick',data:candles.map(row=>row.ohlc),itemStyle:{color:colors.green,color0:colors.red,borderColor:colors.green,borderColor0:colors.red},barMaxWidth:10,
+      {type:'category',gridIndex:1,data:labels,axisLabel:{color:palette.muted,fontSize:10,lineHeight:13,hideOverlap:true,interval:Math.max(1,Math.floor(candles.length/4))},axisTick:{show:false},axisLine:{lineStyle:{color:palette.border}}}],
+    yAxis:[{type:'value',position:'right',min,max,splitNumber:4,axisLabel:{color:palette.muted,fontSize:11,formatter:value=>value.toFixed(2)},splitLine:{lineStyle:{color:palette.chartGrid}}},{type:'value',gridIndex:1,show:false}],
+    series:[{id:'candles',type:'candlestick',data:candles.map(row=>row.ohlc),itemStyle:{color:palette.green,color0:palette.red,borderColor:palette.green,borderColor0:palette.red},barMaxWidth:10,
       markArea:{silent:true,data:zones.filter(zone=>zone.low!==zone.high).map(zone=>[{yAxis:zone.low,itemStyle:{color:zone.type==='S'?'#ef747324':zone.type==='D'?'#29c5b029':'#8f590024'}},{yAxis:zone.high}])},
-      markLine:{silent:true,symbol:['none','none'],label:{show:false},data:[{yAxis:lastClose,lineStyle:{color:'#713bdd',type:'dotted',width:1},label:{show:true,position:'end',formatter:lastClose.toFixed(2),backgroundColor:'#713bdd',color:'#fff',padding:[3,4],borderRadius:3,fontSize:10}},...zones.filter(zone=>zone.low===zone.high).map(zone=>({yAxis:zone.low,lineStyle:{color:zone.type==='S'?colors.red:zone.type==='D'?colors.green:colors.amber,width:1}}))]}},
-      {id:'volume',type:'bar',xAxisIndex:1,yAxisIndex:1,silent:true,data:candles.map(row=>({value:row.volume,itemStyle:{color:row.ohlc[1]>=row.ohlc[0]?'#087a4b3d':'#bb304a4a'}}))},...overlays],
+      markLine:{silent:true,symbol:['none','none'],label:{show:false},data:[{yAxis:lastClose,lineStyle:{color:palette.primary,type:'dotted',width:1},label:{show:true,position:'end',formatter:lastClose.toFixed(2),backgroundColor:palette.primary,color:palette.onPrimary,padding:[3,4],borderRadius:3,fontSize:10}},...zones.filter(zone=>zone.low===zone.high).map(zone=>({yAxis:zone.low,lineStyle:{color:zone.type==='S'?palette.red:zone.type==='D'?palette.green:palette.amber,width:1}}))]}},
+      {id:'volume',type:'bar',xAxisIndex:1,yAxisIndex:1,silent:true,data:candles.map(row=>({value:row.volume,itemStyle:{color:row.ohlc[1]>=row.ohlc[0]?palette.chartVolumeUp:palette.chartVolumeDown}}))},...overlays],
   });
   return <div ref={ref} className="grid-mini-chart" role="img" data-candle-count={candles.length} data-history-from={candles[0].date} data-history-to={candles.at(-1).date} aria-label={`${symbol} ${timeframe} ${provider} chart · ${candles.length} available candles from ${candles[0].date} to ${candles.at(-1).date} · Last candle close ${lastClose.toFixed(2)} · ${zoneLabel} time · EMA 9/21 and VWAP when available`}/>;
 }

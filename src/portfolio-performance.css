@@ -17,8 +17,8 @@
 .perf-chart-key,.perf-comparison figcaption,.perf-coverage,.perf-tools,.perf-details,.perf-refresh {font-size:13px;}
 .perf-chart-key {display:flex; flex-wrap:wrap; align-items:center; gap:6px 26px; padding:3px 13px 5px;}
 .perf-chart-key span {display:inline-flex; align-items:center; gap:8px;}
-.perf-chart-key i {display:inline-block; width:27px; border-top:3px solid #713bdd;}
-.perf-chart-key span:nth-child(2) i {border-top:2px dashed #746d83;}
+.perf-chart-key i {display:inline-block; width:27px; border-top:3px solid var(--primary);}
+.perf-chart-key span:nth-child(2) i {border-top:2px dashed var(--muted);}
 .perf-shared {color:var(--muted); margin-left:auto;}
 .perf-canvas {width:100%; height:clamp(212px,19.6vw,342px);}
 .perf-inspector:not(:focus-within),.perf-sr {position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap;}

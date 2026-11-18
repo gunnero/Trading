@@ -3,7 +3,7 @@
 .nav-item>.pa-badge{margin-left:auto;flex:0 0 auto}
 .pa-filters{display:grid;grid-template-columns:1fr 1.3fr 1.2fr 1fr 1fr auto;gap:12px;align-items:end;padding:0 24px 20px}
 .pa-filters label{display:grid;gap:8px;font-size:12px;min-width:0}
-.pa-filters input,.pa-filters select{width:100%;min-width:0;height:40px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);padding:8px;font:inherit;color-scheme:light}
+.pa-filters input,.pa-filters select{width:100%;min-width:0;height:40px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);padding:8px;font:inherit;color-scheme:inherit}
 .pa-filters .text-button{min-height:40px;white-space:nowrap}
 .pa-pagination{border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:18px 24px;gap:12px;color:var(--muted);font-size:12px}
 .pa-pagination>div{display:flex;gap:8px}

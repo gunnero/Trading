@@ -19,11 +19,11 @@
 }
 .workspace-save-badge[data-state="saved"] {
   color: var(--green);
-  background: #d9f3e4;
+  background: var(--positive-tint);
 }
 .workspace-save-badge:is([data-state="error"], [data-state="conflict"]) {
   color: var(--amber);
-  background: #fff0d9;
+  background: var(--warning-tint);
 }
 .workspace-navigation {
   display: flex;
@@ -142,7 +142,7 @@
 .session-display-preview small { padding-left: 20px; border-left: 1px solid var(--border); }
 .workspace-note { margin: 9px 0 0; }
 .workspace-backup ul { padding-left: 18px; margin: 8px 0 12px; }
-.workspace-backup li::marker { color: #ae8fe9; }
+.workspace-backup li::marker { color: var(--accent-border); }
 .workspace-backup .button { display: inline-flex; align-items: center; gap: 9px; }
 @media (max-width: 760px) {
   .workspace-navigation { display: block; padding: 9px 0 0; }

@@ -1,3 +1,4 @@
+import {useChartPalette} from './appearance';
 import {useEffect,useRef,useState} from 'react';
 import {init,use} from 'echarts/core';
 import {LineChart} from 'echarts/charts';
@@ -8,6 +9,7 @@ import {useDisplayTime} from './DisplayTime';
 use([LineChart,GridComponent,TooltipComponent,CanvasRenderer]);
 
 export default function PortfolioPerformanceChart({comparison,benchmark}){
+  const palette = useChartPalette();
   const {clockStamp,clockTime,clockDate,briefingTime,displayDay}=useDisplayTime();
   const element=useRef(null),chart=useRef(null);
   const [observation,setObservation]=useState(null);
@@ -19,36 +21,36 @@ export default function PortfolioPerformanceChart({comparison,benchmark}){
   useEffect(()=>{
     const node=element.current,graph=init(node);
     chart.current=graph;
-    const colors=['#713bdd','#746d83'],gridColor='#ded7ec';
+    const colors=[palette.primary,palette.muted],gridColor=palette.chartGrid;
     const date=at=>briefingTime(at,{hour:undefined,minute:undefined});
     const withinDay=displayDay(start)===displayDay(end);
     const intraday=end-start<2*86400000;
     const xAxis=(width)=>{
       const splits=Math.min(points.length-1,Math.max(2,Math.min(10,Math.floor((width-96)/89))));
       return {type:'value',min:start,max:end,interval:(end-start)/splits,axisTick:{show:true},
-        axisLine:{lineStyle:{color:'#9f96b3'}},splitLine:{show:true,lineStyle:{color:gridColor}},
-        axisLabel:{color:'#41364e',fontSize:12,lineHeight:15,hideOverlap:true,formatter:at=>withinDay?clockTime(at):date(at)+'\n'+(intraday?clockTime(at):clockDate(at).split(',')[0])},
+        axisLine:{lineStyle:{color:palette.chartAxis}},splitLine:{show:true,lineStyle:{color:gridColor}},
+        axisLabel:{color:palette.text,fontSize:12,lineHeight:15,hideOverlap:true,formatter:at=>withinDay?clockTime(at):date(at)+'\n'+(intraday?clockTime(at):clockDate(at).split(',')[0])},
         axisPointer:{label:{formatter:p=>clockStamp(p.value)}}};
     };
     graph.setOption({
       animation:false,grid:{left:52,right:67,top:14,bottom:41},
-      textStyle:{fontFamily:'Inter, sans-serif'},tooltip:{trigger:'axis',confine:true,renderMode:'richText',
+      textStyle:{fontFamily:'Inter, sans-serif'},tooltip:{backgroundColor:palette.panel,borderColor:palette.border,textStyle:{color:palette.text},trigger:'axis',confine:true,renderMode:'richText',
         formatter:items=>[clockStamp(items[0].value[0]),...items.map(p=>p.seriesName+'   '+p.value[1].toFixed(2))].join('\n')},
       xAxis:xAxis(node.clientWidth),
-      yAxis:{type:'value',scale:true,splitNumber:7,boundaryGap:['7%','12%'],axisLabel:{color:'#41364e',fontSize:12},
-        splitLine:{lineStyle:{color:gridColor}},axisLine:{show:true,lineStyle:{color:'#9f96b3'}}},
+      yAxis:{type:'value',scale:true,splitNumber:7,boundaryGap:['7%','12%'],axisLabel:{color:palette.text,fontSize:12},
+        splitLine:{lineStyle:{color:gridColor}},axisLine:{show:true,lineStyle:{color:palette.chartAxis}}},
       series:['value','benchmark'].map((field,i)=>({
         name:i?benchmark:'Account',type:'line',symbol:'circle',symbolSize:(_,p)=>p.dataIndex===points.length-1?7:0,
         data:points.map(p=>[p.at,p[field]]),itemStyle:{color:colors[i]},
         lineStyle:{color:colors[i],width:i?1.8:2.4,type:i?'dashed':'solid'},
-        endLabel:{show:true,distance:7,color:'#fff',backgroundColor:colors[i],borderRadius:3,padding:[3,5],
+        endLabel:{show:true,distance:7,color:palette.onPrimary,backgroundColor:colors[i],borderRadius:3,padding:[3,5],
           formatter:p=>p.value[1].toFixed(1)},labelLayout:{moveOverlap:'shiftY'},
       })),
     });
     const observer=new ResizeObserver(()=>{if(node.clientWidth){graph.resize();graph.setOption({xAxis:xAxis(node.clientWidth)});}});
     observer.observe(node);
     return()=>{observer.disconnect();chart.current=null;graph.dispose();};
-  },[points,start,end,benchmark,briefingTime,clockDate,clockStamp,clockTime,displayDay]);
+  },[points,start,end,benchmark,briefingTime,clockDate,clockStamp,clockTime,displayDay, palette]);
 
   function inspect(position){
     setObservation(position);

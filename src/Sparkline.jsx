@@ -1,8 +1,9 @@
+import {useChartPalette} from './appearance';
 import {memo, useEffect, useRef} from 'react';
 
-const colors={green:'#087a4b',red:'#bb304a',amber:'#8f5900',muted:'#6f6483'};
 // A preview needs only a stroke, not an independent interactive chart engine.
 export const Sparkline=memo(function Sparkline({tone='green',data=[]}){
+  const palette = useChartPalette();
   const ref=useRef(null);
   useEffect(()=>{
     const canvas=ref.current;
@@ -16,7 +17,7 @@ export const Sparkline=memo(function Sparkline({tone='green',data=[]}){
       const values=data.filter(value=>typeof value==='number'&&Number.isFinite(value));
       if(values.length<2)return;
       const low=Math.min(...values),span=Math.max(...values)-low;
-      context.strokeStyle=colors[tone]||colors.muted;context.lineWidth=1.3;context.lineJoin='round';context.beginPath();
+      context.strokeStyle=palette[tone]||palette.muted;context.lineWidth=1.3;context.lineJoin='round';context.beginPath();
       let connected=false;
       data.forEach((value,index)=>{
         if(typeof value!=='number'||!Number.isFinite(value)){connected=false;return;}
@@ -29,6 +30,6 @@ export const Sparkline=memo(function Sparkline({tone='green',data=[]}){
     const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);};
     const observer=new ResizeObserver(schedule);observer.observe(canvas);schedule();
     return()=>{observer.disconnect();cancelAnimationFrame(frame);};
-  },[tone,data]);
+  },[tone,data, palette]);
   return <canvas className="sparkline" ref={ref} aria-hidden="true"/>;
 });

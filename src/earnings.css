@@ -12,8 +12,8 @@
 .earnings-page .segmented{display:inline-flex;background:transparent;border:0;border-radius:5px;gap:3px;padding:0}
 .earnings-page .segmented button{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:4px;font-size:11px;min-height:28px;white-space:nowrap}
 .earnings-page .segmented button.selected{background:var(--selection);color:var(--primary)}
-.earnings-page .earnings-view{border:1px solid #c7b4e8;gap:0}
-.earnings-page .earnings-view button.selected{background:var(--primary);color:white}
+.earnings-page .earnings-view{border:1px solid var(--accent-border);gap:0}
+.earnings-page .earnings-view button.selected{background:var(--primary);color:var(--on-primary)}
 .earnings-board-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
 .earnings-date-picker{display:flex;align-items:center;gap:7px;color:var(--primary);border-right:1px solid var(--border);padding-right:12px}
 .earnings-date-picker input{width:124px;padding:4px 0;background:transparent;border:0;font-size:11px;color:var(--text);min-height:28px}
@@ -46,7 +46,7 @@
 .earnings-watched.is-watched{color:var(--primary)}
 .earnings-level-badge{display:inline-flex;align-items:center;background:var(--selection);color:var(--primary);border:0;border-radius:4px;padding:3px 4px;font-size:8px;font-weight:600;line-height:1;flex:none}
 .earnings-result{display:inline-flex;padding:3px 5px;border-radius:5px;white-space:nowrap;font-size:9px;font-weight:500;text-transform:none;line-height:1.2}
-.earnings-result.beat{background:#d8f4e5;color:var(--green)}.earnings-result.miss{background:#faddE4;color:var(--red)}.earnings-result.met,.earnings-result.reported{background:var(--selection);color:var(--text)}.earnings-result.pending{background:#fff0d3;color:var(--amber)}
+.earnings-result.beat{background:var(--positive-tint);color:var(--green)}.earnings-result.miss{background:var(--negative-tint);color:var(--red)}.earnings-result.met,.earnings-result.reported{background:var(--selection);color:var(--text)}.earnings-result.pending{background:var(--warning-tint);color:var(--amber)}
 .earnings-price-move{position:relative}
 .earnings-price-move>div{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .earnings-price-move strong{font-size:18px}.earnings-price-move span,.earnings-price-move small{font-size:11px;color:var(--muted)}.earnings-price-move>small{display:block;margin-top:4px}

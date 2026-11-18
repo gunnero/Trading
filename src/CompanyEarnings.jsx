@@ -1,3 +1,4 @@
+import {useChartPalette} from './appearance';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {CalendarBlank, ChartBar, Stack} from '@phosphor-icons/react';
 import {formatDate} from './data/market';
@@ -12,6 +13,7 @@ const percent = value => Number.isFinite(value) ? `${value > 0 ? '+' : ''}${numb
 const quarter = period => period.replace(/^([1-4])Q(\d{4})$/, 'Q$1 $2');
 
 function EarningsChart({rows, revenue = false, currency}) {
+  const palette = useChartPalette();
   const element = useRef(null);
   const values = rows.flatMap(row => revenue ? [row.revenue] : [row.actual, row.estimate]).filter(Number.isFinite);
   const available = values.length > 0;
@@ -30,30 +32,30 @@ function EarningsChart({rows, revenue = false, currency}) {
         return {
           name, type: 'bar', barGap: '4%', barMaxWidth: 48, itemStyle: style,
           data: rows.map(row => Number.isFinite(row[field]) ? row[field] / scale : null),
-          label: {show: true, position: 'outside', fontSize: 10, color: '#251b3a',
+          label: {show: true, position: 'outside', fontSize: 10, color: palette.text,
             formatter: point => number(point.value, {minimumFractionDigits: revenue ? 0 : 2})},
           labelLayout: {hideOverlap: true}
         };
       }
-      const series = [bars(revenue ? 'revenue' : 'actual', 'Reported', {color: '#713bdd'})];
+      const series = [bars(revenue ? 'revenue' : 'actual', 'Reported', {color: palette.primary})];
       if (showEstimates) series.push(bars('estimate', 'Estimate', {
-        color: '#e4d9fa', borderColor: '#ad8be6', borderWidth: 1
+        color: palette.chartEstimate, borderColor: palette.chartAxis, borderWidth: 1
       }));
       chart.setOption({
-        animation: false, textStyle: {fontFamily: 'Inter, sans-serif', color: '#251b3a'},
+        animation: false, textStyle: {fontFamily: 'Inter, sans-serif', color: palette.text},
         grid: {left: 3, right: 6, top: 22, bottom: 4, containLabel: true},
-        tooltip: {trigger: 'axis', confine: true},
+        tooltip: {backgroundColor:palette.panel,borderColor:palette.border,textStyle:{color:palette.text},trigger: 'axis', confine: true},
         xAxis: {type: 'category', data: rows.map(r => quarter(r.period)), axisTick: {show: false},
-          axisLine: {lineStyle: {color: '#d6cde8'}}, axisLabel: {fontSize: 10, interval: 0, color: '#554969'}},
-        yAxis: {type: 'value', splitNumber: 5, axisLabel: {fontSize: 10, color: '#6f6483'},
-          splitLine: {lineStyle: {color: '#e3dcef'}}},
+          axisLine: {lineStyle: {color: palette.border}}, axisLabel: {fontSize: 10, interval: 0, color: palette.muted}},
+        yAxis: {type: 'value', splitNumber: 5, axisLabel: {fontSize: 10, color: palette.muted},
+          splitLine: {lineStyle: {color: palette.chartGrid}}},
         series
       });
       observer = new ResizeObserver(() => chart.resize());
       observer.observe(element.current);
     }).catch(() => {});
     return () => { active = false; observer?.disconnect(); chart?.dispose(); };
-  }, [rows, revenue, scale, available, showEstimates]);
+  }, [rows, revenue, scale, available, showEstimates, palette]);
 
   return <section className="company-earnings-chart">
     <div className="company-eps-heading">

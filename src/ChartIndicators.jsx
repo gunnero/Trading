@@ -1,7 +1,7 @@
 import {useDisplayTime} from './DisplayTime';
 export const INDICATORS=[
-  {key:'ema',label:'9 / 21 EMA ribbon',color:'#81808c',series:['ema9','ema21']},
-  {key:'vwap',label:'Session VWAP',color:'#3b2954',series:['vwap']},
+  {key:'ema',label:'9 / 21 EMA ribbon',color:'var(--chart-ema)',series:['ema9','ema21']},
+  {key:'vwap',label:'Session VWAP',color:'var(--chart-vwap)',series:['vwap']},
   {key:'pdh',label:'Previous day high',color:'#4caf50',series:['pdh'],cross:true},
   {key:'pdl',label:'Previous day low',color:'#f23645',series:['pdl'],cross:true},
   {key:'pdc',label:'Previous day close',color:'#9e7c08',series:['pdc'],cross:true},

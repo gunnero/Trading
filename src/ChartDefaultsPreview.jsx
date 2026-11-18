@@ -49,7 +49,7 @@ export function ChartDefaultsPreview({draft}) {
   const sma = enabled.some(item => item.key.startsWith('sma'));
   const previous = enabled.some(item => item.cross);
   const legend = [
-    [draft.enabled.ema, 'EMA 9 / 21', '#777383'], [enabled.some(i => i.key === 'vwap'), 'Session VWAP', '#443058'],
+    [draft.enabled.ema, 'EMA 9 / 21', 'var(--chart-ema)'], [enabled.some(i => i.key === 'vwap'), 'Session VWAP', 'var(--chart-vwap)'],
     [previous, 'Previous day', '#a18330'], [sma, 'Daily SMAs', '#148790'],
     [draft.showLevels, 'Imported levels', '#79c58d'], [draft.drawingsVisible, 'Drawing', draft.drawingColor],
   ];

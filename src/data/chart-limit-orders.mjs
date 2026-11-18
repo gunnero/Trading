@@ -4,10 +4,10 @@ const price=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFracti
 
 // Account, listing and currency matching happens before a chart receives these
 // read-only references. Never derive an unreported remaining quantity here.
-export function chartLimitOrders(lines=[]){
+export function chartLimitOrders(lines=[], colors={green:'#087a4b',red:'#bb304a'}){
   if(!Array.isArray(lines))return [];
   return lines.filter(line=>line&&['BUY','SELL'].includes(line.side)&&Number.isFinite(line.value)&&line.value>0&&!terminal.has(line.status)).map(line=>({...line,
-    color:line.side==='BUY'?'#087a4b':'#bb304a',
+    color:line.side==='BUY'?colors.green:colors.red,
     remainingQuantity:Number.isFinite(line.remainingQuantity)&&line.remainingQuantity>=0?line.remainingQuantity:null,
   }));
 }

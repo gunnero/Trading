@@ -52,10 +52,10 @@
 .pe-company:focus-visible {outline:2px solid var(--primary); outline-offset:-2px; border-radius:4px;}
 .pe-weight {display:flex; align-items:center; gap:10px; padding-right:clamp(3px,2vw,30px);}
 .pe-weight b,.pe-row>.pe-value {font-weight:650;}
-.pe-track {flex:1; height:9px; overflow:hidden; border-radius:6px; background:#ddd4ef;}
-.pe-track i {display:block; height:100%; background:#986cde; border-radius:inherit;}
+.pe-track {flex:1; height:9px; overflow:hidden; border-radius:6px; background:var(--selection);}
+.pe-track i {display:block; height:100%; background:var(--primary); border-radius:inherit;}
 .pe-count {display:flex; align-items:center; justify-content:space-between; gap:6px;}
-.pe-expanded {padding:0; background:#f4f0fa;}
+.pe-expanded {padding:0; background:var(--bg);}
 .pe-ownership {padding:6px 28px 9px 46px;}
 .pe-ownership table {font-size:13px;}
 .pe-ownership th,.pe-ownership td {padding:7px 9px; border-bottom:1px solid var(--border);}
@@ -64,7 +64,7 @@
 .pe-ownership small,.pe-ownership p {color:var(--muted); font-size:11px; line-height:1.4;}
 .pe-ownership small {display:block; margin-top:2px;}
 .pe-ownership p {margin:7px 9px 0;}
-.pe-other-table {background:#f7f4fc;}
+.pe-other-table {background:var(--panel);}
 .pe-other-table>thead th:first-child,.is-nested .pe-company {padding-left:32px;}
 .pe-feedback {padding:0 16px 12px; font-size:13px; color:var(--muted);}
 .pe-foot {justify-content:space-between; flex-wrap:wrap; gap:7px 16px; margin-top:10px; color:var(--muted); font-size:12px; line-height:1.5;}

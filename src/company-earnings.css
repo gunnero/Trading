@@ -41,8 +41,8 @@
 .company-eps-legend, .company-eps-legend span, .company-history-heading span { display: inline-flex; align-items: center; }
 .company-eps-legend { gap: 10px; color: var(--muted); font-size: 11px; }
 .company-eps-legend span { gap: 5px; }
-.company-eps-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: #713bdd; }
-.company-eps-legend span + span::before { background: #e4d9fa; border: 1px solid #ad8be6; }
+.company-eps-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: var(--primary); }
+.company-eps-legend span + span::before { background: var(--chart-estimate); border: 1px solid var(--accent-border); }
 .company-eps-canvas, .company-chart-empty { width: 100%; height: clamp(158px,20vh,204px); }
 .company-chart-empty { display: grid; place-content: center; color: var(--muted); font-size: var(--company-body); text-align: center; }
 .company-history-heading { margin-bottom: 8px; }
@@ -61,7 +61,7 @@
 .company-earnings tbody th, .company-earnings tbody td:nth-child(3), .company-earnings tbody td:nth-child(5) { font-weight: 650; }
 .company-earnings tbody th small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
 .company-report-status { display: inline-block; border-radius: 4px; background: var(--selection); padding: 1px 6px; font-size: 11px; font-weight: 600; }
-.company-report-status.green { background: #ddf3e5; }
+.company-report-status.green { background: var(--positive-tint); }
 .company-surprise { display: inline-block; padding-inline-start: 6px; font-size: 11px; color: var(--muted); }
 .company-earnings-coverage { font-size: 11px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
 .company-earnings .company-disclosure { margin: 0; }
