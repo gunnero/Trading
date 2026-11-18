@@ -19,7 +19,8 @@ export function filterWatchlist(entries,quotes,{query='',group='All',movement='A
   const search=query.trim().toLowerCase();
   const rows=entries.filter(entry=>{
     if(group!=='All'&&entry.group!==group)return false;
-    if(!`${entry.symbol} ${entry.exchange}`.toLowerCase().includes(search))return false;
+    const name=quotes[quoteKey(entry)]?.quote?.name||'';
+    if(!`${entry.id} ${entry.symbol} ${entry.exchange} ${name}`.toLowerCase().includes(search))return false;
     const change=watchlistMove(entry,quotes);
     return movement==='All'||change!==null&&(movement==='Gainers'?change>0:movement==='Losers'?change<0:movement==='Unchanged'&&change===0);
   });

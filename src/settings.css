@@ -104,3 +104,13 @@
 .settings-net-toggle{display:flex;align-items:center;gap:12px;cursor:pointer}.settings-net-toggle input{width:18px;height:18px;accent-color:var(--teal,var(--primary))}
 
 }
+
+.settings-compact-view {min-width:0}
+.app-shell .settings-compact-view>header.page-header {min-height:0;margin:0;padding:24px 0 5px;border:0}
+.settings-compact-view .settings-page {padding-top:0}
+.settings-compact-view .settings-layout {gap:16px}
+.app-shell .settings-compact-view .settings-nav {gap:8px;align-items:center;padding:4px 0 12px}
+.app-shell .settings-compact-view .settings-nav a {padding:6px 15px;min-height:34px;border:0;border-radius:5px}
+.settings-compact-view .settings-nav a>svg {display:none}
+@media(max-width:760px){.app-shell .settings-compact-view>header.page-header{padding:17px 0 6px}}
+@media(min-width:761px){.app-shell .settings-compact-view .page-header h1{font-size:36px}}

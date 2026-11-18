@@ -77,21 +77,25 @@ try {
   mark('Options plan draft, budget, saved plans and notes');
 
   await openWatchlist(page);
-  await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
+  await expect(page.locator('[data-watchlist-id]')).toHaveCount(52);
   await page.getByRole('textbox', { name: 'Search watchlist' }).fill('NVDA');
-  await expect(page.locator('.watch-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('[data-watchlist-id]')).toHaveCount(1);
   await page.getByRole('button', { name: 'NVDA', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('211.26–212.71');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Search watchlist' }).fill('');
+  await page.locator('.listing-filters summary').click();
   await page.getByRole('combobox', { name: 'Filter status' }).selectOption('Testing demand');
-  await expect(page.locator('.watch-table tbody tr')).toHaveCount(3);
-  await page.getByRole('combobox', { name: 'Filter asset group' }).selectOption('CRYPTO');
+  await expect(page.locator('[data-watchlist-id]')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Crypto',exact:true }).click();
   await expect(page.getByRole('heading', { name: 'No symbols match' })).toBeVisible();
   await page.getByRole('button', { name: 'Reset filters' }).click();
+  await page.getByRole('button',{name:'Stocks',exact:true}).click();
+  await page.locator('.listing-filters summary').click();
   await page.getByRole('combobox', { name: 'Sort watchlist' }).selectOption('Biggest move');
-  await expect(page.locator('.watch-table tbody tr').first()).toContainText('NVDA');
+  await expect(page.locator('[data-watchlist-id]').first()).toContainText('NVDA');
+  await page.getByRole('button',{name:'All',exact:true}).click();
   await page.getByRole('textbox', { name: 'Search watchlist' }).fill('BTC');
   await page.getByRole('button', { name: 'BTCUSD', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('Your exchange’s spot crypto quote is not connected');
@@ -103,11 +107,11 @@ try {
   await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
   await page.getByLabel('Watchlist export').fill('###FUND,NASDAQ:QQQ,NASDAQ:QQQ,AMEX:SPY');
   await page.getByRole('dialog').getByRole('button', { name: 'Import watchlist', exact: true }).click();
-  await expect(page.locator('.watch-table tbody tr')).toHaveCount(2);
+  await expect(page.locator('[data-watchlist-id]')).toHaveCount(2);
   await page.getByRole('button', { name: 'Import watchlist', exact: true }).click();
   await page.getByLabel('Watchlist export').fill(originalWatchlist);
   await page.getByRole('dialog').getByRole('button', { name: 'Import watchlist', exact: true }).click();
-  await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);
+  await expect(page.locator('[data-watchlist-id]')).toHaveCount(52);
   mark('Watchlist import, deduplication and restore');
 
   await nav('Overview').click();await page.locator('.page-header').getByRole('button',{name:'Key levels',exact:true}).click();
@@ -152,7 +156,7 @@ try {
       await page.getByRole('button', { name: 'Open navigation' }).click();
       await openWatchlist(page);
       await assertNoOverflow();
-      await expect(page.getByRole('heading', { name: 'Watchlist radar' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^Watchlist · \d+ symbols?$/ })).toBeVisible();
       await snapshot('mobile-watchlist');
       await page.getByRole('button', { name: 'Open navigation' }).click();
       await nav('Overview').click();

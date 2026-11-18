@@ -37,11 +37,11 @@ try{
     if([390,820,1488].includes(width)){
       await page.screenshot({path:`${dir}/overview-${width}.png`});await chart.scrollIntoViewIfNeeded();await page.screenshot({path:`${dir}/chart-${width}.png`});
     }
-    await page.goto(runtime.url+'/#watchlist');await expect(page.locator('.watch-table tbody tr')).toHaveCount(52);await noOverflow(page);
+    await page.goto(runtime.url+'/#watchlist');await expect(page.locator('[data-watchlist-id]')).toHaveCount(52);await noOverflow(page);
     expect(await page.locator('[_echarts_instance_]').count()).toBe(0);
     const row=page.locator('[data-watchlist-id="NASDAQ:NVDA"]');await row.scrollIntoViewIfNeeded();
     if(width<=760){
-      for(const selector of ['td:nth-child(3)','td:nth-child(4)','.zone-cell','td:nth-child(6)','.reason-col','.watchlist-remove'])await expect(row.locator(selector)).toBeVisible();
+      for(const selector of ['.listing-venue','.listing-kind','.listing-price','.listing-change','.listing-context','.listing-actions'])await expect(row.locator(selector)).toBeVisible();
       const r=await row.boundingBox();expect(r.width).toBeLessThanOrEqual(width);expect(r.height).toBeLessThan(240);
     }
     if([390,820].includes(width))await page.screenshot({path:`${dir}/watchlist-${width}.png`});
@@ -78,8 +78,8 @@ try{
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await expect(chart).toHaveAttribute('data-price-scale','manual');
   await panel.getByRole('button',{name:'Drawing tools',exact:true}).tap();await panel.getByRole('button',{name:'Horizontal level',exact:true}).tap();await chart.scrollIntoViewIfNeeded();const drawingBox=await chart.boundingBox();await mobile.touchscreen.tap(drawingBox.x+100,drawingBox.y+120);await expect(panel.locator('.drawing-shape')).toHaveCount(1);
   await expect(mobile.locator('.workspace-save-status')).toContainText('Workspace saved');await mobile.reload();await expect(panel.locator('.drawing-shape')).toHaveCount(1);await expect(chart).toHaveAttribute('data-price-scale','manual');await panel.getByRole('button',{name:'Reset view',exact:true}).tap();await expect(chart).toHaveAttribute('data-price-scale','auto');await expect(panel.locator('.drawing-shape')).toHaveCount(1);
-  await openWatchlist(mobile);await mobile.getByRole('textbox',{name:'Search watchlist'}).fill('NVDA');await mobile.locator('.watch-table .symbol-button').tap();const dialog=mobile.getByRole('dialog');await expect(dialog.locator('.price-chart')).toBeVisible();
-  expect(await dialog.evaluate(node=>node.scrollWidth-node.clientWidth)).toBeLessThanOrEqual(1);await dialog.evaluate(node=>{node.scrollTop=1000;});await expect(dialog.getByRole('button',{name:'Close dialog',exact:true})).toBeInViewport();await dialog.getByRole('button',{name:'Close dialog',exact:true}).tap();await expect(mobile.locator('.watch-table .symbol-button')).toBeFocused();
+  await openWatchlist(mobile);await mobile.getByRole('textbox',{name:'Search watchlist'}).fill('NVDA');await mobile.locator('.listing-symbol').tap();const dialog=mobile.getByRole('dialog');await expect(dialog.locator('.price-chart')).toBeVisible();
+  expect(await dialog.evaluate(node=>node.scrollWidth-node.clientWidth)).toBeLessThanOrEqual(1);await dialog.evaluate(node=>{node.scrollTop=1000;});await expect(dialog.getByRole('button',{name:'Close dialog',exact:true})).toBeInViewport();await dialog.getByRole('button',{name:'Close dialog',exact:true}).tap();await expect(mobile.locator('.listing-symbol')).toBeFocused();
   await mobile.close();mark('Phone drawer traps/returns focus, page refresh preserves navigation, chart swipes scroll until activated, touch axis/drawings work and persist, Reset keeps drawings, and company dialogs stay closable');
 
   const perf=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});await setup(perf);await perf.clock.install({time:new Date('2026-10-25T12:00:00Z')});

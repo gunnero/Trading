@@ -16,13 +16,6 @@
 
 .transfer-global{margin-bottom:20px}.transfer-global header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.transfer-global header>span{font-size:12px;color:var(--muted)}.transfer-mkd-net>span,.transfer-mkd-net>strong,.transfer-mkd-net>small{display:block}.transfer-mkd-net>strong{margin:8px 0;font-size:22px;overflow-wrap:anywhere}
 
-.settings-transfers-view {min-width:0}
-.app-shell .settings-transfers-view>header.page-header {min-height:0;margin:0;padding:24px 0 5px;border:0}
-.settings-transfers-view .settings-page {padding-top:0}
-.settings-transfers-view .settings-layout {gap:16px}
-.app-shell .settings-transfers-view .settings-nav {gap:8px;align-items:center;padding:4px 0 12px}
-.app-shell .settings-transfers-view .settings-nav a {padding:6px 15px;min-height:34px;border:0;border-radius:5px}
-.settings-transfers-view .settings-nav a>svg {display:none}
 .transfers-desk {gap:14px}
 .ledger-title,.ledger-actions,.ledger-title .ledger-unlocked,.bank-brand,.bank-sources,.bank-facts,.bank-facts>span,.ledger-platforms summary span {display:flex;align-items:center;gap:10px}
 .ledger-title {padding:5px 0;gap:14px}
@@ -99,7 +92,6 @@ button.ledger-status:hover {text-decoration:underline}
 .transfers-desk .transfer-review-form {margin:8px}
 @media(max-width:1120px) {.bank-controls {grid-template-columns:repeat(3,minmax(0,1fr))}.bank-controls>.button {justify-self:start}.bank-hourly {grid-column:span 2}}
 @media(max-width:760px) {
-  .app-shell .settings-transfers-view>header.page-header {padding:17px 0 6px}
   .ledger-title {gap:7px;flex-wrap:wrap}.ledger-title .button {min-height:36px}
   .transfers-desk .panel.transfer-connection {padding:12px}
   .bank-controls {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 8px}
@@ -128,7 +120,6 @@ button.ledger-status:hover {text-decoration:underline}
 .ledger-group-button span {min-width:0;overflow-wrap:anywhere}
 .ledger-table td:nth-child(2) {overflow-wrap:anywhere}
 @media(min-width:761px) {
- .app-shell .settings-transfers-view .page-header h1 {font-size:36px}
  .bank-controls {min-height:59px}
  .bank-facts {min-height:38px}
  .bank-controls small,.bank-last strong,.bank-hourly,.bank-brand span {font-size:13px}

@@ -19,14 +19,14 @@ try{
   for(const [route,title] of pages){
    await go(route,title);await expect(page.locator('main h1')).toHaveCount(1);await expect(page.locator('.page-header')).toHaveCount(1);await expect(page.locator('.topbar')).toHaveCount(0);
    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth),`${route} overflow at ${width}`).toBeLessThanOrEqual(1);
-   const metric=await page.locator('.page-header').evaluate(h=>{const t=h.querySelector('h1'),d=h.querySelector('.page-header-description'),s=getComputedStyle(t),b=h.getBoundingClientRect(),r=t.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,titleX:r.x,titleY:r.y,font:s.fontFamily,size:s.fontSize,weight:s.fontWeight,line:s.lineHeight,tracking:s.letterSpacing,color:s.color,background:getComputedStyle(h).backgroundColor,subtitle:getComputedStyle(d).fontSize};});
+   const metric=await page.locator('.page-header').evaluate(h=>{const t=h.querySelector('h1'),d=h.querySelector('.page-header-description'),s=getComputedStyle(t),b=h.getBoundingClientRect(),r=t.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,titleX:r.x,titleY:r.y,font:s.fontFamily,size:s.fontSize,weight:s.fontWeight,line:s.lineHeight,tracking:s.letterSpacing,color:s.color,background:getComputedStyle(h).backgroundColor,subtitle:d?getComputedStyle(d).fontSize:null};});
    baseline??=metric;
    const marketHeader=['briefing','earnings','news'].includes(route);
    const sharedTypography=['titleX','font','weight','color','background'];
    const commonKeys=['x','y','width','titleX','titleY','font','size','weight','line','tracking','color','background','subtitle'];
-   const keys=route==='sentiment'?sharedTypography:marketHeader||['journal/trades','journal/plans','review'].includes(route)?[...sharedTypography,'tracking']:commonKeys;
+   const keys=['sentiment','settings/watchlist'].includes(route)?sharedTypography:marketHeader||['journal/trades','journal/plans','review'].includes(route)?[...sharedTypography,'tracking']:commonKeys;
    for(const key of keys)if(metric[key]!==baseline[key])layoutIssues.push({route,width,key,actual:metric[key],expected:baseline[key]});
-   const titleSize=['journal/plans','review'].includes(route)&&width>740?'36px':route==='sentiment'?(width<=600?'30px':'38px'):width<=600?'27px':marketHeader?'28px':'30px';
+   const titleSize=route==='settings/watchlist'&&width>760?'36px':['journal/plans','review'].includes(route)&&width>740?'36px':route==='sentiment'?(width<=600?'30px':'38px'):width<=600?'27px':marketHeader?'28px':'30px';
    expect(metric.size,route+' at '+width).toBe(titleSize);
    for(const action of await page.locator('.page-header-actions button,.page-header-actions a').all()){await expect(action).toBeVisible();const b=await action.boundingBox();expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width+1);}
    if(width===1488){await page.locator('.page-header').screenshot({path:`${dir}/${route.replace('/','-')}-header.png`});if(!route.includes('/')||route==='journal/trades')await page.screenshot({path:`${dir}/${route.replace('/','-')}-desktop.png`});}

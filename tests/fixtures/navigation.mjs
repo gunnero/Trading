@@ -10,5 +10,5 @@ export async function openWatchlist(page) {
   }
   await link.click();
   await expect(link).toHaveAttribute('aria-current','page');
-  await expect(page.getByRole('heading',{name:'Watchlist radar',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/^Watchlist · \d+ symbols?$/})).toBeVisible();
 }
