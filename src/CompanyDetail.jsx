@@ -2,7 +2,7 @@ import {usePortfolioPrivacy} from './PortfolioPrivacy';
 import {useDisplayTime} from './DisplayTime';
 import {apiFetch} from './auth-client';
 import {useEffect,useState,useId} from 'react';
-import {ArrowUpRight,CaretRight,ArrowsClockwise,AppleLogo,Buildings,SlidersHorizontal,Tag,ChartBar,Stack,Coins,Note} from '@phosphor-icons/react';
+import {ArrowUpRight,CaretRight,ArrowsClockwise,AppleLogo,Buildings,Star,SlidersHorizontal,Tag,ChartBar,Stack,Coins,Note} from '@phosphor-icons/react';
 import {PriceChart} from './Charts';
 import {INDICATORS} from './ChartIndicators';
 import {ChartHeader,ChartLevels,useSavedChart,useSavedTimeframe} from './ChartSettings';
@@ -184,8 +184,9 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
  const chartOrderLines=showOrders&&history.quote?.providerSymbol===entry.symbol.replaceAll('.','-')?orderLines.filter(line=>line.currency===history.quote.currency):[];
  const source=snapshot.status==='loading'?'Loading company snapshot…':snapshot.status==='unavailable'?snapshot.message:`${snapshot.status==='stale'?'Cached snapshot':'Yahoo company snapshot'} · Fetched ${clockStamp(snapshot.fetchedAt)} ${zoneLabel}`;
  const Logo=entry.symbol==='AAPL'?AppleLogo:Buildings;
+ const CustomIcon=tab==='earnings'?Star:SlidersHorizontal;
  return <div className="company-detail" data-tab={tab}>
-  <div className="company-masthead"><header className="company-identity"><span className="company-mark" aria-hidden="true"><Logo size={30} weight={entry.symbol==='AAPL'?'fill':'regular'}/></span><div className="company-identity-copy"><h3><strong>{data?.name||q?.name||entry.symbol}</strong><span> · {entry.symbol} · {entry.exchange} · {q?.currency||data?.currency||'—'}</span></h3>{tab==='overview'?<div className="company-quote"><strong>{quotePrice(q)}</strong><span className={quoteTone(q)}>{quoteChange(q)}</span><small>{q?`Yahoo · ${quoteStamp(q)} · ${quoteDelay(q)}`:'Quote unavailable'}{stale?' · Cached / old market data':''}</small></div>:<p>{data?`Observation: ${clockStamp(data.quoteObservedAt)} ${zoneLabel} · Yahoo Finance`:source}</p>}</div>{onUseCustom&&<button className="button primary company-use" onClick={onUseCustom}><SlidersHorizontal size={15}/>Use as Custom</button>}</header>
+  <div className="company-masthead"><header className="company-identity"><span className="company-mark" aria-hidden="true"><Logo size={30} weight={entry.symbol==='AAPL'?'fill':'regular'}/></span><div className="company-identity-copy"><h3><strong>{data?.name||q?.name||entry.symbol}</strong><span> · {entry.symbol} · {entry.exchange} · {q?.currency||data?.currency||'—'}</span></h3>{tab==='overview'?<div className="company-quote"><strong>{quotePrice(q)}</strong><span className={quoteTone(q)}>{quoteChange(q)}</span><small>{q?`Yahoo · ${quoteStamp(q)} · ${quoteDelay(q)}`:'Quote unavailable'}{stale?' · Cached / old market data':''}</small></div>:<p>{data?`Observation: ${clockStamp(data.quoteObservedAt)} ${zoneLabel} · Yahoo Finance`:source}</p>}</div>{onUseCustom&&<button className={`button ${tab==='earnings'?'outline':'primary'} company-use`} onClick={onUseCustom}><CustomIcon size={15}/>Use as Custom</button>}</header>
   <div className="company-tabs" role="tablist" aria-label="Company details" onKeyDown={navigateTabs}>{tabs.map(([id,label])=><button key={id} id={`${tabId}-${id}`} role="tab" aria-controls={`${tabId}-panel`} tabIndex={tab===id?0:-1} aria-selected={tab===id} onClick={()=>selectTab(id)}>{label}</button>)}</div></div>
   {snapshot.status!=='ok'&&<p className="company-source-warning" role="status">{source}{snapshot.status==='stale'&&<> · {snapshot.message}</>}</p>}
   <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${tab}`} tabIndex={0}>
@@ -204,7 +205,7 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
    {canReadOrders&&<PortfolioChartOrders state={orderState} lines={orderLines} shown={showOrders} onToggle={setShowOrders} matched={!!position.orderListing&&position.orderListing.id===entry.id&&(!orderState.data||orderState.data.priceCurrency===position.holding.instrumentCurrency)}/>}
   </div>}
   {tab==='financials'&&(data?<Financials data={data} clockStamp={clockStamp} zoneLabel={zoneLabel}/>:<div className="empty"><h3>{snapshot.status==='loading'?'Loading financials…':'Financials unavailable'}</h3><p>{snapshot.message||'Fetching the company snapshot.'}</p></div>)}
-  {tab==='earnings'&&<CompanyEarnings key={key} data={data} status={snapshot.status} message={snapshot.message}/>}
+  {tab==='earnings'&&<CompanyEarnings key={key} data={data} status={snapshot.status} message={snapshot.message} source={source}/>}
   {tab==='news'&&<CompanyNews key={entry.id} symbol={entry.symbol.replaceAll('.','-')}/>}
   </div>
   <footer className="company-footer"><span role="status">{source}{tab==='financials'?' · TTM: trailing 12 months':''}</span><div><button className="icon-button" aria-label="Refresh company snapshot" onClick={snapshot.refresh}><ArrowsClockwise size={15}/></button><a href={data?.sourceUrl||`https://finance.yahoo.com/quote/${encodeURIComponent(entry.symbol.replaceAll('.','-'))}/`} target="_blank" rel="noopener noreferrer">Source page <ArrowUpRight size={13}/></a></div></footer>

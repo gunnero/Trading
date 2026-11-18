@@ -1,6 +1,98 @@
-.company-earnings-banner{display:grid;grid-template-columns:1fr 1fr;gap:18px;background:var(--selection);padding:12px;border-radius:6px}.company-earnings-banner>div+div{border-left:1px solid var(--border);padding-left:18px}.company-earnings-banner h3{font-size:18px;margin:0 0 6px}.company-earnings-banner p{font-size:10px;margin:4px 0 0;line-height:1.6}.company-next-report{display:flex;gap:12px}.company-next-report>svg{color:var(--primary);flex-shrink:0}.company-next-report span{font-size:10px;display:block}.company-next-report strong{font-size:13px;display:block;line-height:1.5}
-.company-earnings-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;font-size:10px;color:var(--muted)}.company-earnings-filters>span{margin-right:auto}.company-earnings-filters label{display:flex;align-items:center;gap:5px}.company-earnings-filters select{min-height:28px;padding:4px 6px;font-size:10px;max-width:140px;background:var(--panel);border:1px solid var(--border);border-radius:4px;color:var(--text)}
-.company-earnings-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.company-earnings-chart{min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:10px 8px 6px}.company-eps-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.company-eps-heading h4{font-size:11px;margin:0;font-weight:650}.company-eps-legend{display:flex;gap:8px;font-size:8px;color:var(--muted)}.company-eps-legend span{display:flex;align-items:center;gap:4px}.company-eps-legend i{width:7px;height:7px;border-radius:1px;background:#713bdd}.company-eps-legend span+span i{background:#cbb5f4}.company-eps-canvas{height:170px;width:100%}.company-earnings-chart>small{font-size:9px;color:var(--muted);display:block;text-align:center;min-height:12px}.company-chart-empty{height:170px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--muted);padding:15px}
-.company-earnings-results{margin:12px 0 0;border:1px solid var(--border);border-radius:7px;padding:10px;background:var(--panel)}.company-earnings-results .company-card-heading h3{font-size:17px;margin:0 0 8px}.company-earnings-results .company-card-heading>span{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--muted);margin-bottom:8px}.company-earnings-results .company-card-heading>span svg{color:var(--primary)}
-.company-earnings table{width:100%;min-width:530px;border-collapse:collapse;font-size:10px}.company-earnings th,.company-earnings td{padding:6px 7px;border-bottom:1px solid var(--border);text-align:left;font-variant-numeric:tabular-nums;white-space:nowrap}.company-earnings thead{background:var(--selection)}.company-earnings th{font-weight:600}.company-earnings td small,.company-earnings th small{display:block;font-size:9px;margin-top:2px;color:var(--muted);font-weight:400}.company-eps-result{display:inline-block;padding:2px 5px;border-radius:3px;background:#6f648311;font-size:9px}.company-eps-result.green{background:#087a4b17}.company-eps-result.red{background:#bb304a17}.company-earnings-coverage{font-size:9px;color:var(--muted);margin:8px 0 0;line-height:1.6}.company-earnings-summary{font-size:11px}
-@media(max-width:520px){.company-earnings-banner{grid-template-columns:1fr;gap:10px}.company-earnings-banner>div+div{border-left:0;border-top:1px solid var(--border);padding:10px 0 0}.company-earnings-charts{grid-template-columns:1fr}.company-earnings-filters>span{width:100%}.company-earnings-filters select{min-height:36px}.company-eps-canvas{height:180px}}
+.modal.company-modal:has(.company-detail[data-tab="earnings"]) { --company-dialog-width: 1016px; }
+.company-detail[data-tab="earnings"] .company-identity p,
+.company-detail[data-tab="earnings"] .company-footer,
+.company-detail[data-tab="earnings"] .company-footer a { font-size: 12px; }
+.company-detail[data-tab="earnings"] .company-mark { background: var(--selection); color: var(--text); }
+.company-detail[data-tab="earnings"] .company-use { color: var(--primary); border: 1px solid var(--primary); background: var(--panel); }
+.company-detail[data-tab="earnings"] .company-use:hover { background: var(--selection); }
+
+.company-earnings { display: grid; gap: 10px; }
+.company-earnings-banner {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 16px;
+  background: var(--selection);
+  border-radius: 7px;
+}
+.company-earnings-banner h3, .company-history-heading h3 { font-size: 20px; line-height: 1.2; margin: 0; }
+.company-earnings-banner p, .company-earnings-empty p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+.company-next-report { display: flex; gap: 12px; align-items: flex-start; border-inline-start: 1px solid var(--border); padding-inline-start: 20px; }
+.company-next-report svg, .company-history-heading svg, .company-earnings-empty svg { color: var(--primary); flex: none; }
+.company-next-report span, .company-next-report small { display: block; font-size: 11px; color: var(--muted); }
+.company-next-report strong { display: block; font-size: 16px; line-height: 1.4; }
+.company-next-report p { font-size: 12px; margin: 1px 0 2px; }
+.company-earnings-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.company-earnings-filters > span { margin-inline-end: auto; }
+.company-earnings-filters label { display: flex; align-items: center; gap: 6px; }
+.company-earnings-filters select {
+  min-height: 28px;
+  padding: 2px 6px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.company-earnings-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.company-earnings-chart, .company-earnings-results {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.company-eps-heading, .company-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; }
+.company-eps-heading h4 { font-size: 15px; line-height: 1.35; margin: 0; }
+.company-eps-legend, .company-eps-legend span, .company-history-heading span { display: inline-flex; align-items: center; }
+.company-eps-legend { gap: 10px; color: var(--muted); font-size: 11px; }
+.company-eps-legend span { gap: 5px; }
+.company-eps-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: #713bdd; }
+.company-eps-legend span + span::before { background: #e4d9fa; border: 1px solid #ad8be6; }
+.company-eps-canvas, .company-chart-empty { width: 100%; height: clamp(158px,20vh,204px); }
+.company-chart-empty { display: grid; place-content: center; color: var(--muted); font-size: 13px; text-align: center; }
+.company-history-heading { margin-bottom: 8px; }
+.company-history-heading span { gap: 6px; border-radius: 4px; padding: 3px 7px; background: var(--selection); font-size: 11px; }
+.company-earnings-results .table-scroll { max-width: 100%; overflow-x: auto; }
+.company-earnings table { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.company-earnings th, .company-earnings td {
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.company-earnings th { font-weight: 650; color: var(--text); }
+.company-earnings thead th { background: var(--selection); font-size: 12px; }
+.company-earnings tbody th, .company-earnings tbody td:nth-child(3), .company-earnings tbody td:nth-child(5) { font-weight: 650; }
+.company-earnings tbody th small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
+.company-report-status { display: inline-block; border-radius: 4px; background: var(--selection); padding: 1px 6px; font-size: 11px; font-weight: 600; }
+.company-report-status.green { background: #ddf3e5; }
+.company-surprise { display: inline-block; padding-inline-start: 6px; font-size: 11px; color: var(--muted); }
+.company-earnings-coverage { font-size: 11px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
+.company-earnings .company-disclosure { margin: 0; }
+.company-earnings .company-disclosure > summary { font-size: 12px; }
+.company-earnings .company-disclosure p { font-size: 12px; line-height: 1.5; }
+.company-earnings-empty { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 7px; }
+.company-earnings-empty h3 { margin: 0; font-size: 17px; }
+
+@media (max-width: 700px) {
+  .company-earnings-banner { gap: 12px; }
+  .company-next-report { padding-inline-start: 12px; gap: 6px; }
+  .company-earnings td:first-child, .company-earnings th:first-child { position: sticky; left: 0; }
+  .company-earnings tbody th { background: var(--panel); }
+}
+@media (max-width: 599px) {
+  .company-earnings-banner, .company-earnings-charts { grid-template-columns: 1fr; }
+  .company-earnings-banner { padding: 12px; }
+  .company-next-report { border-inline-start: 0; padding: 8px 0 0; border-top: 1px solid var(--border); }
+  .company-earnings-filters { gap: 5px 10px; }
+  .company-earnings-filters > span { flex-basis: 100%; }
+  .company-earnings-filters select { min-height: 34px; }
+  .company-earnings-chart, .company-earnings-results { padding: 9px; }
+  .company-eps-canvas, .company-chart-empty { height: 176px; }
+  .company-history-heading h3 { font-size: 18px; }
+  .company-history-heading span { font-size: 10px; }
+}
