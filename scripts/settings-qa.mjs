@@ -73,8 +73,31 @@ try{
  await settingsNav.getByRole('link',{name:'Workspace',exact:true}).click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Download workspace backup'}).click();const download=await downloadPromise;const backup=JSON.parse(readFileSync(await download.path(),'utf8'));expect(JSON.stringify(backup)).not.toContain('isolated-unsaved-key-fixture');await expect(page.locator('.settings-content')).toContainText('Europe/Skopje');
  mark('Account controls open inline in Settings and clear unsaved credentials on leaving; Workspace exposes time settings and a credential-free backup');
  await expect(page.locator('.sidebar-transfer-net')).toBeVisible();
- const netSwitch=page.getByRole('switch',{name:'Show Trading net'});await netSwitch.uncheck();await save();await expect(page.locator('.sidebar-transfer-net')).toHaveCount(0);await page.reload();await expect(netSwitch).not.toBeChecked();await expect(page.locator('.sidebar-transfer-net')).toHaveCount(0);await netSwitch.check();await save();await page.reload();await expect(netSwitch).toBeChecked();await expect(page.locator('.sidebar-transfer-net')).toBeVisible();
- mark('Trading net visibility saves and survives reload in both hidden and shown states');
+ const netSwitch=page.getByRole('switch',{name:'Show Trading net',exact:true});
+ const badge=page.locator('.workspace-save-badge');
+ await expect(badge).toHaveText('Saved automatically');
+ let releasePut;
+ const paused=new Promise(resolve=>{releasePut=resolve;});
+ await page.route('**/api/workspace',async route=>{
+   if(route.request().method()!=='PUT')return route.fallback();
+   await paused;
+   await route.fulfill({status:503,json:{message:'Isolated save outage'}});
+ });
+ await netSwitch.focus();await page.keyboard.press('Space');
+ await expect(netSwitch).not.toBeChecked();
+ await expect(badge).toHaveText('Unsaved changes');await expect(badge).toHaveText('Saving…');
+ releasePut();await expect(badge).toHaveText('Save failed');
+ await expect(page.locator('.sidebar-transfer-net')).toHaveCount(0);
+ await page.unroute('**/api/workspace');await page.getByRole('button',{name:'Retry save'}).click();
+ await expect(badge).toHaveText('Saved automatically');
+ await page.reload();await expect(netSwitch).not.toBeChecked();
+ await page.route('**/api/workspace',route=>route.request().method()==='PUT'?route.fulfill({status:409,json:{message:'Isolated revision conflict'}}):route.fallback());
+ await netSwitch.check();await expect(badge).toHaveText('Save conflict');
+ await page.unroute('**/api/workspace');await page.getByRole('button',{name:'Load saved version'}).click();
+ await expect(netSwitch).not.toBeChecked();await expect(badge).toHaveText('Saved automatically');
+ await netSwitch.check();await expect(badge).toHaveText('Saved automatically');
+ await page.reload();await expect(netSwitch).toBeChecked();await expect(page.locator('.sidebar-transfer-net')).toBeVisible();
+ mark('Trading net supports the keyboard and persists after reload. The badge follows pending, saving, failure, retry and conflict recovery.');
  for(const width of [320,390,820,1024,1488]){
   await page.setViewportSize({width,height:900});
   for(const category of ['Watchlist','Charts','Connections','Account & security','Workspace']){

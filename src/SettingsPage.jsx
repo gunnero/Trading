@@ -1,48 +1,37 @@
 import {PageHeader,useSectionNavigation} from './PageHeader';
-import {useDisplayTime} from './DisplayTime';
-import {timeZones} from './data/display-time.mjs';
-import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,UserCircle,ArrowRight,DownloadSimple,Clock,SignOut,Tag,ArrowsLeftRight} from '@phosphor-icons/react';
-import {useAuth} from './Auth';
+import {WorkspaceSettings,WorkspaceSaveBadge} from './WorkspaceSettings';
+import {ChartLine,PlugsConnected,ShieldCheck,HardDrives,ArrowRight,Tag,ArrowsLeftRight} from '@phosphor-icons/react';
 import {AccountSettings} from './AccountSettings';
 import {GlobalChartSettings,useChartSettingsStore} from './ChartSettings';
 import {DataConnections} from './DataConnections';
-import {useMinuteClock} from './Feeds';
 
 import './settings.css';
 
 const categories=[{id:'transfers',label:'Transfers & Costs',icon:ArrowsLeftRight},{id:'watchlist',label:'Watchlist',icon:Tag},{id:'charts',label:'Charts',icon:ChartLine},{id:'connections',label:'Connections',icon:PlugsConnected},{id:'account',label:'Account & security',icon:ShieldCheck},{id:'workspace',label:'Workspace',icon:HardDrives}];
 export const settingsCategory=route=>{const id=route.split('/')[1];return categories.some(item=>item.id===id)?id:'charts';};
-export function SettingsPage({briefing,connectionSettingsOpen,onConnectionSettings,category,transfersContent,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
-  const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
+export function SettingsPage({briefing,connectionSettingsOpen,onConnectionSettings,category,transfersContent,watchlistContent,workspace}){
+  const {settings,saveDefaults}=useChartSettingsStore();
   const navigation=useSectionNavigation(category);
-  const compactHeader=['transfers','watchlist','charts','connections','account'].includes(category);
-  const content=<><PageHeader title="Settings" description={compactHeader?undefined:"Manage your watchlist, charts, data connections and account in one place."}/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':category==='connections'?' settings-connections-page':''}`}>
-
-    <div className="settings-layout"><nav ref={navigation} className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>
-      <div className="settings-content" key={category}>
-        {category==='transfers'&&transfersContent}
-        {category==='watchlist'&&watchlistContent}
-        {category==='charts'&&<GlobalChartSettings initial={settings.defaults} setups={settings.charts} onSave={saveDefaults} embedded/>}
-        {category==='connections'&&<DataConnections briefing={briefing} settingsOpen={connectionSettingsOpen} onSettings={onConnectionSettings}/>}
-        {category==='account'&&<AccountSettings workspace={workspace}/>}
-        {category==='workspace'&&<><section className="panel settings-card"><header><div><h2>Sidebar</h2><p>Choose what appears below Fear &amp; Greed.</p></div></header><label className="settings-net-toggle"><input type="checkbox" role="switch" checked={workspace.data.preferences.showTradingNet!==false} onChange={e=>{const showTradingNet=e.target.checked;workspace.update(current=>({...current,preferences:{...current.preferences,showTradingNet}}));}}/>Show Trading net</label><p className="settings-footnote">Saves automatically. Hiding this card keeps bank syncing and your saved transactions active.</p></section><SessionDisplay workspace={workspace}/><section className="panel settings-card"><header><HardDrives size={25}/><div><h2>Workspace backup</h2><p>Keep a copy of your saved trading workspace.</p></div></header><p className="settings-card-description">Includes watchlist, imported levels, chart settings, drawings, plans, journal trades, daily reviews and notes. Passwords, API keys and account recovery codes are excluded.</p><button className="button outline" onClick={workspace.backup}><DownloadSimple size={18}/>Download workspace backup</button></section></>}
+  const isWorkspace=category==='workspace';
+  const tabs=<nav ref={navigation} className="settings-nav" aria-label="Settings sections">
+    {categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}
+  </nav>;
+  return <div className={isWorkspace?'settings-compact-view workspace-view':'settings-compact-view'}>
+    <PageHeader title={isWorkspace?'Workspace':'Settings'}
+      titleAccessory={isWorkspace&&<WorkspaceSaveBadge status={workspace.status}/>}
+      description={isWorkspace?'Display preferences and your saved workspace.':undefined}/>
+    <div className={`settings-page${category==='watchlist'?' settings-watchlist-page':category==='connections'?' settings-connections-page':''}`}>
+      <div className="settings-layout">
+        {isWorkspace?<div className="workspace-navigation"><h2>Settings</h2>{tabs}</div>:tabs}
+        <div className="settings-content" key={category}>
+          {category==='transfers'&&transfersContent}
+          {category==='watchlist'&&watchlistContent}
+          {category==='charts'&&<GlobalChartSettings initial={settings.defaults} setups={settings.charts} onSave={saveDefaults} embedded/>}
+          {category==='connections'&&<DataConnections briefing={briefing} settingsOpen={connectionSettingsOpen} onSettings={onConnectionSettings}/>}
+          {category==='account'&&<AccountSettings workspace={workspace}/>}
+          {isWorkspace&&<WorkspaceSettings workspace={workspace}/>}
+        </div>
       </div>
     </div>
-  </div></>;
-  return compactHeader?<div className="settings-compact-view">{content}</div>:content;
-}
-
-function SessionDisplay({workspace}){
-  const {settings,zoneLabel,formatLabel,clockDate,clockTime}=useDisplayTime(),now=useMinuteClock();
-  const zones=timeZones(settings.timeZone);
-  const change=patch=>workspace.update(current=>({...current,displayTime:{...settings,...current.displayTime,...patch}}));
-  return <section className="panel settings-card session-display-settings"><header><Clock size={25}/><div><h2>Session display</h2><p>Choose how times appear throughout your desk.</p></div></header>
-    <dl className="settings-facts">
-      <div><dt><label htmlFor="display-time-zone">Time zone</label></dt><dd><select id="display-time-zone" value={settings.timeZone} onChange={e=>change({timeZone:e.target.value})}>{zones.map(zone=><option key={zone} value={zone}>{zone.replaceAll('_',' ')}</option>)}</select><small>Daylight saving adjusts automatically</small></dd></div>
-      <div><dt><label htmlFor="display-time-format">Time format</label></dt><dd><select id="display-time-format" value={settings.hourCycle} onChange={e=>change({hourCycle:e.target.value})}><option value="h23">24-hour · 16:30</option><option value="h12">12-hour · 4:30 PM</option></select></dd></div>
-      <div><dt>Trading session</dt><dd>U.S. markets <small>Market schedules always follow New York exchange time</small></dd></div>
-    </dl>
-    <div className="session-display-preview" aria-live="polite"><span>YOUR CLOCK</span><strong>{clockTime(now)}</strong><small>{clockDate(now)} · {zoneLabel} · {formatLabel}</small></div>
-    <p className="settings-footnote">Changes save automatically. Journal entry and import times still use Skopje, matching your broker records; trade review times follow your display setting.</p>
-  </section>;
+  </div>;
 }

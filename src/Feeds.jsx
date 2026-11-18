@@ -5,7 +5,19 @@ import {createFeedCache} from './data/feed-cache.mjs';
 
 export function useMinuteClock() {
   const [now,setNow]=useState(Date.now());
-  useEffect(()=>{const tick=()=>{if(!document.hidden)setNow(Date.now());};const timer=setInterval(tick,60000);document.addEventListener('visibilitychange',tick);return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',tick);};},[]);
+  useEffect(()=>{
+    let timer;
+    function tick(){
+      clearTimeout(timer);
+      if(document.hidden)return;
+      const instant=Date.now();
+      setNow(instant);
+      timer=setTimeout(tick,60000-instant%60000);
+    }
+    tick();
+    document.addEventListener('visibilitychange',tick);
+    return ()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',tick);};
+  },[]);
   return now;
 }
 const feeds=createFeedCache();
