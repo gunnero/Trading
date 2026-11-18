@@ -36,7 +36,7 @@ function Dialog({title,onClose,children,wide=false}){
   return <dialog ref={ref} className={`modal ${wide?'wide company-modal':'pm-dialog'}`} aria-labelledby="pm-dialog-title" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose();}}><div className="modal-inner"><header className="modal-header"><h2 id="pm-dialog-title">{title}</h2><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={22}/></button></header>{children}</div></dialog>;
 }
 
-export default function PortfolioManager({route='portfolio',onNavigate,sheet,watchlist,setupInterval,onActivity,onInsights}){
+export default function PortfolioManager({route='portfolio',onNavigate,sheet,watchlist,setupInterval,onActivity,onInsights,onUseCustom}){
   const privacy=usePortfolioPrivacy();
   const isTradePage=route.split('/')[1]==='trade';
   const isAccountPage=route.split('/')[1]==='account';
@@ -146,7 +146,7 @@ export default function PortfolioManager({route='portfolio',onNavigate,sheet,wat
         <div className="pm-import-row"><span>Have a saved snapshot?</span><button className="text-button" disabled={actionsHidden||account.connected} onClick={()=>setDialog({type:'import',account})}><UploadSimple size={16}/>Import snapshot</button>{account.connected&&<small>Disconnect to import manually.</small>}</div>
       </section></PortfolioAccountPrivacy>}
     {dialog&&!actionsHidden&&<PortfolioDialog key={`${dialog.type}-${dialog.account?.id||dialog.person?.id||'new'}`} dialog={dialog} people={people} accounts={allAccounts} mutate={mutate} reload={load} onClose={()=>setDialog(null)} onSelect={id=>{privacy.update({account:id,filter:'all'});onNavigate(accountRoute(id));}} onAccountRemoved={()=>onNavigate('portfolio')}/>}
-    {holdingView?.route===route&&<PortfolioAccountPrivacy revealed={!!revealedAccount} balancesVisible={balancesVisible}><Dialog wide title={`${viewedHolding?.name||holdingView.ticker} · holding details`} onClose={()=>setHoldingView(null)}>{viewedHolding?<HoldingDetail key={`${holdingView.accountId}:${holdingView.ticker}`} holding={viewedHolding} account={viewedAccount} owner={personName(viewedAccount.personId,selectedPrivacy)} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onTrade={actionsHidden?null:side=>openTrade(viewedAccount,viewedHolding,side)}/>:<p className="pm-no-results">This holding is no longer in the latest account snapshot.</p>}</Dialog></PortfolioAccountPrivacy>}
+    {holdingView?.route===route&&<PortfolioAccountPrivacy revealed={!!revealedAccount} balancesVisible={balancesVisible}><Dialog wide title={`${viewedHolding?.name||holdingView.ticker} · holding details`} onClose={()=>setHoldingView(null)}>{viewedHolding?<HoldingDetail onUseCustom={onUseCustom} key={`${holdingView.accountId}:${holdingView.ticker}`} holding={viewedHolding} account={viewedAccount} owner={personName(viewedAccount.personId,selectedPrivacy)} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval} onTrade={actionsHidden?null:side=>openTrade(viewedAccount,viewedHolding,side)}/>:<p className="pm-no-results">This holding is no longer in the latest account snapshot.</p>}</Dialog></PortfolioAccountPrivacy>}
   </div>;
 }
 
@@ -214,14 +214,14 @@ function AccountReturn({snapshot}){
   const p=portfolioPerformance(snapshot);
   return <span className="pm-card-return"><b className={tone(p.open)}>{money(p.open,snapshot.currency)}{p.openPercent!==null?` (${percent(p.openPercent)})`:''}</b> open return</span>;
 }
-function HoldingDetail({holding,account,owner,sheet,watchlist,setupInterval,onTrade}){
+function HoldingDetail({holding,account,owner,sheet,watchlist,setupInterval,onTrade,onUseCustom}){
   const privacy=usePortfolioPrivacy();
   const [chosen,setChosen]=useState('');
   const choices=portfolioListingChoices(watchlist),automatic=portfolioListing(holding,watchlist),entry=automatic||choices.find(e=>e.id===chosen);
   const position={holding,accountId:account.id,connected:account.connected,platform:account.platform,orderListing:automatic,onTrade:account.connected&&!privacy.privateMode?onTrade:null,listing:entry,currency:account.snapshot.currency,owner,accountLabel:privacy.label(account.label,account.id),sourceLabel:privacy.privateMode?'Saved snapshot':account.snapshot.sourceLabel,source:account.snapshot.source,observedAt:account.snapshot.observedAt,lastSuccess:account.lastSuccess,status:portfolioStatus(account),environment:account.environment};
   return <>
     {!automatic&&<div className="pm-listing-picker"><label>Stock / ETF listing<select aria-label="Holding chart listing" value={entry?.id||''} onChange={e=>setChosen(e.target.value)}><option value="" disabled>Choose this holding’s ticker</option>{choices.map(e=><option key={e.id} value={e.id}>{e.exchange}:{e.symbol}</option>)}</select></label><p>No unique automatic match for {holding.name} ({holding.ticker}). Choose this holding’s own ticker and currency. QQQ is a separate ETF, not an exchange selection. This choice applies to this view only.</p></div>}
-    {entry?<CompanyDetail key={entry.id} entry={entry} sheet={sheet} setupInterval={setupInterval} position={position}/>:<><PortfolioPosition position={position}/><div className="empty"><h3>Choose a chart listing</h3><p>Your holding details are available above. A matching listing is needed for its chart, company details and your saved levels.</p></div></>}
+    {entry?<CompanyDetail key={entry.id} entry={entry} sheet={sheet} setupInterval={setupInterval} position={position} onUseCustom={onUseCustom&&choices.some(item=>item.id===entry.id)?()=>onUseCustom(entry.id):undefined}/>:<><PortfolioPosition position={position}/><div className="empty"><h3>Choose a chart listing</h3><p>Your holding details are available above. A matching listing is needed for its chart, company details and your saved levels.</p></div></>}
     <details className="company-disclosure"><summary>Listing & trading hours</summary>{automatic&&<p className="pm-auto-listing">Chart matched automatically · <strong>{automatic.exchange}:{automatic.symbol}</strong></p>}<StockHours accountId={account.id} connected={account.connected} ticker={holding.ticker} name={holding.name}/></details>
   </>;
 }

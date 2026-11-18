@@ -4,7 +4,8 @@ import {apiFetch} from './auth-client';
 import {useEffect,useState,useId} from 'react';
 import {ArrowUpRight,CaretRight,ArrowsClockwise,AppleLogo,Buildings,SlidersHorizontal,Tag,ChartBar,Stack,Coins,Note} from '@phosphor-icons/react';
 import {PriceChart} from './Charts';
-import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
+import {INDICATORS} from './ChartIndicators';
+import {ChartHeader,ChartLevels,useSavedChart,useSavedTimeframe} from './ChartSettings';
 import {useMarketChart} from './useMarketData';
 import {useZoneRoles} from './ZoneRoles';
 import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
@@ -15,6 +16,7 @@ import {stageLabel} from './data/retests.mjs';
 import {useStockSetup} from './useStockSetup';
 import {CompanyNews} from './CompanyNews';
 import './company-detail.css';
+import './company-overview.css';
 import {CompanyEarnings} from './CompanyEarnings';
 import {PortfolioPosition} from './PortfolioPosition';
 import {PortfolioStockChart} from './PortfolioStockChart';
@@ -53,10 +55,33 @@ function EarningsCard({data}){
   <div className="company-event-row"><span>Ex-dividend date</span><strong>{data.exDividend?formatDate(data.exDividend):'Not supplied'}</strong></div><div className="company-event-row"><span>Dividend payment</span><strong>{data.dividendDate?formatDate(data.dividendDate):'Not supplied'}</strong></div><p className="small-copy muted">Dates remain as published. Schedules can change.</p>
  </section>;
 }
+function CompanyChartLegend({scope,indicators}){
+ const {config}=useSavedChart(scope);
+ const readings=INDICATORS.filter(item=>['ema','vwap'].includes(item.key)&&config.enabled[item.key])
+  .flatMap(item=>item.series.map(id=>({id,color:item.color,value:indicators?.series?.[id]?.at(-1)})))
+  .filter(reading=>Number.isFinite(reading.value));
+ if(!readings.length)return null;
+ return <dl className="company-chart-legend" aria-label="Latest overlay readings">{readings.map(({id,color,value})=>
+  <div key={id}><dt><i style={{borderColor:color}} aria-hidden="true"/>{id==='ema9'?'EMA 9':id==='ema21'?'EMA 21':'VWAP'}</dt><dd>{number(value,{minimumFractionDigits:2})}</dd></div>
+ )}</dl>;
+}
 function Profile({data,entry,q}){
  const p=data.profile;
- const facts=[['Listing',`${entry.symbol} · ${entry.exchange}`],['Currency',data.currency],['Company / fund type',data.fund?data.type:'Corporate (Equity)'],['Observation',q?quoteDelay(q):'Unavailable'],['Data source','Yahoo Finance']];
- return <section className="company-profile"><h3>{data.fund?'Fund profile':'Company profile'}</h3><p className="company-description">{p.description||'Business description not supplied.'}{p.description?.length===700?'…':''}</p><h4>{data.fund?'Fund facts':'Company facts'}</h4><dl className="company-profile-facts">{facts.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not supplied'}</dd></div>)}</dl><details className="company-disclosure"><summary>More about {entry.symbol}</summary><dl className="company-profile-facts">{(data.fund?[['Fund family',p.fundFamily],['Category',p.category],['Inception',p.inception?formatDate(p.inception):null]]:[['Sector',p.sector],['Industry',p.industry],['Headquarters',[p.city,p.country].filter(Boolean).join(', ')],['Employees',number(p.employees,{maximumFractionDigits:0})],['Session volume',number(q?.volume,{notation:'compact'})]]).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not supplied'}</dd></div>)}</dl><div className="company-links">{p.website&&<a href={p.website} target="_blank" rel="noopener noreferrer">Company website <ArrowUpRight size={14}/></a>}{p.investorRelations&&<a href={p.investorRelations} target="_blank" rel="noopener noreferrer">Investor relations <ArrowUpRight size={14}/></a>}</div></details></section>;
+ const description=p.description||'Business description not supplied.';
+ const abbreviated=description.length>230;
+ const summary=abbreviated?description.slice(0,230).replace(/\s+\S*$/,'')+'…':description;
+ const facts=[['Listing',`${entry.symbol} · ${entry.exchange}`],['Currency',data.currency],['Company / fund type',data.fund?data.type:'Corporate (Equity)'],['Observation',q?quoteDelay(q):'Unavailable'],['Coverage','U.S. listing'],['Data source','Yahoo Finance']];
+ const extra=data.fund?[['Fund family',p.fundFamily],['Category',p.category],['Inception',p.inception?formatDate(p.inception):null]]:[['Sector',p.sector],['Industry',p.industry],['Headquarters',[p.city,p.country].filter(Boolean).join(', ')],['Employees',number(p.employees,{maximumFractionDigits:0})],['Session volume',number(q?.volume,{notation:'compact'})]];
+ return <section className="company-profile">
+  <h3>{data.fund?'Fund profile':'Company profile'}</h3><p className="company-description">{summary}</p>
+  <h4>{data.fund?'Fund facts':'Company facts'}</h4>
+  <dl className="company-profile-facts">{facts.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not supplied'}</dd></div>)}</dl>
+  <details className="company-disclosure"><summary>More about {entry.symbol}</summary>
+   {abbreviated&&<p>{description}{description.length===700?'…':''}</p>}
+   <dl className="company-profile-facts">{extra.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not supplied'}</dd></div>)}</dl>
+   <div className="company-links">{p.website&&<a href={p.website} target="_blank" rel="noopener noreferrer">Company website <ArrowUpRight size={14}/></a>}{p.investorRelations&&<a href={p.investorRelations} target="_blank" rel="noopener noreferrer">Investor relations <ArrowUpRight size={14}/></a>}</div>
+  </details>
+ </section>;
 }
 function FinancialHistory({data}){
  const [period,setPeriod]=useState('annual'),[statement,setStatement]=useState('income');
@@ -100,16 +125,17 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
   <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${tab}`} tabIndex={0}>
   {tab==='overview'&&<div className="company-overview">
    {position&&<><PortfolioPosition position={position} compact><div className="company-chart-choice segmented" aria-label="Holding chart view"><button aria-pressed={!simpleChart} className={!simpleChart?'selected':''} onClick={()=>setSimpleChart(false)}>Candles & levels</button><button aria-pressed={simpleChart} className={simpleChart?'selected':''} onClick={()=>setSimpleChart(true)}>Price history</button></div>{!simpleChart&&<div className="pm-chart-position"><label><input type="checkbox" checked={showAverage&&!hideBalances} disabled={!averageLine||hideBalances} onChange={e=>setShowAverage(e.target.checked)}/><i/>Average paid {hideBalances?'••••':number(position.holding.averagePrice)} {position.holding.instrumentCurrency}</label><span>{averageLine?`Account reference · ${entry.exchange}:${entry.symbol}`:history.status==='loading'?'Checking chart currency…':'Average line unavailable: chart symbol and currency must match the holding.'}</span></div>}</PortfolioPosition></>}
-   {position&&simpleChart?<PortfolioStockChart entry={entry} position={position} instrument={instrument} sheetDate={sheet.date} orderLines={showOrders?orderLines:[]}/>:<section className="context-chart-panel company-chart" aria-label={`${entry.symbol} company chart`}><ChartHeader symbol={entry.symbol} quote={q} marketKey={key} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles}/><ChartLevels scope={`${key}|${timeframe}`} instrument={instrument} date={sheet.date} roles={roles} quoteDate={q?.sessionDate}/>
+   {position&&simpleChart?<PortfolioStockChart entry={entry} position={position} instrument={instrument} sheetDate={sheet.date} orderLines={showOrders?orderLines:[]}/>:<section className="context-chart-panel company-chart" aria-label={`${entry.symbol} company chart`}><ChartHeader symbol={entry.symbol} quote={q} marketKey={key} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles} showToolLabels/><ChartLevels scope={`${key}|${timeframe}`} instrument={instrument} date={sheet.date} roles={roles} quoteDate={q?.sessionDate}/>
 
+    {history.candles?.length>0&&<CompanyChartLegend scope={`${key}|${timeframe}`} indicators={history.indicators}/>}
     {history.candles?.length?<PriceChart symbol={entry.symbol} drawingKey={key} timeframe={timeframe} candles={history.candles} price={history.quote.price} instrument={instrument} indicators={history.indicators} referenceLine={showAverage&&!hideBalances?averageLine:null} orderLines={chartOrderLines}/>:<div className="empty" role="status"><h3>{history.status==='loading'?'Loading company chart…':'Company chart unavailable'}</h3><p>{history.message||'Fetching regular-session candles.'}</p></div>}
-    <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}Regular-session history · Yahoo Finance · {timeframe==='4h'?'4h from hourly bars · ':''}partial candles marked</span><span>{zoneLabel} · refreshes each minute</span></div>
+    <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}Regular-session history · Yahoo Finance · {timeframe==='4h'?'4h from hourly bars · ':''}partial candles marked</span><span>{history.quote?.observedAt&&<>Observed {quoteStamp(history.quote)} · </>}Refreshes each minute</span></div>
    </section>}
-   {canReadOrders&&<PortfolioChartOrders state={orderState} lines={orderLines} shown={showOrders} onToggle={setShowOrders} matched={!!position.orderListing&&position.orderListing.id===entry.id&&(!orderState.data||orderState.data.priceCurrency===position.holding.instrumentCurrency)}/>}
    <div className="company-overview-bottom"><section className="company-setup"><h3>Break & retest</h3><div className="company-setup-status"><span className={setup?.direction==='bearish'?'red':setup?.stage==='confirmed'?'green':'amber'}>{stageLabel(setup?.stage||'loading')}</span><span>Confirmation · {setupInterval}</span></div><p>{setup?.message||`${setup?.direction==='bullish'?'Bullish':setup?.direction==='bearish'?'Bearish':'Monitoring'}${setup?.zone?` · ${setup.direction==='bullish'?'Break above':'Break below'} ${zoneText(setup.zone)}`:' · EMA 9/21 + session VWAP'}`}</p>
-    <details className="company-exact-levels" open><summary>Exact level list<small>{instrument?.sourceDate||sheet.date} · {instrument?.timeframe||'No matching sheet'}{instrument?.carriedForward?' · Carried forward':''}</small></summary><div aria-label={`All ${entry.symbol} levels`}>{instrument?instrument.zones.map((z,i)=><div className="level-row" key={i}><span className={z.type==='S'?'red':z.type==='D'?'green':'amber'}>{zoneName(z.type)}</span><strong>{zoneText(z)}</strong></div>):<p className="muted">No matching levels in your sheet.</p>}</div></details>
+    <details className="company-exact-levels" open><summary>Exact level list<small>{instrument?`Sheet ${instrument.sourceDate||sheet.date} · ${instrument.timeframe}`:'No matching sheet'}{instrument?.carriedForward?' · Carried forward':''}</small></summary><div aria-label={`All ${entry.symbol} levels`}>{instrument?instrument.zones.map((z,i)=><div className="level-row" key={i}><span className={z.type==='S'?'red':z.type==='D'?'green':'amber'}>{zoneName(z.type)}</span><strong>{zoneText(z)}</strong>{z.lastFlip&&<small>Flipped from {zoneName(z.lastFlip.from).toLowerCase()}</small>}</div>):<p className="muted">No matching levels in your sheet.</p>}</div></details>
     <details className="company-disclosure"><summary>Strategy checks & earnings dates</summary>{setup?.checks?.map(c=><div className="company-event-row" key={c.name}><span>{c.name}</span><strong className={c.passed===true?'green':'amber'}>{c.passed===null?'Unavailable':c.passed?'Aligned':'Conflict'}</strong></div>)}{setup?.through&&<p className="small-copy muted">Checked through {clockStamp(setup.through*1000)} {zoneLabel} · regular session {setup.sessionDate}</p>}<p>Options bid/ask, Greeks and contract liquidity are not connected.</p>{data&&<EarningsCard data={data}/>}</details>
    </section>{data?<Profile data={data} entry={entry} q={q}/>:<section><h3>Company profile</h3><p className="muted">{snapshot.status==='loading'?'Loading source information…':snapshot.message}</p></section>}</div>
+   {canReadOrders&&<PortfolioChartOrders state={orderState} lines={orderLines} shown={showOrders} onToggle={setShowOrders} matched={!!position.orderListing&&position.orderListing.id===entry.id&&(!orderState.data||orderState.data.priceCurrency===position.holding.instrumentCurrency)}/>}
   </div>}
   {tab==='financials'&&(data?<Financials data={data} clockStamp={clockStamp} zoneLabel={zoneLabel}/>:<div className="empty"><h3>{snapshot.status==='loading'?'Loading financials…':'Financials unavailable'}</h3><p>{snapshot.message||'Fetching the company snapshot.'}</p></div>)}
   {tab==='earnings'&&<CompanyEarnings key={key} data={data} status={snapshot.status} message={snapshot.message}/>}

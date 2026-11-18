@@ -87,6 +87,11 @@ function SessionDesk({workspace}) {
   const setWatchText=watchText=>workspace.update(current=>replaceWatchlist(current,parseWatchlist(watchText)));
   const setFocus=focus=>workspace.update(current=>({...current,preferences:{...current.preferences,focus,...(['QQQ','SPY'].includes(focus)?{symbol:focus}:{})}}));
   const setCustom=customSymbol=>workspace.update(current=>({...current,preferences:{...current.preferences,customSymbol,focus:'custom'}}));
+  function openCustomListing(id){
+    setCustom(id);
+    setDialog(null);
+    navigate('overview');
+  }
   const gridConfig=gridSettings(preferences.chartGrid);
   const gridActive=focus==='hot'&&gridConfig.view==='grid';
   const setGridConfig=change=>workspace.update(current=>({...current,preferences:{...current.preferences,chartGrid:{...gridSettings(current.preferences.chartGrid),...change}}}));
@@ -235,7 +240,7 @@ function SessionDesk({workspace}) {
           <WatchlistActivity watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
-        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager route={route} onNavigate={navigate} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval}/></React.Suspense>}
+        {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager onUseCustom={openCustomListing} route={route} onNavigate={navigate} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval}/></React.Suspense>}
         {section === 'insights' && <React.Suspense fallback={<p role="status">Loading insights…</p>}><PortfolioInsights watchlist={watchlist} tab={['alerts','reports','monitor','allocation','performance','calendar','annual'].includes(route.split('/')[2])?route.split('/')[2]:'exposure'} onTab={tab=>navigate(`insights/${tab}`)} onJournal={()=>navigate('journal/broker')}/></React.Suspense>}
         {section === 'activity' && <React.Suspense fallback={<p role="status">Loading activity…</p>}><PortfolioActivity notifications={notifications} watchlist={watchlist}/></React.Suspense>}
         {section === 'sentiment' && <React.Suspense fallback={<p role="status">Loading sentiment…</p>}><SentimentPage briefing={briefing} onSettings={()=>navigate('settings/connections/cnn')}/></React.Suspense>}
@@ -261,7 +266,7 @@ function SessionDesk({workspace}) {
     {dialog === 'watch-add' && <AddSymbolDialog watchlist={watchlist} onClose={()=>setDialog(null)} onAdd={addSymbol}/>}
     {dialog === 'watch-import' && <ImportDialog kind="watchlist" initial={watchText} onClose={() => setDialog(null)} onImport={(parsed, text) => { setWatchText(text); setRemovedEntry(null); setDialog(null); setToast(`Imported ${parsed.length} symbols into your radar.`); }}/ >}
     {dialog === 'plan' && planSnapshot && <PlanDialog symbol={planSnapshot.symbol} marketKey={planSnapshot.marketKey} setup={planSnapshot.setup} context={planSnapshot.context} quote={planSnapshot.quote} onClose={() => setDialog(null)} onSave={plan => { setPlans(p => [{ ...plan, id: crypto.randomUUID(), createdAt:new Date().toISOString(), notes: '', sessionDate:planSnapshot.quote.sessionDate, priceMode:'yahoo', marketQuote:{price:planSnapshot.quote.price,observedAt:planSnapshot.quote.observedAt,provider:'Yahoo Finance'} }, ...p]); setDialog(null); navigate('journal/plans'); setToast(`${planSnapshot.symbol} draft saved to Trade journal → Plans.`); }}/ >}
-    {dialog === 'instrument' && selectedEntry && (chartableEntry(selectedEntry)?<Modal title={`${selectedEntry.symbol} details`} subtitle="Company, trading context & catalysts" onClose={()=>setDialog(null)} wide className="company-modal"><CompanyDetail key={selectedEntry.id} entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} setupInterval={setupInterval} onUseCustom={()=>{setCustom(selectedEntry.id);setDialog(null);navigate('overview');}}/></Modal>:<InstrumentDialog entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} onClose={() => setDialog(null)}/>)}
+    {dialog === 'instrument' && selectedEntry && (chartableEntry(selectedEntry)?<Modal title={`${selectedEntry.symbol} details`} subtitle="Company, trading context & catalysts" onClose={()=>setDialog(null)} wide className="company-modal"><CompanyDetail key={selectedEntry.id} entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} setupInterval={setupInterval} onUseCustom={()=>openCustomListing(selectedEntry.id)}/></Modal>:<InstrumentDialog entry={selectedEntry} sheet={sheet} result={quotes[quoteKey(selectedEntry)]} onClose={() => setDialog(null)}/>)}
     {toast && <div className="toast" role="status"><Check size={19}/>{toast}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={17}/></button></div>}
   </div>;
 }
