@@ -3,16 +3,17 @@ import PortfolioJournal from './PortfolioJournal';
 import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
 import {lazy,Suspense,useEffect,useId,useMemo,useRef,useState} from 'react';
-import {Notebook,Plus,UploadSimple,DownloadSimple,CaretLeft,CaretRight,X,Trash,ArrowUpRight,CheckCircle,Clock,ImageSquare,ArrowCounterClockwise} from '@phosphor-icons/react';
+import {Plus,UploadSimple,DownloadSimple,X,Trash,ArrowUpRight,CheckCircle,ImageSquare,ArrowCounterClockwise} from '@phosphor-icons/react';
 import {apiFetch} from './auth-client';
 import {REVIEW_ITEMS,JOURNAL_TAGS,emptyJournal,validateTrade,validateJournal,localStamp,localToInstant,journalDay,parseJournalImport,planJournalImport,tradeResult,journalStats,money,duration} from './data/journal.mjs';
 import './journal.css';
+import './journal-trades.css';
+import {JournalAnalysis,JournalFilters,JournalResults,JournalSummary} from './JournalDashboard';
 import SavedPlans from './SavedPlans';
 import {marketDay} from './data/calendar.mjs';
 
 import {useJournalReplay} from './useJournalReplay';
 import JournalStrategyReview from './JournalStrategyReview';
-const Curve=lazy(()=>import('./JournalCurve'));
 const TradeChart=lazy(()=>import('./JournalTradeChart'));
 const contract=t=>`${t.symbol} ${t.strike} ${t.optionType==='CALL'?'Call':'Put'}`;
 const accountKey=t=>JSON.stringify([t.firm,t.account]);
@@ -26,9 +27,9 @@ function JournalModal({title,children,onClose,chart=false}){
 }
 function toForm(trade){const now=localStamp(new Date());return trade?{...trade,entryAt:localStamp(trade.entryAt),exitAt:trade.exitAt?localStamp(trade.exitAt):'',status:trade.exitAt?'closed':'open',fees:trade.fees??'',risk:trade.risk??'',reportedPnl:trade.reportedPnl??''}:{id:crypto.randomUUID(),firm:'Vanquish',account:'Main',symbol:'QQQ',expiration:now.slice(0,10),optionType:'CALL',position:'long',strike:'',quantity:1,multiplier:100,entryPrice:'',exitPrice:'',entryAt:now,exitAt:now,status:'closed',fees:'',risk:'',reportedPnl:'',review:Object.fromEntries(REVIEW_ITEMS.map(([key])=>[key,null])),tags:[],notes:'',source:'manual',sourceLabel:'Manual entry',entryOrderId:'',exitOrderId:''};}
 function fromForm(form){const opt=key=>form[key]===''?null:Number(form[key]);return validateTrade({...form,symbol:form.symbol.trim().toUpperCase(),strike:Number(form.strike),quantity:Number(form.quantity),multiplier:Number(form.multiplier),entryPrice:Number(form.entryPrice),exitPrice:form.status==='open'?null:Number(form.exitPrice),entryAt:localToInstant(form.entryAt),exitAt:form.status==='open'?null:localToInstant(form.exitAt),fees:opt('fees'),risk:opt('risk'),reportedPnl:opt('reportedPnl')});}
-function TradeEditor({trade,onSave,onClose,onDelete,accounts,workspace}){
+function TradeEditor({trade,initialView='chart',onSave,onClose,onDelete,accounts,workspace}){
   const [form,setForm]=useState(()=>toForm(trade)),initial=useRef(JSON.stringify(form)),[error,setError]=useState('');
-  const [view,setView]=useState(trade?'chart':'details');
+  const [view,setView]=useState(trade?initialView:'details');
   const replay=useJournalReplay(trade,workspace,view==='chart');
   const edit=(key,value)=>setForm(v=>({...v,[key]:value}));
   const close=()=>{if(JSON.stringify(form)!==initial.current&&!confirm('Discard the unsaved changes to this trade?'))return;onClose();};
@@ -77,40 +78,48 @@ function ImportTrades({prepared,existing,onImport,onClose}){
     {(error||problem)&&<p role="alert" className="amber">{error||problem}</p>}<footer className="journal-form-actions"><button className="button outline" onClick={onClose}>Cancel</button><button className="button primary" disabled={!verified||!plan.added.length||!!problem||!firm.trim()||!account.trim()} onClick={()=>{try{onImport(rows);}catch(e){setError(e.message);}}}>Import {plan.added.length} {plan.added.length===1?'trade':'trades'}</button></footer>
   </div></JournalModal>;
 }
-function JournalCalendar({month,onMonth,days,selected,onSelect}){
-  const [year,m]=month.split('-').map(Number),first=new Date(Date.UTC(year,m-1,1)),offset=(first.getUTCDay()+6)%7,count=new Date(Date.UTC(year,m,0)).getUTCDate(),map=new Map(days.map(d=>[d.date,d]));
-  const shift=delta=>onMonth(new Date(Date.UTC(year,m-1+delta,1)).toISOString().slice(0,7));
-  return <section className="panel journal-calendar"><header><h3>P/L calendar</h3><div><button className="icon-button" aria-label="Previous journal month" onClick={()=>shift(-1)}><CaretLeft size={18}/></button><strong>{first.toLocaleDateString('en-US',{timeZone:'UTC',month:'short',year:'numeric'})}</strong><button className="icon-button" aria-label="Next journal month" onClick={()=>shift(1)}><CaretRight size={18}/></button></div></header><div className="journal-calendar-grid">{['M','T','W','T','F','S','S'].map((d,i)=><span key={'day'+i} className="journal-weekday">{d}</span>)}{Array.from({length:offset},(_,i)=><span key={'space'+i}/>)}{Array.from({length:count},(_,i)=>{const date=`${month}-${String(i+1).padStart(2,'0')}`,d=map.get(date);return <button key={date} className={`${d?d.gross>0?'positive':d.gross<0?'negative':'neutral':''} ${selected===date?'selected':''}`} aria-label={`${date}, ${d?money(d.gross)+' gross, '+d.count+' trades':'no closed trades'}`} aria-pressed={selected===date} onClick={()=>onSelect(selected===date?'':date)}><span>{i+1}</span>{d&&<><strong>{Math.abs(d.gross)>=1000?`${d.gross<0?'-':''}$${(Math.abs(d.gross)/1000).toFixed(1)}k`:money(d.gross).replace('.00','')}</strong><small>{d.count} {d.count===1?'trade':'trades'}</small></>}</button>;})}</div><p>Realized gross P/L · grouped by Skopje exit date</p></section>;
-}
-function JournalTrades({workspace,tradeId,onClearTrade}){
-  const {zoneLabel,formatLabel,journalStamp}=useDisplayTime();
+function JournalTrades({workspace,tradeId,onClearTrade,nav,missing}){
+  const [symbol,setSymbol]=useState('');
   const trades=workspace.data.journal?.trades||[],[month,setMonth]=useState(()=>journalDay(new Date()).slice(0,7)),[allTime,setAllTime]=useState(false),[account,setAccount]=useState(''),[query,setQuery]=useState(''),[day,setDay]=useState(''),[editor,setEditor]=useState(null),[importing,setImporting]=useState(null),[drafts,setDrafts]=useState([]),[draftError,setDraftError]=useState(''),[notice,setNotice]=useState(''),[removed,setRemoved]=useState(null);
   useEffect(()=>{const trade=tradeId?trades.find(t=>t.id===tradeId):null;setEditor(trade?{trade}:null);},[tradeId]);
   const closeEditor=()=>{setEditor(null);if(tradeId)onClearTrade();};
   useEffect(()=>{const controller=new AbortController();apiFetch('/api/journal/drafts',{signal:controller.signal}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.message);if(!controller.signal.aborted){setDrafts(d.drafts);setDraftError(d.message||'');}}).catch(e=>{if(!controller.signal.aborted)setDraftError(e.message);});return()=>controller.abort();},[]);
   const accounts=[...new Map(trades.map(t=>[accountKey(t),t])).values()];
-  const matching=trades.filter(t=>(!account||accountKey(t)===account)&&(!query||`${t.symbol} ${t.optionType} ${t.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())));
-  const filtered=matching.filter(t=>{const date=journalDay(t.exitAt||t.entryAt);return (allTime||date.startsWith(month))&&(!day||date===day);}).sort((a,b)=>(b.exitAt||b.entryAt).localeCompare(a.exitAt||a.entryAt));
-  const stats=useMemo(()=>journalStats(filtered),[JSON.stringify(filtered)]),calendarDays=journalStats(matching).series;
+  const matching=useMemo(()=>trades.filter(t=>(!symbol||t.symbol===symbol)&&(!account||accountKey(t)===account)
+    &&(!query||[t.symbol,t.optionType,...t.tags].join(' ').toLowerCase().includes(query.toLowerCase()))),[trades,symbol,account,query]);
+  const filtered=useMemo(()=>matching.filter(t=>{
+    const date=journalDay(t.exitAt||t.entryAt);
+    return (allTime||date.startsWith(month))&&(!day||date===day);
+  }),[matching,allTime,month,day]);
+  const stats=useMemo(()=>journalStats(filtered),[filtered]);
+  const calendarStats=useMemo(()=>journalStats(matching.filter(t=>t.exitAt&&journalDay(t.exitAt).startsWith(month))),[matching,month]);
   const prepared=drafts.filter(d=>{try{return planJournalImport(trades,d.trades).added.length;}catch{return true;}});
   const changeMonth=value=>{if(!/^\d{4}-\d{2}$/.test(value))return;setMonth(value);setAllTime(false);setDay('');};
   function update(change){workspace.update(current=>({...current,journal:validateJournal(change(current.journal||emptyJournal()))}));}
   function save(trade){update(j=>({...j,trades:editor?.trade?j.trades.map(t=>t.id===trade.id?trade:t):[...j.trades,trade]}));closeEditor();setNotice('Trade updated. Changes save to your workspace.');}
   function importRows(rows){let n=0;update(j=>{const plan=planJournalImport(j.trades,rows);n=plan.added.length;return {...j,trades:[...j.trades,...plan.added]};});setImporting(null);setNotice(`${n} trades added. Changes save to your workspace.`);if(rows.length)changeMonth(journalDay(rows[0].exitAt||rows[0].entryAt).slice(0,7));}
   function remove(id){const t=trades.find(t=>t.id===id);update(j=>({...j,trades:j.trades.filter(t=>t.id!==id)}));setRemoved(t);closeEditor();setNotice('Trade removed.');}
-  return <div className="journal-trades-view">
-    <div className="journal-heading-actions journal-trades-actions"><button className="button outline" onClick={()=>setImporting({})}><UploadSimple size={18}/>Import trades</button><button className="button primary" onClick={()=>setEditor({trade:null})}><Plus size={18}/>Add trade</button></div>
+  const actions=<>
+    <button className="button primary" onClick={()=>setEditor({trade:null})}><Plus size={17}/>Add trade</button>
+    <button className="button outline" aria-label="Import trades" onClick={()=>setImporting({})}><UploadSimple size={17}/>Import</button>
+    <button className="button outline" disabled={!filtered.length} onClick={()=>download(filtered,'Journal export')}><DownloadSimple size={17}/>Export</button>
+  </>;
+  return <div className="journal-page jt-page">
+    <PageHeader title="Trade journal" description="Review your executions and improve your process." actions={actions}/>
+    {nav}
+    {missing&&<p className="journal-help amber" role="status">This trade is no longer in the journal.</p>}
     {prepared.map(d=><div className="journal-prepared" key={d.id}><ImageSquare size={23}/><div><strong>Screenshot ready to review</strong><span>{d.label} · not yet added to your results</span></div><button className="button outline" onClick={()=>setImporting({prepared:d})}>Review import<ArrowUpRight size={16}/></button></div>)}
     {draftError&&<p className="journal-help amber" role="status">{draftError}</p>}
     {notice&&<div className="journal-notice" role="status"><CheckCircle size={18}/><span>{notice}</span>{removed&&<button className="text-button" onClick={()=>{try{update(j=>({...j,trades:[...j.trades,removed]}));setRemoved(null);setNotice('Trade restored.');}catch(e){setNotice(e.message);}}}><ArrowCounterClockwise size={15}/>Undo removal</button>}<button className="icon-button" aria-label="Dismiss journal message" onClick={()=>setNotice('')}><X size={15}/></button></div>}
-    <div className="journal-filters"><label>Trading account<select value={account} onChange={e=>setAccount(e.target.value)}><option value="">All accounts</option>{accounts.map(t=><option key={accountKey(t)} value={accountKey(t)}>{t.firm} · {t.account}</option>)}</select></label><label>Month<input type="month" value={month} onChange={e=>changeMonth(e.target.value)}/></label><label className="journal-all-time"><input type="checkbox" checked={allTime} onChange={e=>{setAllTime(e.target.checked);setDay('');}}/>All time</label><label>Search<input type="search" placeholder="Symbol or review tag" value={query} onChange={e=>setQuery(e.target.value)}/></label>{day&&<button className="text-button" onClick={()=>setDay('')}>{day}<X size={14}/></button>}</div>
-    <div className="journal-stats"><article className="panel"><span>Gross P/L</span><strong className={tone(stats.gross)}>{stats.closed?money(stats.gross):'—'}</strong><small>{stats.closed?stats.missingFees?`Net unavailable · fees missing on ${stats.missingFees} trades`:`Net after fees ${money(stats.net)}`:'Add closed trades to see results'}</small></article><article className="panel"><span>Win rate · gross</span><strong>{stats.winRate===null?'—':stats.winRate.toFixed(1)+'%'}</strong><small>{stats.wins} wins · {stats.losses} losses · {stats.breakeven} flat</small></article><article className="panel"><span>Profit factor · gross</span><strong>{stats.profitFactor===null?'—':stats.profitFactor.toFixed(2)}</strong><small>{!stats.closed?'No closed trades':stats.losses?'Winning P/L ÷ losing P/L':'Not defined without losing trades'}</small></article><article className="panel"><span>Average hold</span><strong>{duration(stats.averageHold)}</strong><small>{stats.closed} closed records · {stats.open} open</small></article></div>
-    <div className="journal-analysis"><section className="panel journal-curve"><header><div><h3>Cumulative gross P/L</h3><p>{day|| (allTime?'All recorded dates':month)} · USD · realized trades only</p></div><Notebook size={22}/></header>{stats.series.length?<Suspense fallback={<div className="journal-chart-empty">Loading performance chart…</div>}><Curve series={stats.series}/></Suspense>:<div className="journal-chart-empty"><Notebook size={34}/><strong>Your history starts here.</strong><span>Add a trade or review a screenshot import.</span></div>}<p className="journal-chart-caption">Starts from $0 within this filter. This is recorded P/L, not account equity or a prop-firm drawdown limit.</p></section><JournalCalendar month={month} onMonth={changeMonth} days={calendarDays} selected={day} onSelect={value=>{setDay(value);setAllTime(false);}}/></div>
-    <section className="panel journal-trades"><header><div><h3>Trades</h3><span>{filtered.length} records · {zoneLabel} / {formatLabel}</span></div><div><button className="text-button" disabled={!filtered.length} onClick={()=>download(filtered,'Journal export')}><DownloadSimple size={16}/>Export</button></div></header>
-      {filtered.length?<div className="journal-table-scroll"><table><thead><tr><th>Contract</th><th>Entry → exit</th><th>Qty</th><th>Premium</th><th>Gross P/L</th><th>Review</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map(t=>{const r=tradeResult(t),answered=Object.values(t.review).filter(v=>v!==null).length;return <tr key={t.id}><td><button className="journal-symbol" onClick={()=>setEditor({trade:t})}>{contract(t)}</button><small>{t.expiration} · {t.firm} / {t.account}</small></td><td data-label={`Entry → exit · ${zoneLabel}`}><span>{journalStamp(t.entryAt)}</span><small>{journalStamp(t.exitAt)}</small></td><td data-label="Contracts">{t.quantity}<small>{t.position}</small></td><td data-label="Premium">{money(t.entryPrice)}<small>→ {money(t.exitPrice)}</small></td><td data-label="Gross P/L"><strong className={tone(r.gross)}>{money(r.gross)}</strong><small>{t.exitAt?`Net ${money(r.net)}`:'Open · unmarked'}</small></td><td data-label="Review"><span>Automatic review</span><small>{answered}/4 personal notes</small><small>{duration(r.seconds)}</small></td><td><button className="icon-button" aria-label={`Review ${contract(t)} trade`} onClick={()=>setEditor({trade:t})}><CaretRight size={18}/></button></td></tr>;})}</tbody></table></div>:<div className="journal-empty"><Clock size={26}/><p>{trades.length?'No trades match these filters.':'Manual entries and reviewed imports will appear here.'}</p><button className="text-button" onClick={()=>setEditor({trade:null})}>{trades.length?'Add trade':'Add your first trade'}<Plus size={16}/></button></div>}
-      <footer>Calculated from your recorded premiums, quantities and multiplier. Blank fees are unknown. Open a trade for automatic strategy checks. Personal notes stay separate.</footer>
-    </section>
-    {editor&&<TradeEditor trade={editor.trade} workspace={workspace.data} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
+    <JournalFilters trades={trades} accounts={accounts} accountKey={accountKey} month={month} allTime={allTime}
+      onMonth={changeMonth} onAllTime={()=>{setAllTime(true);setDay('');}} account={account} onAccount={setAccount}
+      symbol={symbol} onSymbol={setSymbol} query={query} onQuery={setQuery} day={day} onClearDay={()=>setDay('')}/>
+    <JournalSummary stats={stats}/>
+    <JournalAnalysis stats={stats} calendarStats={calendarStats} month={month} onMonth={changeMonth} day={day}
+      onDay={value=>{setDay(value);setAllTime(false);}}/>
+    <JournalResults trades={filtered} stats={stats} hasTrades={!!trades.length} onOpen={(trade,view)=>setEditor({trade,view})}
+      onAdd={()=>setEditor({trade:null})}/>
+    {editor&&<TradeEditor trade={editor.trade} initialView={editor.view} workspace={workspace.data} accounts={[...new Set(trades.map(t=>t.account))]} onSave={save} onClose={closeEditor} onDelete={remove}/>}
     {importing&&<ImportTrades prepared={importing.prepared} existing={trades} onImport={importRows} onClose={()=>setImporting(null)}/>}
   </div>;
 }
@@ -119,9 +128,11 @@ export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,o
   const tabs=useSectionNavigation(tab);
   let tradeId='';try{tradeId=decodeURIComponent(encodedId||'');}catch{}
   const selected=workspace.data.journal?.trades.find(trade=>trade.id===tradeId);
+  const nav=<nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Broker trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans <span>{workspace.data.plans.length}</span></button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button></nav>;
+  if(tab==='trades')return <JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade} missing={tradeId&&!selected} nav={nav}/>;
   return <div className="journal-page"><PageHeader title={tab==='review'?'Session review':'Trade journal'} description={tab==='review'?'Your results, execution and lessons for one U.S. trading day.':'Review your trades, plans and daily sessions in one place.'}/>
 
-    <nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Broker trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans <span>{workspace.data.plans.length}</span></button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button></nav>
-    {tab==='review'?<SessionReview embedded workspace={workspace} selectedDay={reviewDay} onDay={onReviewDay} onJournal={()=>onTab('trades')} onTrade={id=>onTab(`trades/${encodeURIComponent(id)}`)}/>:tab==='broker'?<PortfolioJournal/>:tab==='plans'?<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>:<>{tradeId&&!selected&&<p className="journal-help amber" role="status">This trade is no longer in the journal.</p>}<JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade}/></>}
+    {nav}
+    {tab==='review'?<SessionReview embedded workspace={workspace} selectedDay={reviewDay} onDay={onReviewDay} onJournal={()=>onTab('trades')} onTrade={id=>onTab(`trades/${encodeURIComponent(id)}`)}/>:tab==='broker'?<PortfolioJournal/>:<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>}
   </div>;
 }

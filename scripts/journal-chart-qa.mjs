@@ -12,6 +12,7 @@ const browser=await chromium.launch({headless:true,executablePath:'/home/gunner/
 const checks=[],errors=[];const mark=s=>{checks.push(s);console.log('PASS '+s);};
 let mode='ok';const requests=[];
 async function setup(page){
+ await page.clock.setFixedTime(new Date('2026-10-26T17:30:00Z'));
  page.on('pageerror',e=>errors.push(e.message));await mockMarket(page);await mockBriefing(page);
  await page.route('**/api/market/trade-history?*',async route=>{
   const params=new URL(route.request().url()).searchParams,symbol=params.get('symbol'),frame=params.get('interval');requests.push(Object.fromEntries(params));

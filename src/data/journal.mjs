@@ -71,9 +71,31 @@ export function tradeResult(t){
 export function journalStats(trades){
   const closed=trades.filter(t=>t.exitAt),results=closed.map(tradeResult),wins=results.filter(r=>r.gross>0),losses=results.filter(r=>r.gross<0),gross=roundMoney(results.reduce((s,r)=>s+r.gross,0)),missingFees=results.filter(r=>r.net===null).length;
   const winning=roundMoney(wins.reduce((s,r)=>s+r.gross,0)),losing=roundMoney(-losses.reduce((s,r)=>s+r.gross,0));
-  const days=new Map();for(const t of [...closed].sort((a,b)=>a.exitAt.localeCompare(b.exitAt))){const date=journalDay(t.exitAt),day=days.get(date)||{date,gross:0,count:0};day.gross=roundMoney(day.gross+tradeResult(t).gross);day.count++;days.set(date,day);}
-  let cumulative=0;const series=[...days.values()].map(d=>({...d,cumulative:cumulative=roundMoney(cumulative+d.gross)}));
-  return {closed:closed.length,open:trades.length-closed.length,gross,missingFees,net:closed.length&&!missingFees?roundMoney(results.reduce((s,r)=>s+r.net,0)):null,wins:wins.length,losses:losses.length,breakeven:closed.length-wins.length-losses.length,winRate:closed.length?wins.length/closed.length*100:null,profitFactor:losing>0?winning/losing:null,averageHold:closed.length?results.reduce((s,r)=>s+r.seconds,0)/closed.length:null,series};
+  const days=new Map(),exits=[];
+  let fees=0,realizedGross=0,realizedNet=0;
+  for(const trade of [...closed].sort((a,b)=>a.exitAt.localeCompare(b.exitAt))){
+    const date=journalDay(trade.exitAt);
+    const day=days.get(date) || {date,gross:0,net:0,count:0};
+    const result=tradeResult(trade);
+    realizedGross=roundMoney(realizedGross+result.gross);
+    realizedNet=realizedNet===null || result.net===null ? null : roundMoney(realizedNet+result.net);
+    const point={at:trade.exitAt,cumulative:realizedGross,cumulativeNet:realizedNet};
+    if(exits.at(-1)?.at===point.at)exits[exits.length-1]=point;
+    else exits.push(point);
+    day.gross=roundMoney(day.gross+result.gross);
+    day.net=day.net===null || result.net===null ? null : roundMoney(day.net+result.net);
+    day.count++;
+    days.set(date,day);
+    if(trade.fees!==null)fees+=trade.fees;
+  }
+  let cumulative=0,cumulativeNet=0;
+  const series=[...days.values()].map(day=>{
+    cumulative=roundMoney(cumulative+day.gross);
+    cumulativeNet=cumulativeNet===null || day.net===null ? null : roundMoney(cumulativeNet+day.net);
+    return {...day,cumulative,cumulativeNet};
+  });
+  return {closed:closed.length,open:trades.length-closed.length,gross,missingFees,
+    fees:closed.length&&!missingFees?roundMoney(fees):null,net:closed.length?cumulativeNet:null,wins:wins.length,losses:losses.length,breakeven:closed.length-wins.length-losses.length,winRate:closed.length?wins.length/closed.length*100:null,profitFactor:losing>0?winning/losing:null,averageHold:closed.length?results.reduce((s,r)=>s+r.seconds,0)/closed.length:null,series,exits};
 }
 export const money=value=>value===null?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
 export function duration(value){if(value===null)return '—';const seconds=Math.round(value);return seconds<60?`${seconds}s`:seconds<3600?`${Math.floor(seconds/60)}m ${seconds%60}s`:`${Math.floor(seconds/3600)}h ${Math.floor(seconds%3600/60)}m`;}

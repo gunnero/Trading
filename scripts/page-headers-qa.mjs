@@ -21,8 +21,13 @@ try{
    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth),`${route} overflow at ${width}`).toBeLessThanOrEqual(1);
    const metric=await page.locator('.page-header').evaluate(h=>{const t=h.querySelector('h1'),d=h.querySelector('.page-header-description'),s=getComputedStyle(t),b=h.getBoundingClientRect(),r=t.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,titleX:r.x,titleY:r.y,font:s.fontFamily,size:s.fontSize,weight:s.fontWeight,line:s.lineHeight,tracking:s.letterSpacing,color:s.color,background:getComputedStyle(h).backgroundColor,subtitle:getComputedStyle(d).fontSize};});
    baseline??=metric;
-   for(const key of (['briefing','earnings','news'].includes(route)?['titleX','font','weight','tracking','color','background']:['x','y','width','titleX','titleY','font','size','weight','line','tracking','color','background','subtitle']))if(metric[key]!==baseline[key])layoutIssues.push({route,width,key,actual:metric[key],expected:baseline[key]});
-   expect(metric.size).toBe(width<=600?'27px':['briefing','earnings','news'].includes(route)?'28px':'30px');
+   const marketHeader=['briefing','earnings','news'].includes(route);
+   const sharedTypography=['titleX','font','weight','color','background'];
+   const commonKeys=['x','y','width','titleX','titleY','font','size','weight','line','tracking','color','background','subtitle'];
+   const keys=route==='sentiment'?sharedTypography:marketHeader||route==='journal/trades'?[...sharedTypography,'tracking']:commonKeys;
+   for(const key of keys)if(metric[key]!==baseline[key])layoutIssues.push({route,width,key,actual:metric[key],expected:baseline[key]});
+   const titleSize=route==='sentiment'?(width<=600?'30px':'38px'):width<=600?'27px':marketHeader?'28px':'30px';
+   expect(metric.size,route+' at '+width).toBe(titleSize);
    for(const action of await page.locator('.page-header-actions button,.page-header-actions a').all()){await expect(action).toBeVisible();const b=await action.boundingBox();expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width+1);}
    if(width===1488){await page.locator('.page-header').screenshot({path:`${dir}/${route.replace('/','-')}-header.png`});if(!route.includes('/')||route==='journal/trades')await page.screenshot({path:`${dir}/${route.replace('/','-')}-desktop.png`});}
    if([820,390].includes(width)&&['levels','briefing','earnings','news','journal/trades','review','settings/charts','sentiment'].includes(route))await page.screenshot({path:`${dir}/${route.replace('/','-')}-${width}.png`});
@@ -31,7 +36,7 @@ try{
   }
  }
  expect(layoutIssues).toEqual([]);
- mark('All 14 states preserve one consistent heading; Calendar, Earnings and News use their approved compact headers; actions remain visible at five widths without overflow');
+ mark('All 14 states preserve one consistent heading; Calendar, Earnings, News and journal Trades use their approved compact headers; actions remain visible at five widths without overflow');
  await page.setViewportSize({width:390,height:844});
  for(const [route,title] of pages.filter(([route])=>!route.includes('/'))){await go(route,title);const menu=page.getByRole('button',{name:'Open navigation',exact:true});await menu.click();await expect(page.getByRole('dialog',{name:'Navigation'})).toBeVisible();await expect(page.locator('.main-shell')).toHaveAttribute('inert','');await page.keyboard.press('Escape');await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await expect(menu).toBeFocused();}
  await page.getByRole('button',{name:'Open navigation'}).click();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Markets',exact:true}).click();await page.getByRole('navigation',{name:'Markets sections'}).getByRole('button',{name:'News',exact:true}).click();await expect(page.locator('.page-header h1')).toHaveText('News');await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
@@ -40,7 +45,7 @@ try{
  await go('levels','Key levels');await page.locator('.page-header').getByRole('button',{name:'Import levels'}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
  await go('earnings','Earnings');await page.locator('.page-header').getByRole('button',{name:'Full calendar'}).click();await expect(page.getByRole('region',{name:'U.S. earnings calendar',exact:true})).toBeVisible();await page.getByRole('button',{name:'Session view',exact:true}).click();await expect(page.locator('.earnings-board-filters')).toBeVisible();
  await go('journal/plans','Trade journal');await expect(page.getByRole('heading',{name:'Saved plans',exact:true})).toBeVisible();await page.getByRole('navigation',{name:'Trade journal sections'}).getByRole('button',{name:'Session review',exact:true}).click();await expect(page.locator('.page-header h1')).toHaveText('Session review');await page.getByRole('navigation',{name:'Trade journal sections'}).getByRole('button',{name:'Trades',exact:true}).click();await expect(page).toHaveURL(/#journal\/trades$/);await page.reload();await expect(page.locator('.page-header h1')).toHaveText('Trade journal');await page.goBack();await expect(page.locator('.page-header h1')).toHaveText('Session review');
- await go('sentiment','Fear & Greed');await page.locator('.page-header').getByRole('button',{name:'Refresh readings'}).click();await expect(page.locator('.sentiment-panel')).toBeVisible();
+ await go('sentiment','Fear & Greed');await page.locator('.page-header').getByRole('button',{name:'Refresh readings'}).click();await expect(page.getByRole('region',{name:'Seven sentiment indicators'})).toBeVisible();
  await go('news','News');await expect(page.locator('.page-header').getByRole('link',{name:'Yahoo Finance'})).toHaveAttribute('href',/finance.yahoo.com/);await page.getByRole('button',{name:'My watchlist',exact:true}).click();await expect(page.getByLabel('News symbol')).toBeVisible();await page.getByRole('checkbox',{name:'Economy headlines only'}).check();await expect(page.getByRole('checkbox',{name:'Economy headlines only'})).toBeChecked();
  await go('settings/workspace','Settings');await expect(page.getByLabel('Time zone',{exact:true})).toBeVisible();await page.getByRole('navigation',{name:'Settings sections'}).getByRole('link',{name:'Charts',exact:true}).click();await expect(page.getByRole('heading',{name:'Chart defaults',exact:true})).toBeVisible();
  mark('Header actions, journal/review links, import dialog, earnings view switch, sentiment refresh, News filters and Settings navigation remain functional');

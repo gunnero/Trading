@@ -16,6 +16,19 @@ test('Net uses explicit fees only; gross statistics exclude opens and keep zero/
  assert.equal(tradeResult(a).net,50);assert.equal(tradeResult(a).r,1.8);assert.equal(tradeResult(d).gross,null);const stats=journalStats([a,b,c,d]);assert.equal(stats.gross,0);assert.equal(stats.net,-4);assert.equal(stats.profitFactor,1);assert.equal(stats.closed,3);assert.equal(stats.open,1);assert.equal(stats.breakeven,1);assert.ok(Math.abs(stats.winRate-100/3)<1e-10);
  assert.equal(tradeResult(fixture({position:'short',entryPrice:2.96,exitPrice:2.42})).gross,54);assert.equal(tradeResult(fixture({position:'short'})).returnPct,null);
 });
+test('Calendar and cumulative net include explicit zero fees and stop at missing fees',()=>{
+ const first=fixture({fees:0}),late=fixture({id:'overnight',fees:4,exitAt:'2026-10-26T23:30:00Z'});
+ const known=journalStats([late,first]);
+ assert.deepEqual(known.series.map(d=>[d.date,d.net,d.cumulativeNet]),[['2026-10-26',54,54],['2026-10-27',50,104]]);
+ assert.equal(known.fees,4);
+ assert.deepEqual(known.exits.map(p=>p.cumulativeNet),[54,104]);
+ const mixed=journalStats([late,first,fixture({id:'unknown'})]);
+ assert.deepEqual(mixed.exits.map(p=>p.cumulative),[108,162]);
+ assert.equal(mixed.fees,null);
+ assert.equal(mixed.net,null);
+ assert.deepEqual(mixed.series.map(d=>[d.net,d.cumulativeNet,d.cumulative]),[[null,null,108],[50,null,162]]);
+ assert.equal(journalStats([]).fees,null);
+});
 test('Skopje conversion follows DST, preserves seconds and rejects nonexistent or ambiguous wall times',()=>{
  assert.equal(localToInstant('2026-10-26T16:19:54'),'2026-10-26T15:19:54.000Z');assert.equal(localToInstant('2026-10-23T16:19:54'),'2026-10-23T14:19:54.000Z');assert.equal(localStamp('2026-10-26T23:30:00Z'),'2026-10-27T00:30:00');assert.throws(()=>localToInstant('2026-03-29T02:30'));assert.throws(()=>localToInstant('2026-10-25T02:30'));assert.throws(()=>localToInstant('2026-02-30T12:00'));
 });
