@@ -28,6 +28,25 @@ try{
  const sidebar=await page.locator('.sidebar').boundingBox(),desktop=await dialog.boundingBox();
  expect(desktop.x).toBeGreaterThanOrEqual(sidebar.x+sidebar.width);
  expect(desktop.width).toBeGreaterThan(1150);
+ for(const viewport of [{width:1488,height:1220},{width:1366,height:768},{width:820,height:900},{width:390,height:844},{width:320,height:568}]){
+  await page.setViewportSize(viewport);
+  let baseline;
+  for(const name of ['Overview','Financials','Earnings','News','Overview']){
+   await tab(name).click();
+   await expect(tab(name)).toHaveAttribute('aria-selected','true');
+   const layout=await dialog.evaluate(el=>{
+    const elements=[el,...el.querySelectorAll('.modal-header .icon-button,.company-mark,.company-identity h3,.company-quote,.company-use,[role=tab]')];
+    return elements.map(node=>{
+     const {x,y,width,height}=node.getBoundingClientRect(),style=getComputedStyle(node);
+     return {x,y,width,height,font:style.font};
+    });
+   });
+   if(!baseline)baseline=layout;
+   expect(layout,`${name} layout at ${viewport.width}px`).toEqual(baseline);
+   expect(await dialog.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+  }
+ }
+ mark('Company tabs keep the same dialog, header, controls and type scale across five viewport sizes');
  for(const width of [320,390,820,1100,1240,1488]){
   await page.setViewportSize({width,height:1058});
   await expect.poll(()=>dialog.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);

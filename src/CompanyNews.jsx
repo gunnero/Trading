@@ -7,7 +7,7 @@ import './company-news.css';
 
 const pageSize = 5;
 
-export function CompanyNews({symbol, children}) {
+export function CompanyNews({symbol}) {
   const [limit, setLimit] = useState(pageSize);
   const feed = useFeed(`/api/news?symbols=${encodeURIComponent(symbol.replaceAll('.', '-'))}`);
   const {marketTime, clockStamp, zoneLabel} = useDisplayTime();
@@ -62,7 +62,6 @@ export function CompanyNews({symbol, children}) {
       <summary>Sources &amp; refresh</summary>
       <p>This tab checks Yahoo Finance for headlines every 10 minutes. The ticker feed may include related companies and global stories. Publishers may require a subscription.</p>
       {(unavailable || cached) && feed.message && <p>{feed.message}</p>}
-      {children}
     </details>
   </section>;
 }

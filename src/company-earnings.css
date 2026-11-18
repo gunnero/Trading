@@ -1,11 +1,3 @@
-.modal.company-modal:has(.company-detail[data-tab="earnings"]) { --company-dialog-width: 1016px; }
-.company-detail[data-tab="earnings"] .company-identity p,
-.company-detail[data-tab="earnings"] .company-footer,
-.company-detail[data-tab="earnings"] .company-footer a { font-size: 12px; }
-.company-detail[data-tab="earnings"] .company-mark { background: var(--selection); color: var(--text); }
-.company-detail[data-tab="earnings"] .company-use { color: var(--primary); border: 1px solid var(--primary); background: var(--panel); }
-.company-detail[data-tab="earnings"] .company-use:hover { background: var(--selection); }
-
 .company-earnings { display: grid; gap: 10px; }
 .company-earnings-banner {
   display: grid;
@@ -16,14 +8,14 @@
   background: var(--selection);
   border-radius: 7px;
 }
-.company-earnings-banner h3, .company-history-heading h3 { font-size: 20px; line-height: 1.2; margin: 0; }
-.company-earnings-banner p, .company-earnings-empty p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+.company-earnings-banner h3, .company-history-heading h3 { font-size: var(--company-section); line-height: 1.2; margin: 0; }
+.company-earnings-banner p, .company-earnings-empty p { margin: 4px 0 0; font-size: var(--company-body); line-height: 1.45; }
 .company-next-report { display: flex; gap: 12px; align-items: flex-start; border-inline-start: 1px solid var(--border); padding-inline-start: 20px; }
 .company-next-report svg, .company-history-heading svg, .company-earnings-empty svg { color: var(--primary); flex: none; }
 .company-next-report span, .company-next-report small { display: block; font-size: 11px; color: var(--muted); }
 .company-next-report strong { display: block; font-size: 16px; line-height: 1.4; }
-.company-next-report p { font-size: 12px; margin: 1px 0 2px; }
-.company-earnings-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.company-next-report p { font-size: var(--company-caption); margin: 1px 0 2px; }
+.company-earnings-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: var(--company-caption); color: var(--muted); }
 .company-earnings-filters > span { margin-inline-end: auto; }
 .company-earnings-filters label { display: flex; align-items: center; gap: 6px; }
 .company-earnings-filters select {
@@ -45,18 +37,18 @@
   background: var(--panel);
 }
 .company-eps-heading, .company-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap; }
-.company-eps-heading h4 { font-size: 15px; line-height: 1.35; margin: 0; }
+.company-eps-heading h4 { font-size: var(--company-subheading); line-height: 1.35; margin: 0; }
 .company-eps-legend, .company-eps-legend span, .company-history-heading span { display: inline-flex; align-items: center; }
 .company-eps-legend { gap: 10px; color: var(--muted); font-size: 11px; }
 .company-eps-legend span { gap: 5px; }
 .company-eps-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 2px; background: #713bdd; }
 .company-eps-legend span + span::before { background: #e4d9fa; border: 1px solid #ad8be6; }
 .company-eps-canvas, .company-chart-empty { width: 100%; height: clamp(158px,20vh,204px); }
-.company-chart-empty { display: grid; place-content: center; color: var(--muted); font-size: 13px; text-align: center; }
+.company-chart-empty { display: grid; place-content: center; color: var(--muted); font-size: var(--company-body); text-align: center; }
 .company-history-heading { margin-bottom: 8px; }
 .company-history-heading span { gap: 6px; border-radius: 4px; padding: 3px 7px; background: var(--selection); font-size: 11px; }
 .company-earnings-results .table-scroll { max-width: 100%; overflow-x: auto; }
-.company-earnings table { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.company-earnings table { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; font-size: var(--company-body); }
 .company-earnings th, .company-earnings td {
   padding: 5px 9px;
   border-bottom: 1px solid var(--border);
@@ -65,7 +57,7 @@
   white-space: nowrap;
 }
 .company-earnings th { font-weight: 650; color: var(--text); }
-.company-earnings thead th { background: var(--selection); font-size: 12px; }
+.company-earnings thead th { background: var(--selection); font-size: var(--company-caption); }
 .company-earnings tbody th, .company-earnings tbody td:nth-child(3), .company-earnings tbody td:nth-child(5) { font-weight: 650; }
 .company-earnings tbody th small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
 .company-report-status { display: inline-block; border-radius: 4px; background: var(--selection); padding: 1px 6px; font-size: 11px; font-weight: 600; }
@@ -73,8 +65,8 @@
 .company-surprise { display: inline-block; padding-inline-start: 6px; font-size: 11px; color: var(--muted); }
 .company-earnings-coverage { font-size: 11px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
 .company-earnings .company-disclosure { margin: 0; }
-.company-earnings .company-disclosure > summary { font-size: 12px; }
-.company-earnings .company-disclosure p { font-size: 12px; line-height: 1.5; }
+.company-earnings .company-disclosure > summary { font-size: var(--company-caption); }
+.company-earnings .company-disclosure p { font-size: var(--company-caption); line-height: 1.5; }
 .company-earnings-empty { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 7px; }
 .company-earnings-empty h3 { margin: 0; font-size: 17px; }
 
@@ -93,6 +85,5 @@
   .company-earnings-filters select { min-height: 34px; }
   .company-earnings-chart, .company-earnings-results { padding: 9px; }
   .company-eps-canvas, .company-chart-empty { height: 176px; }
-  .company-history-heading h3 { font-size: 18px; }
   .company-history-heading span { font-size: 10px; }
 }

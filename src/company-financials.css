@@ -1,9 +1,3 @@
-.modal.company-modal:has(.company-detail[data-tab="financials"]) { --company-dialog-width: 1184px; }
-.company-detail[data-tab="financials"] .company-identity p,
-.company-detail[data-tab="financials"] .company-footer,
-.company-detail[data-tab="financials"] .company-footer a { font-size: 12px; }
-.company-detail[data-tab="financials"] .company-mark { width: 44px; height: 44px; flex-basis: 44px; }
-
 .company-financial-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -14,7 +8,7 @@
 .company-financial-summary > section { padding-inline: 18px; min-width: 0; border-inline-start: 1px solid var(--border); }
 .company-financial-summary > section:first-child { padding-left: 0; border: 0; }
 .company-financial-summary > section:last-child { padding-right: 0; }
-.company-financial-summary h3 { display: flex; align-items: center; gap: 9px; font-size: 16px; margin: 0 0 12px; }
+.company-financial-summary h3 { display: flex; align-items: center; gap: 9px; font-size: var(--company-subheading); margin: 0 0 12px; }
 .company-financial-summary h3 svg, .company-statement-body aside svg { flex: none; color: var(--primary); }
 .company-detail .company-financial-summary .company-metrics { display: block; }
 .company-detail .company-financial-summary .company-metrics > div {
@@ -26,8 +20,8 @@
   padding: 4px 0;
   border: 0;
 }
-.company-detail .company-financial-summary .company-metrics dt { font-size: 13px; color: var(--muted); line-height: 1.4; }
-.company-detail .company-financial-summary .company-metrics dd { font-size: 14px; margin: 0 0 0 auto; font-variant-numeric: tabular-nums; }
+.company-detail .company-financial-summary .company-metrics dt { font-size: var(--company-body); color: var(--muted); line-height: 1.4; }
+.company-detail .company-financial-summary .company-metrics dd { font-size: var(--company-body); margin: 0 0 0 auto; font-variant-numeric: tabular-nums; }
 .company-financial-summary .company-metrics small { display: none; }
 
 .company-detail .company-history { margin: 0; padding: 0; background: transparent; border: 0; }
@@ -40,16 +34,16 @@
   border-block: 1px solid var(--border);
 }
 .company-statement-tabs { display: flex; max-width: 100%; }
-.company-statement-tabs button { padding: 10px 15px; border-bottom: 2px solid transparent; font-size: 14px; }
+.company-statement-tabs button { padding: 10px 15px; border-bottom: 2px solid transparent; font-size: var(--company-body); }
 .company-statement-tabs button[aria-pressed="true"] { color: var(--primary); border-color: var(--primary); font-weight: 650; }
 .company-statement-controls .segmented { margin-block: 4px; }
-.company-statement-controls .segmented button { padding: 5px 12px; font-size: 12px; }
-.company-detail .company-history .company-statement-caption { margin: 9px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.company-statement-controls .segmented button { padding: 5px 12px; font-size: var(--company-caption); }
+.company-detail .company-history .company-statement-caption { margin: 9px 0; color: var(--muted); font-size: var(--company-caption); line-height: 1.5; }
 
 .company-statement-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(160px, 1fr); gap: 20px; }
 .company-statement-body > * { min-width: 0; }
 .company-statement-body .table-scroll { align-self: start; overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; }
-.company-detail .company-history table { width: 100%; min-width: 100%; margin: 0; border: 0; background: var(--panel); font-size: 14px; }
+.company-detail .company-history table { width: 100%; min-width: 100%; margin: 0; border: 0; background: var(--panel); font-size: var(--company-body); }
 .company-detail .company-history th, .company-detail .company-history td { padding: 8px 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .company-detail .company-history th:first-child { position: sticky; inset-inline-start: 0; z-index: 1; text-align: left; background: var(--panel); }
 .company-detail .company-history thead th:first-child { background: var(--selection); }
@@ -62,18 +56,18 @@
   gap: 16px;
   padding: 8px 0 8px 18px;
   border-inline-start: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--company-body);
 }
 .company-statement-body aside > div { display: flex; align-items: start; gap: 10px; }
 .company-statement-body aside span { font-weight: 600; }
 .company-statement-body aside strong, .company-statement-body aside small { display: block; margin-top: 3px; }
-.company-statement-body aside small { font-size: 12px; font-weight: 400; color: var(--muted); }
-.company-unavailable, .company-statement-unavailable { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; margin: 0; padding: 14px; font-size: 13px; }
+.company-statement-body aside small { font-size: var(--company-caption); font-weight: 400; color: var(--muted); }
+.company-unavailable, .company-statement-unavailable { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; margin: 0; padding: 14px; font-size: var(--company-body); }
 .company-statement-unavailable p { margin: 0 0 8px; }
 .company-statement-unavailable .company-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .company-statement-unavailable .company-metrics > div { padding: 6px; }
-.company-statement-unavailable .company-metrics dt, .company-statement-unavailable .company-metrics small { font-size: 12px; }
-.company-statement-unavailable .company-metrics dd { font-size: 14px; }
+.company-statement-unavailable .company-metrics dt, .company-statement-unavailable .company-metrics small { font-size: var(--company-caption); }
+.company-statement-unavailable .company-metrics dd { font-size: var(--company-body); }
 
 .company-financial-details { margin-top: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
 .company-financial-details > summary {
@@ -82,12 +76,11 @@
   background: var(--selection);
   border-radius: 5px;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--company-body);
   font-weight: 600;
 }
 .company-financial-details > summary svg { vertical-align: middle; margin: 0 7px 2px 3px; color: var(--primary); }
 .company-financial-details > :not(summary) { margin-inline: 12px; }
-.company-detail[data-tab="financials"] .company-footer { margin-top: 16px; }
 
 @media (max-width: 800px) {
   .company-financial-summary { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: 18px; }
@@ -97,16 +90,15 @@
 @media (max-width: 600px) {
   .company-financial-summary { padding-block: 6px 14px; }
   .company-financial-summary > section { padding-inline: 10px; }
-  .company-financial-summary h3 { font-size: 14px; gap: 5px; }
+  .company-financial-summary h3 { gap: 5px; }
   .company-financial-summary h3 svg { width: 16px; }
   .company-statement-controls { padding-bottom: 4px; }
   .company-statement-tabs { justify-content: space-between; width: 100%; }
-  .company-statement-tabs button { padding: 9px 4px; font-size: 13px; min-height: 40px; }
+  .company-statement-tabs button { padding: 9px 4px; font-size: var(--company-body); min-height: 40px; }
   .company-statement-controls .segmented button { min-height: 36px; }
   .company-statement-body { grid-template-columns: minmax(0,1fr); gap: 10px; }
   .company-statement-body aside { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 10px; padding: 4px 0; border: 0; }
   .company-statement-body aside > div { gap: 6px; }
   .company-statement-body aside svg { width: 16px; }
   .company-detail .company-history th, .company-detail .company-history td { padding: 6px 9px; }
-  .company-detail[data-tab="financials"] .company-mark { width: 36px; height: 36px; }
 }
