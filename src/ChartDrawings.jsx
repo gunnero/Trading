@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useId,useRef,useState} from 'react';
 import {Cursor,LineSegment,Minus,Rectangle,TextT,ArrowUUpLeft,ArrowUUpRight,Trash,Eye,EyeSlash} from '@phosphor-icons/react';
-import {DRAWING_COLORS,MAX_DRAWINGS,timeIndex,indexTime} from './data/drawings.mjs';
+import {DRAWING_PALETTE,DRAWING_COLORS,MAX_DRAWINGS,timeIndex,indexTime} from './data/drawings.mjs';
 import {useSavedChart} from './ChartSettings';
 
 const DrawingContext=createContext(null),EMPTY=[];
@@ -62,7 +62,7 @@ export function DrawingChart({scope,symbol,timeframe,times,instance,formatValue,
     {open&&<><div className="drawing-toolbar" role="group" aria-label="Chart drawing tools">
       <span className="drawing-title">Draw</span>
       <div className="drawing-tool-group">{tools.map(([id,label,Icon])=><button key={id} type="button" title={label} aria-label={label} aria-pressed={tool===id} disabled={!store||(remaining<=0&&id!=='select')} onClick={()=>choose(id)}><Icon size={17}/><span>{id==='horizontal'?'Level':id==='trend'?'Trend':id==='text'?'Note':label}</span></button>)}</div>
-      <label className="drawing-color-label"><span className="sr-only">Drawing color</span><select aria-label="Drawing color" value={selectedItem?.color||color} style={{color:selectedItem?.color||color}} onChange={e=>{setColor(e.target.value);if(draft)setDraft({...draft,color:e.target.value});updateSelected({color:e.target.value});}}>{DRAWING_COLORS.map((value,i)=><option key={value} value={value}>{['Amber','Green','Red','Blue','White'][i]}</option>)}</select></label>
+      <label className="drawing-color-label"><span className="sr-only">Drawing color</span><select aria-label="Drawing color" value={selectedItem?.color||color} style={{color:selectedItem?.color||color}} onChange={e=>{setColor(e.target.value);if(draft)setDraft({...draft,color:e.target.value});updateSelected({color:e.target.value});}}>{DRAWING_COLORS.map(value=><option key={value} value={value}>{DRAWING_PALETTE[value]}</option>)}</select></label>
       <div className="drawing-tool-group drawing-actions">
         <button type="button" aria-label="Undo drawing" title="Undo drawing (Ctrl / ⌘ Z)" disabled={!stack?.past.length} onClick={()=>{setDraft(null);store.change(scope,null,'undo');}}><ArrowUUpLeft size={17}/></button>
         <button type="button" aria-label="Redo drawing" title="Redo drawing (Ctrl / ⌘ Shift Z)" disabled={!stack?.future.length} onClick={()=>{setDraft(null);store.change(scope,null,'redo');}}><ArrowUUpRight size={17}/></button>

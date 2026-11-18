@@ -2,9 +2,8 @@ import {quotePrice,quoteChange,quoteTone} from './data/quotes.mjs';
 import {createContext,useContext,useEffect,useId,useRef,useState} from 'react';
 import {ChartLine,Stack,PencilSimple,ArrowsOutCardinal,ArrowCounterClockwise,Gear,X,ArrowUpRight} from '@phosphor-icons/react';
 import {CHART_DEFAULTS,readChartSettings,chartConfig} from './data/chart-settings.mjs';
-import {DRAWING_COLORS} from './data/drawings.mjs';
+import {ChartDefaultsEditor} from './ChartDefaultsEditor';
 import {TIMEFRAMES} from './data/candles';
-import {INDICATORS} from './ChartIndicators';
 import {ZoneRoleStatus} from './ZoneRoles';
 import {zoneName,zoneText,formatDate} from './data/market';
 
@@ -19,7 +18,7 @@ export function ChartSettingsProvider({workspace,children}){
     ...current,chartSettings:{...readChartSettings(current),defaults,...(all?{charts:{},intervals:{}}:{})},
     ...(all?{preferences:{...current.preferences,timeframe:defaults.defaultTimeframe}}:{}),
   }));}
-  return <Context.Provider value={{settings,update,workspace,saveDefaults:global,openGlobal:()=>setOpen(true)}}>{children}{open&&<GlobalChartSettings initial={settings.defaults} onSave={global} onClose={()=>setOpen(false)}/>}</Context.Provider>;
+  return <Context.Provider value={{settings,update,workspace,saveDefaults:global,openGlobal:()=>setOpen(true)}}>{children}{open&&<GlobalChartSettings initial={settings.defaults} setups={settings.charts} onSave={global} onClose={()=>setOpen(false)}/>}</Context.Provider>;
 }
 export const useChartSettingsStore=()=>useContext(Context);
 export function useSavedChart(scope){
@@ -66,19 +65,19 @@ export function ChartLevels({scope,instrument,date,roles,onTradingView,quoteDate
     {instrument?<details className="context-levels-details"><summary>View all {instrument.zones.length} {instrument.symbol} levels</summary><ul aria-label={`${instrument.symbol} imported levels`}>{instrument.zones.map((zone,i)=><li key={i}><span className={zone.type==='S'?'red':zone.type==='D'?'green':'amber'}>{zoneName(zone.type)}</span><strong>{zoneText(zone)}</strong></li>)}</ul></details>:<p>No supplied levels for this chart.</p>}
   </div>;
 }
-export function GlobalChartSettings({initial,onSave,onClose=()=>{},embedded=false}){
+export function GlobalChartSettings({initial,setups,onSave,onClose=()=>{},embedded=false}){
   const [draft,setDraft]=useState(()=>structuredClone(initial)),[confirm,setConfirm]=useState(null),dialog=useRef(null),title=useId();
   useEffect(()=>{if(embedded)return;const node=dialog.current,trigger=document.activeElement;node.showModal();return()=>{node.close();if(trigger?.isConnected)trigger.focus({preventScroll:true});};},[embedded]);
+  const cancelConfirmation=useRef(null);
+  useEffect(()=>{if(confirm)cancelConfirmation.current?.focus();},[confirm]);
   const edit=patch=>{setDraft(value=>({...value,...patch}));setConfirm(null);};
   const Container=embedded?'section':'dialog';
   const commit=(defaults,all=false)=>{onSave(defaults,all);setDraft(structuredClone(defaults));setConfirm(null);onClose();};
-  return <Container className={embedded?"global-chart-settings settings-chart-editor":"modal global-chart-settings"} ref={dialog} aria-labelledby={title} onCancel={embedded?undefined:onClose} onClick={embedded?undefined:e=>{if(e.target===e.currentTarget)onClose();}}><div className={embedded?"settings-editor-inner":"modal-inner"}>
-    <header className="modal-header"><div><h2 id={title}>{embedded?'Chart defaults':'Global chart settings'}</h2><p>Defaults for new charts and Reset view. Each chart keeps its saved setup.</p></div>{!embedded&&<button type="button" className="icon-button" aria-label="Close chart settings" onClick={onClose}><X size={21}/></button>}</header>
-    <div className="global-chart-fields"><label>Default timeframe<select aria-label="Default chart timeframe" value={draft.defaultTimeframe} onChange={e=>edit({defaultTimeframe:e.target.value})}>{TIMEFRAMES.map(frame=><option key={frame}>{frame}</option>)}</select></label><label>Drawing color<select aria-label="Default drawing color" value={draft.drawingColor} onChange={e=>edit({drawingColor:e.target.value})}>{DRAWING_COLORS.map((color,i)=><option key={color} value={color}>{['Amber','Green','Red','Blue','White'][i]}</option>)}</select></label></div>
-    <fieldset><legend>Default indicators</legend><div className="global-indicator-grid">{INDICATORS.map(item=><label key={item.key}><input type="checkbox" checked={draft.enabled[item.key]} onChange={e=>edit({enabled:{...draft.enabled,[item.key]:e.target.checked}})}/><i style={{background:item.color}}/>{item.label}</label>)}</div></fieldset>
-    <fieldset><legend>Chart display</legend><div className="global-indicator-grid">{[['showLevels','Show imported levels'],['drawingsVisible','Show saved drawings'],['fitLevels','Fit all imported levels'],['fitIndicators','Fit indicators'],['hoverValues','Hover values while Indicators is open']].map(([key,label])=><label key={key}><input type="checkbox" checked={draft[key]} onChange={e=>edit({[key]:e.target.checked})}/>{label}</label>)}</div></fieldset>
-    <p className="global-settings-note">Reset view restores the current chart’s zoom, automatic price scale and these display defaults. Drawings and imported levels are kept. Indicator visibility changes the chart display; your strategy checks keep using their configured indicators.</p>
-    {confirm&&<div className="global-reset-confirm" role="group" aria-label="Confirm global chart reset"><p>{confirm==='factory'?'Restore the original app defaults and reset every saved chart setup?':'Apply these defaults to every saved chart and reset their timeframes, zoom and price scales?'} Your drawings are kept.</p><button type="button" className="button primary" onClick={()=>commit(confirm==='factory'?structuredClone(CHART_DEFAULTS):draft,true)}>Confirm {confirm==='factory'?'reset':'apply to all'}</button><button type="button" className="button" onClick={()=>setConfirm(null)}>Cancel</button></div>}
-    <footer className="global-settings-actions"><button type="button" className="text-button" onClick={()=>setConfirm('factory')}>Restore app defaults</button><button type="button" className="button outline" onClick={()=>setConfirm('all')}>Apply to all charts</button><button type="button" className="button primary" onClick={()=>commit(draft)}>Save defaults</button></footer>
-  </div></Container>;
+  return <Container className={embedded?'chart-defaults':'modal chart-defaults cd-dialog'} ref={dialog} aria-labelledby={title} onCancel={embedded?undefined:onClose} onClick={embedded?undefined:e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className={embedded?'cd-inner':'modal-inner cd-inner'}>
+      <header className="cd-heading"><div><h2 id={title}>{embedded?'Chart defaults':'Global chart settings'}</h2><p>Defaults for new charts and Reset view.</p></div>{!embedded&&<button type="button" className="icon-button" aria-label="Close chart settings" onClick={onClose}><X size={21}/></button>}</header>
+      <ChartDefaultsEditor draft={draft} edit={edit} setups={setups} onSave={()=>commit(draft)} onApply={()=>setConfirm('all')} onRestore={()=>setConfirm('factory')}/>
+      {confirm&&<div className="cd-confirm" role="group" aria-label="Confirm global chart reset"><p>{confirm==='factory'?'Restore the original app defaults and reset every saved chart setup?':'Apply these defaults to every saved chart and reset their timeframes, zoom and price scales?'} Your drawings are kept.</p><button type="button" className="button primary" onClick={()=>commit(confirm==='factory'?structuredClone(CHART_DEFAULTS):draft,true)}>Confirm {confirm==='factory'?'reset':'apply to all'}</button><button type="button" ref={cancelConfirmation} className="button outline" onClick={()=>setConfirm(null)}>Cancel</button></div>}
+    </div>
+  </Container>;
 }

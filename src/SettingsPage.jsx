@@ -26,14 +26,14 @@ function Connections(){
 export function SettingsPage({category,transfersContent,watchlistContent,workspace,onAccount,onLogout,logoutBusy,logoutError}){
   const {settings,saveDefaults}=useChartSettingsStore(),{user,session}=useAuth();
   const navigation=useSectionNavigation(category);
-  const compactHeader=category==='transfers'||category==='watchlist';
+  const compactHeader=['transfers','watchlist','charts'].includes(category);
   const content=<><PageHeader title="Settings" description={compactHeader?undefined:"Manage your watchlist, charts, data connections and account in one place."}/><div className={`settings-page${category==='watchlist'?' settings-watchlist-page':''}`}>
 
     <div className="settings-layout"><nav ref={navigation} className="settings-nav" aria-label="Settings sections">{categories.map(({id,label,icon:Icon})=><a key={id} href={`#settings/${id}`} aria-current={category===id?'page':undefined}><Icon size={20}/><span>{label}</span><ArrowRight size={15}/></a>)}</nav>
       <div className="settings-content" key={category}>
         {category==='transfers'&&transfersContent}
         {category==='watchlist'&&watchlistContent}
-        {category==='charts'&&<><GlobalChartSettings initial={settings.defaults} onSave={saveDefaults} embedded/><p className="settings-footnote">{Object.keys(settings.charts).length} saved chart {Object.keys(settings.charts).length===1?'setup':'setups'}. Each chart keeps its own view until you reset it or apply defaults to all charts.</p></>}
+        {category==='charts'&&<GlobalChartSettings initial={settings.defaults} setups={settings.charts} onSave={saveDefaults} embedded/>}
         {category==='connections'&&<Connections/>}
         {category==='account'&&<AccountSettings workspace={workspace}/>}
         {category==='workspace'&&<><section className="panel settings-card"><header><div><h2>Sidebar</h2><p>Choose what appears below Fear &amp; Greed.</p></div></header><label className="settings-net-toggle"><input type="checkbox" role="switch" checked={workspace.data.preferences.showTradingNet!==false} onChange={e=>{const showTradingNet=e.target.checked;workspace.update(current=>({...current,preferences:{...current.preferences,showTradingNet}}));}}/>Show Trading net</label><p className="settings-footnote">Saves automatically. Hiding this card keeps bank syncing and your saved transactions active.</p></section><SessionDisplay workspace={workspace}/><section className="panel settings-card"><header><HardDrives size={25}/><div><h2>Workspace backup</h2><p>Keep a copy of your saved trading workspace.</p></div></header><p className="settings-card-description">Includes watchlist, imported levels, chart settings, drawings, plans, journal trades, daily reviews and notes. Passwords, API keys and account recovery codes are excluded.</p><button className="button outline" onClick={workspace.backup}><DownloadSimple size={18}/>Download workspace backup</button></section></>}

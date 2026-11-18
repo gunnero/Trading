@@ -21,9 +21,27 @@ try{
  await page.screenshot({path:dir+'/charts-desktop.png'});await page.locator('.sidebar').screenshot({path:dir+'/sidebar-after.png'});
  mark('Settings loads directly without market/chart polling or workspace writes; account and visible Log out sit at the sidebar bottom');
  const save=()=>expect(page.locator('.workspace-save-status')).toContainText('Workspace saved');
+ const preview=page.getByRole('img',{name:'Illustrative 4h candlestick chart'});
+ await expect(preview).toBeVisible();await preview.focus();await page.keyboard.press('ArrowLeft');await expect(page.locator('.cd-reading')).toContainText('Close');
+ await page.getByRole('checkbox',{name:'Hover readings'}).uncheck();await expect(page.locator('.cd-reading')).toHaveCount(0);
+ const levels=page.getByRole('checkbox',{name:'Show imported levels'});
+ await levels.uncheck();await expect(preview.locator('[data-overlay="levels"]')).toHaveCount(0);await levels.check();
+ await page.getByRole('button',{name:'Daily SMA 20/50/100/200'}).click();await page.getByRole('checkbox',{name:'50 SMA · 1D',exact:true}).uncheck();
+ expect(await page.getByRole('checkbox',{name:'Daily SMA 20/50/100/200'}).evaluate(el=>el.indeterminate)).toBe(true);
+ await expect(preview.locator('[data-overlay="sma50"]')).toHaveCount(0);await expect(preview.locator('[data-overlay="sma20"]')).toHaveCount(1);
+ await page.getByLabel('Default drawing color').selectOption({label:'Violet'});await expect(preview.locator('[data-overlay="drawing"]')).toHaveAttribute('stroke','#713bdd');
+ const drawings=page.getByRole('checkbox',{name:'Show saved drawings'});await drawings.uncheck();await expect(preview.locator('[data-overlay="drawing"]')).toHaveCount(0);await drawings.check();
+ for(const frame of ['2m','5m','15m','30m','1h','D','W','M','4h']){
+   await page.getByLabel('Default chart timeframe').selectOption(frame);
+   const plot=page.getByRole('img',{name:'Illustrative '+frame+' candlestick chart'});await expect(plot).toBeVisible();
+   await expect(plot.locator('[data-overlay="vwap"]')).toHaveCount(['D','W','M'].includes(frame)?0:1);
+ }
+ await page.getByText('Saved chart setups',{exact:true}).click();await expect(page.locator('.cd-saved')).toHaveAttribute('open','');
+ expect((await read()).revision).toBe(before.revision);
+ mark('All nine preview intervals, overlay switches, drawing color, mixed indicator states and saved setups work without saving edits');
  await page.getByLabel('Default chart timeframe').selectOption('5m');await page.getByRole('checkbox',{name:'9 / 21 EMA ribbon',exact:true}).uncheck();await page.getByRole('button',{name:'Save defaults',exact:true}).click();await save();
  await page.reload();await expect(page.getByLabel('Default chart timeframe')).toHaveValue('5m');await expect(page.getByRole('checkbox',{name:'9 / 21 EMA ribbon',exact:true})).not.toBeChecked();expect(page.url()).toContain('#settings/charts');
- const saved=await read();expect(saved.data.levelText).toBe(before.data.levelText);expect(saved.data.plans).toEqual(before.data.plans);expect(saved.data.chartDrawings).toEqual(before.data.chartDrawings);
+ const saved=await read();expect(saved.data.chartSettings.defaults.enabled.sma50).toBe(false);expect(saved.data.chartSettings.defaults.enabled.sma20).toBe(true);expect(saved.data.chartSettings.defaults.drawingColor).toBe('#713bdd');expect(saved.data.levelText).toBe(before.data.levelText);expect(saved.data.plans).toEqual(before.data.plans);expect(saved.data.chartDrawings).toEqual(before.data.chartDrawings);
  await page.getByRole('button',{name:'Apply to all charts',exact:true}).click();await page.getByRole('button',{name:'Cancel',exact:true}).click();expect((await read()).revision).toBe(saved.revision);
  await page.getByRole('button',{name:'Restore app defaults',exact:true}).click();await page.getByRole('button',{name:'Confirm reset',exact:true}).click();await save();await expect(page.getByLabel('Default chart timeframe')).toHaveValue('4h');expect((await read()).data.chartDrawings).toEqual(before.data.chartDrawings);
  mark('Chart defaults persist after refresh; apply/reset require confirmation and preserve imported data and drawings');

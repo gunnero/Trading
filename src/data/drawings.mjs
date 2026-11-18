@@ -1,5 +1,6 @@
 export const DRAWING_TYPES=['horizontal','trend','rectangle','text'];
-export const DRAWING_COLORS=['#efbd4e','#27cbb0','#f46f73','#73b8ff','#e8edf0'];
+export const DRAWING_PALETTE={'#efbd4e':'Amber','#27cbb0':'Green','#f46f73':'Red','#73b8ff':'Blue','#e8edf0':'White','#713bdd':'Violet'};
+export const DRAWING_COLORS=Object.keys(DRAWING_PALETTE);
 export const MAX_DRAWINGS=80;
 export function validateDrawings(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>300)throw new Error('Invalid chart drawings.');
