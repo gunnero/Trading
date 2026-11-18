@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {sessionResults,sessionAccount,sessionDates,defaultSessionDay,sessionAdherence,saveSessionNote,validateSessionReviews} from '../src/data/session-review.mjs';
+import {sessionResults,sessionAccount,sessionDates,defaultSessionDay,sessionAdherence,saveSessionNote,saveSessionCheck,validateSessionReviews} from '../src/data/session-review.mjs';
 import {reviewTrade,tradeLevelContext} from '../src/data/journal-review.mjs';
 import {openWorkspaceStore,validateWorkspace,initialWorkspace} from '../server/workspace.mjs';
 import {fixture} from './fixtures/journal.mjs';
@@ -55,4 +55,17 @@ test('Old workspaces and plans stay unchanged; daily notes survive SQLite reopen
   const saved=store.save(data,original.revision);assert.equal(saved.data.sessionReviews.days[0].lesson,'Wait for confirmation.');
   assert.throws(()=>store.save(data,original.revision),e=>e.status===409);
   store.close();store=openWorkspaceStore({directory});assert.deepEqual(store.read(),saved);assert.deepEqual(store.read().data.plans,[reviewPlan]);store.close();
+});
+
+test('Dated personal checks and reflections survive edits and disappear when the last field is cleared',()=>{
+  const checked=saveSessionCheck(undefined,reviewDay,'risk',true);
+  const reviewed=saveSessionNote(checked,reviewDay,'reflection','Wait for the close.');
+  const unchecked=saveSessionCheck(reviewed,reviewDay,'risk',false);
+  assert.deepEqual(checked.days[0].checks,['risk']);
+  assert.equal(unchecked.days[0].reflection,'Wait for the close.');
+  assert.equal(unchecked.days[0].checks,undefined);
+  assert.deepEqual(saveSessionNote(unchecked,reviewDay,'reflection','').days,[]);
+  for(const fields of [{checks:['risk','risk']},{checks:['unknown']},{checks:'risk'},{reflection:12},{reflection:'x'.repeat(2001)}]){
+    assert.throws(()=>validateSessionReviews({version:1,days:[{date:reviewDay,...fields}]}));
+  }
 });

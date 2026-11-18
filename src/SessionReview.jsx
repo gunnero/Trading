@@ -1,51 +1,147 @@
-import {PageHeader} from './PageHeader';
 import {useMemo,useState} from 'react';
-import {CalendarBlank,CaretLeft,CaretRight,ArrowClockwise,Notebook,WarningCircle} from '@phosphor-icons/react';
+import {ArrowClockwise,CalendarBlank,CaretDown,CaretLeft,CaretRight,Check,FloppyDisk,Notebook} from '@phosphor-icons/react';
 import {useDisplayTime} from './DisplayTime';
 import {useMinuteClock} from './Feeds';
 import {marketDay,validDay,addDays} from './data/calendar.mjs';
 import {money,tradeResult} from './data/journal.mjs';
-import {SESSION_NOTE_FIELDS,sessionAccount,sessionDates,defaultSessionDay,sessionResults,sessionAdherence,saveSessionNote} from './data/session-review.mjs';
+import {SESSION_CHECKS,sessionAccount,sessionDates,defaultSessionDay,sessionResults,sessionAdherence,saveSessionNote,saveSessionCheck} from './data/session-review.mjs';
 import {useSessionReviews} from './useSessionReviews';
-import './journal.css';
 import './session-review.css';
-const tone=n=>n>0?'green':n<0?'red':'muted';
-const contract=t=>`${t.symbol} ${t.strike} ${t.optionType==='CALL'?'Call':'Put'}`;
 
-export default function SessionReview({workspace,selectedDay,onDay,onJournal,onTrade,embedded=false}){
-  const {journalStamp,zoneLabel,formatLabel}=useDisplayTime(),now=useMinuteClock();
-  const trades=workspace.data.journal?.trades||[],today=marketDay(now);
+const tone=value=>value>0?'green':value<0?'red':'';
+const signed=value=>value>0?'+'+money(value):money(value);
+const contract=t=>`${t.symbol} ${t.strike} ${t.optionType==='CALL'?'Call':'Put'}`;
+const premium=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:4});
+const tradingDate=day=>new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
+
+function ReviewToolbar({day,today,onDay,latest,accounts,scope,onAccount}){
+  return <section className="sr-toolbar" aria-label="Review date and account">
+    <div className="sr-date-controls">
+      <button className="sr-arrow" aria-label="Previous review day" onClick={()=>onDay(addDays(day,-1))}><CaretLeft/></button>
+      <label className="sr-date"><CalendarBlank/><span aria-hidden="true">{tradingDate(day)}</span><CaretDown size={14} aria-hidden="true"/>
+        <input type="date" aria-label="Session review date" value={day} onChange={e=>{if(validDay(e.target.value))onDay(e.target.value);}}/>
+      </label>
+      <button className="sr-arrow" aria-label="Next review day" onClick={()=>onDay(addDays(day,1))}><CaretRight/></button>
+      <button className="sr-today" onClick={()=>onDay(today)}>Today</button>
+      {latest&&latest!==day&&<button className="text-button" onClick={()=>onDay(latest)}>Latest recorded</button>}
+    </div>
+    {!!accounts.length&&<label className="sr-account">Account<select aria-label="Session review account" value={scope} onChange={e=>onAccount(e.target.value)}>
+      <option value="">All accounts</option>{accounts.map(t=><option key={sessionAccount(t)} value={sessionAccount(t)}>{t.firm} · {t.account}</option>)}
+    </select></label>}
+  </section>;
+}
+
+function ReviewStats({summary}){
+  const {stats}=summary,grossOnly=stats.missingFees>0;
+  const pnl=grossOnly?stats.gross:stats.net;
+  return <dl className="session-review-stats">
+    <div><dt>Closed trades</dt><dd>{stats.closed}</dd></div>
+    <div><dt>{grossOnly?'Gross':'Net'} P/L</dt><dd className={tone(pnl)}>{stats.closed?signed(pnl):'—'}</dd></div>
+    <div><dt>Wins / Losses</dt><dd>{stats.wins} / {stats.losses}</dd><small>{stats.winRate!==null&&stats.winRate.toFixed(1)+'% gross'}{stats.breakeven>0&&' · '+stats.breakeven+' flat'}</small></div>
+    <div><dt>Fees</dt><dd>{money(stats.fees)}</dd>{grossOnly&&<small>Missing on {stats.missingFees} of {stats.closed} closed trades</small>}</div>
+  </dl>;
+}
+
+function EntryEvidence({adherence,entries,results,refresh,onTrade}){
+  const {clockTime}=useDisplayTime();
+  return <details className="sr-disclosure"><summary>Automatic entry checks{adherence.complete>0&&<span>{adherence.matched} / {adherence.complete} matched</span>}</summary>
+    <div className="sr-evidence"><p>Completed 2m candles before entry, compared with dated levels, EMA 9/21 and VWAP.</p>
+      <button className="text-button" aria-label="Recheck session strategy" disabled={!adherence.total||!!adherence.loading} onClick={refresh}><ArrowClockwise/>Recheck</button></div>
+    <table className="sr-rule-table"><thead><tr><th>Rule</th><th>Met</th><th>Missed</th><th>Unknown</th></tr></thead>
+      <tbody>{adherence.rules.map(r=><tr key={r.id}><th scope="row">{r.label}</th><td>{r.met}</td><td>{r.missed}</td><td>{r.unknown}</td></tr>)}</tbody></table>
+    {!!entries.length&&<ul className="sr-entries">{entries.map(trade=>{
+      const result=results[trade.id];
+      return <li key={trade.id}><button className="text-button" onClick={()=>onTrade(trade.id)}>{clockTime(trade.entryAt)} · {contract(trade)}</button>
+        <span>{trade.firm} · {trade.account} · {result?.review?.headline||'Checking entry…'}</span>
+        {result?.review&&<small>{result.review.passed}/6 met · {result.review.failed} missed · {result.review.unknown} unknown</small>}
+        {result?.message&&<small>{result.message}</small>}</li>;
+    })}</ul>}
+    <footer aria-live="polite">{adherence.loading?`Checking ${adherence.loading} of ${adherence.total} entries…`:`${adherence.complete} entries checked · ${adherence.incomplete} incomplete · ${adherence.outside} outside the regular session`}{adherence.cached>0&&` · ${adherence.cached} use cached history`}
+      <small>Missing levels or price history leave checks unknown.</small></footer>
+  </details>;
+}
+
+function ReviewTrades({day,summary,results,onTrade,onJournal}){
+  const {clockTime,clockDate,journalStamp,zoneLabel,formatLabel}=useDisplayTime();
+  const related=[...new Map([...summary.entries,...summary.closed].map(t=>[t.id,t])).values()];
+  const timeFor=t=>marketDay(t.entryAt)===day?t.entryAt:t.exitAt;
+  related.sort((a,b)=>timeFor(a).localeCompare(timeFor(b)));
+  const basis=summary.stats.missingFees?'gross':'net';
+  return <section className="sr-card session-review-trades">
+    <header><h2>Trades in this session</h2><small>Manual journal · U.S. options · USD</small></header>
+    <p className="sr-caption">Entries and exits for {tradingDate(day)} (New York). Results use the exit date.</p>
+    {related.length?<table className="sr-trade-table"><thead><tr>
+      <th>Time ({zoneLabel})</th><th>Contract</th><th>Opening side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>{basis==='net'?'Net':'Gross'} result</th><th>Details</th>
+    </tr></thead><tbody>{related.map(t=>{
+      const entered=marketDay(t.entryAt)===day,exited=!!t.exitAt&&marketDay(t.exitAt)===day;
+      const amount=exited?tradeResult(t)[basis]:null,review=results[t.id]?.review;
+      const status=!entered?'Entry from another session':review?.headline||'Checking entry…';
+      const instant=timeFor(t);
+      return <tr className="session-review-trade" key={t.id}>
+        <td data-label={'Time ('+zoneLabel+')'}><time dateTime={instant} title={journalStamp(instant)+' · '+zoneLabel+' / '+formatLabel}>{clockTime(instant)}</time>{!entered&&<small>Exit</small>}</td>
+        <td data-label="Contract"><strong>{t.symbol}</strong><small>{t.strike} {t.optionType==='CALL'?'Call':'Put'} · {t.expiration}</small></td>
+        <td data-label="Opening side"><span className={'jt-side '+(t.position==='long'?'jt-buy':'jt-sell')}>{t.position==='long'?'Buy':'Sell'}</span></td>
+        <td data-label="Entry" title={journalStamp(t.entryAt)}>{premium.format(t.entryPrice)}</td>
+        <td data-label="Exit" title={t.exitAt?journalStamp(t.exitAt):'Still open'}>{t.exitAt?premium.format(t.exitPrice):'—'}</td>
+        <td data-label="Qty" title="Option contracts">{t.quantity}</td>
+        <td data-label={basis==='net'?'Net result':'Gross result'}><b className={tone(amount)}>{signed(amount)}</b>{!exited&&<small>{t.exitAt?'Exit '+clockDate(t.exitAt):'Still open'}</small>}</td>
+        <td className="sr-view"><button className="text-button" onClick={()=>onTrade(t.id)} aria-label={'View '+contract(t)+' trade at '+journalStamp(instant)} title={t.firm+' · '+t.account+' · '+status}>View trade<CaretRight/></button></td>
+      </tr>;
+    })}</tbody></table>:<div className="sr-empty"><Notebook/><h3>No trades recorded for this session</h3><p>Choose another account or date, or add a trade to your journal.</p>
+      <button className="text-button" onClick={onJournal}>Go to journal<CaretRight/></button></div>}
+  </section>;
+}
+
+export default function SessionReview({workspace,selectedDay,onDay,onJournal,onTrade,onNewPlan}){
+  const now=useMinuteClock(),trades=workspace.data.journal?.trades||[],today=marketDay(now);
   const day=validDay(selectedDay)?selectedDay:defaultSessionDay(trades,now);
-  const [account,setAccount]=useState(''),[noteError,setNoteError]=useState('');
+  const [account,setAccount]=useState(''),[noteError,setNoteError]=useState(null);
   const accounts=[...new Map(trades.map(t=>[sessionAccount(t),t])).values()];
   const scope=accounts.some(t=>sessionAccount(t)===account)?account:'';
   const summary=useMemo(()=>sessionResults(trades,day,scope),[trades,day,scope]);
   const {results,refresh}=useSessionReviews(summary.entries,workspace.data);
-  const adherence=sessionAdherence(summary.entries,results),stats=summary.stats,dates=sessionDates(trades);
-  const notes=workspace.data.sessionReviews?.days.find(row=>row.date===day)||{};
-  const editNote=(field,value)=>{try{workspace.update(current=>({...current,sessionReviews:saveSessionNote(current.sessionReviews,day,field,value)}));setNoteError('');}catch(error){setNoteError(error.message);}};
+  const adherence=sessionAdherence(summary.entries,results);
   const failed=adherence.rules.filter(rule=>rule.missed).sort((a,b)=>b.missed-a.missed);
-  const related=[...new Map([...summary.entries,...summary.closed].map(t=>[t.id,t])).values()].sort((a,b)=>a.entryAt.localeCompare(b.entryAt));
+  const notes=workspace.data.sessionReviews?.days.find(row=>row.date===day);
+  function edit(updater,key,value){
+    try{
+      workspace.update(current=>({...current,sessionReviews:updater(current.sessionReviews,day,key,value)}));setNoteError(null);
+    }catch(error){setNoteError({day,message:error.message});}
+  }
+  function textField(key,label,placeholder,rows=2){
+    return <textarea aria-label={label} maxLength={2000} rows={rows} value={notes?.[key]||''} onChange={e=>edit(saveSessionNote,key,e.target.value)} placeholder={placeholder}/>;
+  }
+  const state={pending:'Saving…',saving:'Saving…',error:'Save failed',conflict:'Workspace conflict'}[workspace.status]||(notes?'Session review saved':'Saves automatically');
   return <div className="session-review-page">
-    {!embedded&&<PageHeader title="Session review" description="Your results, execution and lessons for one U.S. trading day." actions={<button className="button outline" onClick={()=>onJournal()}>Open trade journal<CaretRight size={17}/></button>}/>}
-    <section className="panel session-review-controls" aria-label="Review date and account"><div className="session-review-date"><CalendarBlank size={20}/><button className="icon-button" aria-label="Previous review day" onClick={()=>onDay(addDays(day,-1))}><CaretLeft size={18}/></button><label><span>U.S. trading date</span><input aria-label="Session review date" type="date" value={day} onChange={e=>{if(validDay(e.target.value))onDay(e.target.value);}}/></label><button className="icon-button" aria-label="Next review day" onClick={()=>onDay(addDays(day,1))}><CaretRight size={18}/></button></div><div className="session-review-shortcuts"><button className="text-button" onClick={()=>onDay(today)}>Today</button>{dates.length>0&&<button className="text-button" onClick={()=>onDay(dates[0])}>Latest recorded</button>}</div><label>Trading account<select aria-label="Session review account" value={scope} onChange={e=>setAccount(e.target.value)}><option value="">All accounts</option>{accounts.map(t=><option key={sessionAccount(t)} value={sessionAccount(t)}>{t.firm} · {t.account}</option>)}</select></label></section>
-    <p className="session-review-basis">Dates follow New York. Execution times display in {zoneLabel} / {formatLabel}. Results count exits on this date; strategy checks count entries on this date.</p>
-    <div className="journal-stats session-review-stats"><article className="panel"><span>Realized gross P/L</span><strong className={tone(stats.gross)}>{stats.closed?money(stats.gross):'—'}</strong><small>{!stats.closed?'No closed trades on this date':stats.missingFees?`Net unavailable · fees missing on ${stats.missingFees} trades`:`Net after fees ${money(stats.net)}`}</small></article><article className="panel"><span>Win rate · gross</span><strong>{stats.winRate===null?'—':`${stats.winRate.toFixed(1)}%`}</strong><small>{stats.wins} wins · {stats.losses} losses · {stats.breakeven} flat</small></article><article className="panel"><span>Entries matching every rule</span><strong>{adherence.complete?`${adherence.matched} / ${adherence.complete}`:'—'}</strong><small>{adherence.complete} fully checked · {adherence.incomplete} incomplete · {adherence.loading} pending</small></article><article className="panel"><span>Trades recorded</span><strong>{summary.entries.length} <small>entries</small></strong><small>{stats.closed} exits · {summary.open.length} entries still open</small></article></div>
-    {!related.length&&<section className="panel session-review-empty"><Notebook size={30}/><h3>No trades recorded for this session</h3><p>{scope?'Try another account or date.':'Choose a recorded date, or add your trades to the journal.'} You can still save your daily notes below.</p><button className="button outline" onClick={()=>onJournal()}>Go to journal<CaretRight size={16}/></button></section>}
-    <div className="session-review-columns"><section className="panel session-review-rules" aria-label="Daily strategy adherence"><header><div><span className="eyebrow">AUTOMATIC · BREAK & RETEST · 2M</span><h3>Did you follow your setup?</h3></div><button className="icon-button" aria-label="Recheck session strategy" disabled={!summary.entries.length||adherence.loading>0} onClick={refresh}><ArrowClockwise size={20}/></button></header>
-      <p>Only completed candles before entry are checked against your dated levels, EMA 9/21 and VWAP.</p>
-      <div className="session-review-rule-list">{adherence.rules.map(rule=><div key={rule.id}><strong>{rule.label}</strong><span><b className="green">{rule.met} met</b><b className={rule.missed?'red':'muted'}>{rule.missed} missed</b><b className="muted">{rule.unknown} unknown</b></span></div>)}</div>
-      <footer aria-live="polite">{adherence.loading?`Checking ${adherence.loading} of ${adherence.total} entries…`:`${adherence.total-adherence.incomplete-adherence.outside} entries checked · ${adherence.incomplete} incomplete · ${adherence.outside} outside the regular session`}{adherence.cached>0&&` · ${adherence.cached} use cached history`}<small>Unknown checks are not failures. Missing dated levels or history remain incomplete. Profit or loss does not determine adherence.</small></footer>
-    </section><section className="panel session-review-observations"><header><span className="eyebrow">PATTERNS TO REVISIT</span><h3>What to learn from today</h3></header>
-      {failed.length>0?<ul>{failed.map(rule=><li key={rule.id}><WarningCircle size={18}/><span><strong>{rule.label}</strong><small>Not met on {rule.missed} of {summary.entries.length} entries. Open those trades below to see the evidence.</small></span></li>)}</ul>:<p>{adherence.loading?'Strategy checks are still loading.':adherence.matched?'The fully checked entries met all six rules. Review execution and your notes for the next improvement.':summary.entries.length?'There are no verified rule misses to summarize yet. Incomplete entries still need source data.':'Record an entry to see its strategy checks here.'}</p>}
-      {adherence.outside>0&&<p className="amber">{adherence.outside} {adherence.outside===1?'entry was':'entries were'} outside your regular-session strategy window.</p>}
-      <div className="session-review-tags"><h4>Your trade tags</h4>{summary.tags.length?<div>{summary.tags.map(tag=><span key={tag.label}>{tag.label}<b>{tag.count}</b></span>)}</div>:<p>No tags recorded on this session’s entries.</p>}<small>Tags are your own observations. Exit quality, position sizing and emotions are not inferred from P/L.</small></div>
-    </section></div>
-    <section className="panel session-review-trades"><header><div><h3>Trades in this session</h3><p>Open a trade for its chart, entry-time evidence and notes.</p></div></header>{!related.length?<p className="session-review-muted">No entries or exits on this date.</p>:<div>{related.map(trade=>{
-      const entered=marketDay(trade.entryAt)===day,exited=!!trade.exitAt&&marketDay(trade.exitAt)===day,r=tradeResult(trade),item=results[trade.id],review=item?.review;
-      const label=!entered?'Entry from another session':!item||item.status==='loading'?'Checking entry…':review?.headline||'Review incomplete';
-      return <button key={trade.id} className="session-review-trade" onClick={()=>onTrade(trade.id)} aria-label={`Review ${contract(trade)} from ${journalStamp(trade.entryAt)}`}><span><strong>{contract(trade)}</strong><small>{trade.firm} · {trade.account} · {trade.quantity} contracts</small><small>{journalStamp(trade.entryAt)} → {trade.exitAt?journalStamp(trade.exitAt):'Open'}</small></span><span className="session-review-trade-check"><b className={review?.status==='matched'?'green':review?.failed||review?.status==='outside-session'?'amber':'muted'}>{label}</b>{entered&&review&&<small>{review.passed}/6 met · {review.failed} missed · {review.unknown} unknown</small>}{entered&&item?.message&&<small>{item.message}</small>}</span><span className="session-review-trade-pnl"><strong className={tone(exited?r.gross:null)}>{exited?money(r.gross):'—'}</strong><small>{exited?'Gross realized':trade.exitAt?'Exit on another date':'Still open'}</small></span><CaretRight size={18}/></button>;
-    })}</div>}</section>
-    <section className="panel session-review-notes"><header><div><span className="eyebrow">YOUR DAILY REFLECTION · ALL ACCOUNTS</span><h3>Keep the lesson</h3><p>Notes for {day}. Your words save automatically with your workspace.</p></div><Notebook size={23}/></header><div>{SESSION_NOTE_FIELDS.map(([key,label])=><label key={key}>{label}<textarea aria-label={label} rows={3} maxLength={2000} value={notes[key]||''} onChange={e=>editNote(key,e.target.value)} placeholder={{wentWell:'What should you repeat?',mistakes:'What would you change about your decisions?',lesson:'One useful takeaway from this session.',nextSession:'One specific action for the next session.'}[key]}/></label>)}</div>{noteError&&<p className="amber" role="alert">{noteError}</p>}</section>
+    <ReviewToolbar day={day} today={today} latest={sessionDates(scope?trades.filter(t=>sessionAccount(t)===scope):trades)[0]} onDay={onDay} accounts={accounts} scope={scope} onAccount={setAccount}/>
+    <ReviewStats summary={summary}/>
+    <div className="sr-columns">
+      <section className="sr-card session-review-rules"><h2>Did you follow your setup?</h2>
+        <div className="sr-checks" role="group" aria-label="Your daily checklist across all accounts">{SESSION_CHECKS.map(([key,label])=>
+          <label key={key}><input type="checkbox" checked={!!notes?.checks?.includes(key)} onChange={e=>edit(saveSessionCheck,key,e.target.checked)}/>{label}</label>)}</div>
+        {scope&&<small>Daily checklist and notes cover all accounts.</small>}
+        <EntryEvidence adherence={adherence} entries={summary.entries} results={results} refresh={refresh} onTrade={onTrade}/>
+      </section>
+      <section className="sr-card session-review-observations"><h2>What to learn from today</h2>
+        {textField('reflection','What to learn from today','Which decision would you repeat or change?',3)}
+        <details className="sr-disclosure"><summary>Patterns and trade tags</summary>
+          {failed.length?<ul>{failed.map(r=><li key={r.id}>{r.label} · missed on {r.missed} of {summary.entries.length} entries</li>)}</ul>:
+            <p>{adherence.loading?'Checking entries…':adherence.matched?'Fully checked entries met all six rules.':'No verified rule misses for these entries.'}</p>}
+          <p>{summary.tags.length?summary.tags.map(t=>t.label+' ('+t.count+')').join(' · '):'No tags recorded for these entries.'}</p>
+        </details>
+      </section>
+    </div>
+    <ReviewTrades day={day} summary={summary} results={results} onTrade={onTrade} onJournal={onJournal}/>
+    <section className="sr-card session-review-notes"><h2>Keep the lesson</h2>
+      {textField('lesson','Main lesson','One takeaway to bring into your next session.')}
+      <details className="sr-disclosure sr-extra"><summary>More daily notes</summary><div>{[
+        ['wentWell','What went well','What should you repeat?'],['mistakes','Mistakes to work on','What would you change?'],['nextSession','Focus for the next session','One action for your next session.']
+      ].map(([key,label,placeholder])=><label key={key}>{label}{textField(key,label,placeholder)}</label>)}</div></details>
+      {noteError?.day===day&&<p role="alert">{noteError.message}</p>}
+      <footer><small role="status">{workspace.status==='saved'&&notes&&<Check/>}{state} · All accounts</small><div>
+        <button className="button primary" disabled={workspace.status!=='pending'} onClick={workspace.saveNow}><FloppyDisk/>Save session review</button>
+        <button className="text-button" onClick={onNewPlan}>Start a new plan<CaretRight/></button>
+      </div></footer>
+    </section>
   </div>;
 }

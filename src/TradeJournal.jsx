@@ -128,7 +128,7 @@ export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,o
   const tabs=useSectionNavigation(tab);
   let tradeId='';try{tradeId=decodeURIComponent(encodedId||'');}catch{}
   const selected=workspace.data.journal?.trades.find(trade=>trade.id===tradeId);
-  const nav=<nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Broker trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans{tab!=='plans'&&<span>{workspace.data.plans.length}</span>}</button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button></nav>;
+  const nav=<nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Trades</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Broker trades</button><button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans{tab!=='plans'&&tab!=='review'&&<span>{workspace.data.plans.length}</span>}</button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button></nav>;
   if(tab==='broker')return <div className="journal-page jt-page bj-page"><PageHeader title="Trade journal" description="Broker records with your own review notes."/>{nav}<PortfolioJournal/></div>;
   if(tab==='trades')return <JournalTrades workspace={workspace} tradeId={tradeId} onClearTrade={onClearTrade} missing={tradeId&&!selected} nav={nav}/>;
   if(tab==='plans')return <div className="journal-page jt-page plans-page">
@@ -136,7 +136,7 @@ export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,o
       <button className="button primary" title="Choose a setup on Overview" onClick={onNewPlan}><Plus size={17}/>New plan</button>}/>
     {nav}<SavedPlans workspace={workspace} onNewPlan={onNewPlan}/>
   </div>;
-  return <div className="journal-page"><PageHeader title="Session review" description="Your results, execution and lessons for one U.S. trading day."/>
-    {nav}<SessionReview embedded workspace={workspace} selectedDay={reviewDay} onDay={onReviewDay} onJournal={()=>onTab('trades')} onTrade={id=>onTab(`trades/${encodeURIComponent(id)}`)}/>
+  return <div className="journal-page jt-page review-page"><PageHeader title="Session review" description="Turn today’s trading into one useful lesson."/>
+    {nav}<SessionReview onNewPlan={onNewPlan} workspace={workspace} selectedDay={reviewDay} onDay={onReviewDay} onJournal={()=>onTab('trades')} onTrade={id=>onTab(`trades/${encodeURIComponent(id)}`)}/>
   </div>;
 }

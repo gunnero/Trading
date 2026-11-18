@@ -52,5 +52,5 @@ export function useWorkspace() {
     return()=>{current.current.alive=false;controller.abort();clearTimeout(current.current.timer);window.removeEventListener('beforeunload',protect);window.removeEventListener('opening-bell:session-restored',resume);};
   },[]);
   function backup(){const blob=new Blob([JSON.stringify(current.current.data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`opening-bell-workspace-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  return {data,status,error,update,backup,reload:()=>load(),retry:()=>{if(!current.current.data)load();else{current.current.blocked=false;save();}}};
+  return {data,status,error,update,backup,saveNow:()=>{clearTimeout(current.current.timer);return save();},reload:()=>load(),retry:()=>{if(!current.current.data)load();else{current.current.blocked=false;save();}}};
 }
