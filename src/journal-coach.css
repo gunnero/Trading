@@ -1,0 +1,32 @@
+@layer base {
+  .journal-coach { display: grid; gap: 14px; max-width: 1050px; margin-inline: auto; min-width: 0; }
+  .coach-card { padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; min-width: 0; }
+  .coach-card h2 { margin: 0; font-size: 17px; color: var(--text); }
+  .coach-card h2 svg { vertical-align: text-bottom; }
+  .coach-card p { margin: 8px 0 0; line-height: 1.55; }
+  .coach-controls, .coach-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; }
+  .coach-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; min-width: 0; }
+  .coach-controls select { min-height: 36px; min-width: 0; max-width: 100%; }
+  .coach-controls p { flex-basis: 100%; }
+  .coach-heading { justify-content: space-between; margin-bottom: 10px; }
+  .coach-heading > span, .coach-muted { font-size: 13px; color: var(--muted); }
+  .coach-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .coach-comparison section { border: 1px solid var(--border); background: var(--panel); border-radius: 7px; padding: 14px; }
+  .coach-comparison h3 { margin: 0; font-size: 14px; font-weight: 650; }
+  .coach-count { display: block; margin-top: 6px; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .coach-method, .coach-note-group { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; font-size: 13px; }
+  .coach-method summary, .coach-note-group summary { cursor: pointer; font-weight: 600; color: var(--primary); padding-block: 5px; }
+  .coach-next { display: flex; gap: 12px; background: var(--panel); border-color: var(--accent-border); }
+  .coach-next > svg { color: var(--primary); flex: none; }
+  .coach-action { font-weight: 600; }
+  .coach-note-group ul { margin: 0; padding: 0; list-style: none; }
+  .coach-note-group li { padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .coach-note-group li:last-child { border-bottom: 0; }
+  .coach-note-group li div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+  .coach-note-group li time { color: var(--muted); }
+  .coach-note-group li p { white-space: pre-wrap; }
+  @media (max-width: 480px) {
+    .coach-card { padding: 14px; }
+    .coach-comparison { grid-template-columns: minmax(0, 1fr); }
+  }
+}

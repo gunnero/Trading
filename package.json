@@ -13,6 +13,7 @@
     "test:interaction": "node scripts/qa-runner.mjs interaction",
     "test:briefing": "node scripts/qa-runner.mjs briefing",
     "test:desk-assistant": "node --test tests/desk-assistant.test.mjs && node scripts/desk-assistant-qa.mjs",
+    "test:setup-coach": "node --test tests/setup-coach.test.mjs tests/retests.test.mjs && node scripts/setup-coach-qa.mjs",
     "test:market-groups": "node --test tests/market-context.test.mjs && node scripts/market-groups-qa.mjs",
     "test:context": "node scripts/qa-runner.mjs context",
     "test:indicators": "node scripts/qa-runner.mjs indicators",

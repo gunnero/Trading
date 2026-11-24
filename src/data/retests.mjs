@@ -6,7 +6,7 @@ export const stageLabel=stage=>RETEST_STAGES[stage]||'Waiting for data';
 const candidateStages=['confirmed','retesting','waiting-retest'];
 export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
   sheetDate=instrument?.sourceDate||sheetDate;
-  const base={quote:data?.quote,timeframe:data?.timeframe,through:data?.through,fetchedAt:data?.fetchedAt,sessionDate:data?.quote?.sessionDate};
+  const base={quote:data?.quote,timeframe:data?.timeframe,through:data?.through,fetchedAt:data?.fetchedAt,sessionDate:data?.quote?.sessionDate,levelDate:instrument?sheetDate:null};
   if(!instrument||instrument.futures||!instrument.zones.some(z=>z.type!=='G'))return {...base,stage:'no-levels'};
   if(!data||data.status==='loading')return {...base,stage:'loading'};
   if(data.status!=='ok')return {...base,stage:['stale','insufficient'].includes(data.status)?data.status:'unavailable',message:data.message};
@@ -21,6 +21,7 @@ export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
   const ordered=[...new Map((data.bars||[]).filter(b=>b.closed===true&&[b.open,b.close,b.high,b.low,b.end].every(Number.isFinite)).map(b=>[b.end,b])).values()].sort((a,b)=>a.end-b.end);
   const bars=ordered.filter(b=>b.sessionDate===sheetDate),prior=ordered.filter(b=>b.sessionDate<sheetDate).at(-1);
   const patterns=[],latest=bars.at(-1),reference=latest?.indicators||{};
+  base.barCount=bars.length;
   base.dailyStatus=data.dailyStatus;base.indicators=reference;
   for(const zone of instrument.zones.filter(z=>z.type!=='G')){
     let role=zone.type,active=null,previous=prior?.close;
@@ -45,7 +46,15 @@ export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
     if(active){
       const bull=active.direction==='bullish',edge=bull?zone.high:zone.low,price=data.quote.price;
       const width=Math.max(zone.high-zone.low,price*.001),distance=Math.abs(price-edge)/width;
-      if((bull&&price<zone.low)||(!bull&&price>zone.high))active.stage='invalidated';
+      const invalidated=(bull&&price<zone.low)||(!bull&&price>zone.high);
+      const evidence={
+        candleStage:active.stage,
+        barsSinceBreak:bars.length-1-active.breakIndex,
+        barsSinceConfirmation:active.confirmIndex===null?null:bars.length-1-active.confirmIndex,
+        edge, width, invalidated,
+        quoteOnBreakSide:Number.isFinite(price)?(bull?price>edge:price<edge):null,
+      };
+      if(invalidated)active.stage='invalidated';
       else if(active.stage==='confirmed'&&((bull&&price<=zone.high)||(!bull&&price>=zone.low)))active.stage='retesting';
       else if(candidateStages.includes(active.stage)&&distance>1)active.stage='extended';
       const confirmed=bars.find(b=>b.end===active.confirmedAt),aligned=bar=>{
@@ -64,7 +73,7 @@ export function evaluateRetest(instrument,sheetDate,data,now=Date.now()){
         if(checks.some(c=>c.passed===null))active.stage='indicators-unavailable';
         else if(checks.some(c=>!c.passed))active.stage='indicator-conflict';
       }
-      patterns.push({...base,...active,distance,checks,invalidation:bull?zone.low:zone.high});
+      patterns.push({...base,...active,distance,checks,evidence,invalidation:bull?zone.low:zone.high});
     }
   }
   return patterns.sort(compareSetups)[0]||{...base,stage:'waiting-break'};

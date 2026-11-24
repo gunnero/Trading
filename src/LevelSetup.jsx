@@ -6,6 +6,7 @@ import {useMarketChart} from './useMarketData';
 import {useZoneRoles} from './ZoneRoles';
 import {useStockSetup} from './useStockSetup';
 import {RetestPanel} from './RetestDesk';
+import {SetupExplanation} from './SetupExplanation';
 import {matchingInstrument,locate,formatDate} from './data/market.js';
 import {quoteKey,quotePrice,quoteDelay,isExtendedQuote,awaitingSessionQuote} from './data/quotes.mjs';
 import {SETUP_INTERVALS} from './data/instruments.mjs';
@@ -27,6 +28,7 @@ export function LevelSetup({entry,sheet,result,initialInterval,onPlan,historical
     <div className={`workspace-grid level-setup-grid ${historical?'historical-level-chart':''}`}>
       <section className="chart-panel" aria-label={`${entry.symbol} level setup chart`}>
         <ChartHeader symbol={entry.symbol} marketKey={key} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles}/>
+        {!historical&&<SetupExplanation symbol={entry.symbol} result={setup}/>}
         <ChartLevels scope={`${key}|${timeframe}`} instrument={instrument} date={sourceDate} roles={roles} quoteDate={quote?.sessionDate}/>
         {history.candles?.length?<PriceChart symbol={entry.symbol} drawingKey={key} timeframe={timeframe} candles={history.candles} price={history.quote.price} instrument={instrument} indicators={history.indicators}/>:<div className="empty" role="status"><h3>{history.status==='loading'?'Loading setup chart…':'Chart unavailable'}</h3><p>{history.message||'Fetching regular-session candles.'}</p></div>}
         <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}{timeframe==='4h'?'4h from hourly bars · ':''}Yahoo Finance</span><span>Regular session · partial bars marked</span></div>

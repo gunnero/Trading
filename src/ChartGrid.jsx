@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {PushPin,ArrowsOutSimple,CaretLeft,CaretRight,Info} from '@phosphor-icons/react';
 import {GridChart,PriceChart} from './Charts';
 import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
+import {SetupExplanation} from './SetupExplanation';
 import {useMarketChart} from './useMarketData';
 import {useZoneRoles} from './ZoneRoles';
 import {useDisplayTime} from './DisplayTime';
@@ -61,6 +62,7 @@ export function GridDetail({entry,sheet,interval,setup}){
   const {quoteStamp}=useDisplayTime(),[,saveFrame]=useSavedTimeframe(key);
   const changeFrame=value=>{setFrame(value);saveFrame(value);};
   return <section className="context-chart-panel"><ChartHeader symbol={entry.symbol} marketKey={key} timeframe={frame} onTimeframe={changeFrame} roles={roles}/>
+    <SetupExplanation symbol={entry.symbol} result={setup}/>
     <ChartLevels scope={`${key}|${frame}`} instrument={roles.instrument} date={sheet.date} roles={roles} quoteDate={history.quote?.sessionDate}/>
     {history.candles?.length?<PriceChart symbol={entry.symbol} drawingKey={key} instrument={roles.instrument} timeframe={frame} candles={history.candles} price={history.quote?.price??history.candles.at(-1).ohlc[1]} indicators={history.indicators}/>:<div className="empty"><h3>{history.status==='loading'?'Loading chart…':'Chart unavailable'}</h3><p>{history.message}</p></div>}
     <p className="grid-source-note">{history.status==='stale'?'Cached / old history · ':''}{history.quote?`${history.quote.provider} · ${quoteStamp(history.quote)}`:'Waiting for source'} · Regular-session candles · source may be delayed.</p>

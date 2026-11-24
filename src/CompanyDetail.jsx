@@ -6,6 +6,7 @@ import {ArrowUpRight,CaretRight,ArrowsClockwise,AppleLogo,Buildings,SlidersHoriz
 import {PriceChart} from './Charts';
 import {ChartLegend} from './ChartLegend';
 import {ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
+import {SetupExplanation} from './SetupExplanation';
 import {useMarketChart,useMarketQuotes} from './useMarketData';
 import {useZoneRoles} from './ZoneRoles';
 import {quoteKey,quotePrice,quoteChange,quoteTone,quoteDelay} from './data/quotes.mjs';
@@ -198,6 +199,7 @@ export function CompanyDetail({entry,sheet,result,setupInterval,onUseCustom,posi
    {position&&<><PortfolioPosition position={position} compact><div className="company-chart-choice segmented" aria-label="Holding chart view"><button aria-pressed={!simpleChart} className={!simpleChart?'selected':''} onClick={()=>setSimpleChart(false)}>Candles & levels</button><button aria-pressed={simpleChart} className={simpleChart?'selected':''} onClick={()=>setSimpleChart(true)}>Price history</button></div>{!simpleChart&&<div className="pm-chart-position"><label><input type="checkbox" checked={showAverage&&!hideBalances} disabled={!averageLine||hideBalances} onChange={e=>setShowAverage(e.target.checked)}/><i/>Average paid {hideBalances?'••••':number(position.holding.averagePrice)} {position.holding.instrumentCurrency}</label><span>{averageLine?`Account reference · ${entry.exchange}:${entry.symbol}`:history.status==='loading'?'Checking chart currency…':'Average line unavailable: chart symbol and currency must match the holding.'}</span></div>}</PortfolioPosition></>}
    {position&&simpleChart?<PortfolioStockChart entry={entry} position={position} instrument={instrument} sheetDate={sheet.date} orderLines={showOrders?orderLines:[]}/>:<section className="context-chart-panel company-chart" aria-label={`${entry.symbol} company chart`}><ChartHeader symbol={entry.symbol} quote={chartQuote} marketKey={key} timeframe={timeframe} onTimeframe={setTimeframe} roles={roles} showToolLabels/><ChartLevels scope={`${key}|${timeframe}`} instrument={instrument} date={sheet.date} roles={roles} quoteDate={chartQuote?.sessionDate}/>
 
+    <SetupExplanation symbol={entry.symbol} result={setup}/>
     {history.candles?.length>0&&<ChartLegend scope={`${key}|${timeframe}`} indicators={history.indicators}/>}
     {history.candles?.length?<PriceChart symbol={entry.symbol} drawingKey={key} timeframe={timeframe} candles={history.candles} price={history.quote.price} instrument={instrument} indicators={history.indicators} referenceLine={showAverage&&!hideBalances?averageLine:null} orderLines={chartOrderLines}/>:<div className="empty" role="status"><h3>{history.status==='loading'?'Loading company chart…':'Company chart unavailable'}</h3><p>{history.message||'Fetching regular-session candles.'}</p></div>}
     <div className="chart-footnote"><span>{history.status==='stale'?'Cached / old history · ':''}Regular-session history · Yahoo Finance · {timeframe==='4h'?'4h from hourly bars · ':''}partial candles marked</span><span>{history.quote?.observedAt&&<>Observed {quoteStamp(history.quote)} · </>}Refreshes each minute</span></div>

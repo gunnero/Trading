@@ -1,6 +1,7 @@
 import {brokerWorkspace,journalBroker} from './data/journal-brokers.mjs';
 import IbkrJournal from './IbkrJournal';
 import SessionReview from './SessionReview';
+import JournalCoach from './JournalCoach';
 import PortfolioJournal from './PortfolioJournal';
 import {PageHeader,useSectionNavigation} from './PageHeader';
 import {useDisplayTime} from './DisplayTime';
@@ -150,7 +151,8 @@ export default function TradeJournal({workspace,tab='trades',tradeId:encodedId,o
   const vanquish=brokerWorkspace(workspace,'trades');
   const other=brokerWorkspace(workspace,'other');
   const selected=workspace.data.journal?.trades.find(trade=>trade.id===tradeId);
-  const nav=<nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Vanquish</button><button aria-current={tab==='ibkr'?'page':undefined} onClick={()=>onTab('ibkr')}>IBKR</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Trading 212</button>{other.data.journal.trades.length>0&&<button aria-current={tab==='other'?'page':undefined} onClick={()=>onTab('other')}>Other imports</button>}<button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans{tab!=='plans'&&tab!=='review'&&<span>{workspace.data.plans.length}</span>}</button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button></nav>;
+  const nav=<nav ref={tabs} className="journal-page-tabs" aria-label="Trade journal sections"><button aria-current={tab==='trades'?'page':undefined} onClick={()=>onTab('trades')}>Vanquish</button><button aria-current={tab==='ibkr'?'page':undefined} onClick={()=>onTab('ibkr')}>IBKR</button><button aria-current={tab==='broker'?'page':undefined} onClick={()=>onTab('broker')}>Trading 212</button>{other.data.journal.trades.length>0&&<button aria-current={tab==='other'?'page':undefined} onClick={()=>onTab('other')}>Other imports</button>}<button aria-current={tab==='plans'?'page':undefined} onClick={()=>onTab('plans')}>Plans{tab!=='plans'&&tab!=='review'&&<span>{workspace.data.plans.length}</span>}</button><button aria-current={tab==='review'?'page':undefined} onClick={()=>onReview(selected?marketDay(selected.entryAt):undefined)}>Session review</button><button aria-current={tab==='coach'?'page':undefined} onClick={()=>onTab('coach')}>Journal Coach</button></nav>;
+  if(tab==='coach')return <JournalCoach workspace={workspace} nav={nav} onTab={onTab}/>;
   if(tab==='ibkr')return <IbkrJournal workspace={workspace} nav={nav} tradeId={tradeId} onClearTrade={onClearTrade}/>;
   if(tab==='other')return <JournalTrades workspace={other} title="Other imported trades" nav={nav} managed onClearTrade={onClearTrade}/>;
   if(tab==='broker')return <div className="journal-page jt-page bj-page"><PageHeader title="Trading 212 journal" description="Trading 212 records with your own review notes."/>{nav}<PortfolioJournal/>{brokerWorkspace(workspace,'broker').data.journal.trades.length>0&&<JournalTrades workspace={brokerWorkspace(workspace,'broker')} title="Trading 212 option imports" managed onClearTrade={onClearTrade}/>}</div>;
