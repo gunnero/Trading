@@ -2,6 +2,7 @@ import {Fragment,useState} from 'react';
 import {ArrowSquareOut,ArrowsClockwise,CaretDown,CaretRight,Circle,SlidersHorizontal,Warning} from '@phosphor-icons/react';
 import {useMarketChart} from './useMarketData';
 import {useDisplayTime} from './DisplayTime';
+import {IbkrConnection} from './IbkrConnection';
 import {SentimentConnection} from './SentimentConnection';
 import {sentimentDisplay} from './data/sentiment.mjs';
 import './data-connections.css';
@@ -82,6 +83,7 @@ export function DataConnections({briefing,settingsOpen,onSettings}){
         <button type="button" className="button primary" aria-expanded={settingsOpen} aria-controls={settingsOpen?'connection-settings':undefined} onClick={()=>onSettings(!settingsOpen)}><SlidersHorizontal size={18}/>Connection settings</button></div>
     </header>
     {settingsOpen&&<section id="connection-settings" className="connection-settings-card"><h3>CNN API connection</h3><SentimentConnection embedded onChange={briefing.sentiment.refresh}/></section>}
+    <IbkrConnection/>
     <div className="connection-table"><table aria-label="Data source status">
       <colgroup><col className="con-source"/><col className="con-status"/><col className="con-updated"/><col/></colgroup>
       <thead><tr>{['Source','Status','Last updated','Refresh cadence'].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>

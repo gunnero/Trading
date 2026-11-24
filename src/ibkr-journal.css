@@ -1,0 +1,12 @@
+.ibkr-connection{margin-top:18px;padding:20px;border:1px solid var(--border);border-radius:12px;min-width:0}
+.ibkr-connection header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ibkr-connection p,.ibkr-connection li{font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+.ibkr-connection summary{cursor:pointer;font-size:13px;margin:14px 0}
+.ibkr-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}
+.ibkr-fields label{display:grid;gap:7px;font-size:12px;min-width:0}
+.ibkr-fields input,.ibkr-fields select{width:100%;min-width:0}
+.ibkr-confirm{display:flex;align-items:flex-start;gap:8px;font-size:13px}
+.ibkr-confirm input{width:auto;flex:none;margin-top:3px}
+.ibkr-status{padding:12px 16px;margin:12px 0;border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.6}
+.ibkr-status summary{cursor:pointer}
+@media(max-width:600px){.ibkr-fields{grid-template-columns:1fr}.ibkr-connection{padding:14px}.ibkr-connection .connection-actions{flex-wrap:wrap}}

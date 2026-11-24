@@ -8,6 +8,7 @@ import {openAuthStore,authMiddleware,authConfig} from './auth.mjs';
 import {createSentimentConnection} from './sentiment-connection.mjs';
 import {dirname} from 'node:path';
 import {createNlbConnection} from './nlb-connection.mjs';
+import {createIbkrJournal} from './ibkr-journal.mjs';
 import {journalDraftsMiddleware} from './journal-drafts.mjs';
 import {createPortfolioService} from './portfolio.mjs';
 export function marketFeeds() {
@@ -26,6 +27,8 @@ export function marketFeeds() {
     server.middlewares.use(nlb.middleware);
     const portfolios=globalThis[Symbol.for('opening-bell.portfolios')] ||= createPortfolioService(account,dirname(store.filename),{background:process.env.NODE_ENV!=='test',workspace:()=>store.read().data});
     server.middlewares.use(portfolios.middleware);
+    const ibkr=globalThis[Symbol.for('opening-bell.ibkr-journal')] ||= createIbkrJournal(account,{background:process.env.NODE_ENV!=='test'});
+    server.middlewares.use(ibkr.middleware);
     server.middlewares.use(journalDraftsMiddleware(dirname(store.filename)));
     const marketKey=Symbol.for('opening-bell.market-service');
     server.middlewares.use(marketDataMiddleware(globalThis[marketKey] ||= createMarketService()));

@@ -38,10 +38,12 @@ export function validateTrade(value){
   if(!['manual','screenshot','import'].includes(value.source))fail('Invalid trade source.');
   if(!Array.isArray(value.tags)||value.tags.length>10)fail('Invalid trade tags.');
   const tags=[...new Set(value.tags.map(v=>text(v,'tag',40)))];
-  return {id,firm,account,symbol:value.symbol,expiration:value.expiration,optionType:value.optionType,position:value.position,strike,quantity,multiplier,entryPrice,entryAt,exitPrice,exitAt,fees,risk,reportedPnl,review,tags,notes:text(value.notes??'','review notes',2000,true),source:value.source,sourceLabel:text(value.sourceLabel??'','source label',160,true),entryOrderId:text(value.entryOrderId??'','entry order ID',80,true),exitOrderId:text(value.exitOrderId??'','exit order ID',80,true)};
+  const executionIds={};for(const key of ['entryExecutionId','exitExecutionId'])if(value[key]!==undefined)executionIds[key]=text(value[key],key,80,true);
+  return {...executionIds,id,firm,account,symbol:value.symbol,expiration:value.expiration,optionType:value.optionType,position:value.position,strike,quantity,multiplier,entryPrice,entryAt,exitPrice,exitAt,fees,risk,reportedPnl,review,tags,notes:text(value.notes??'','review notes',2000,true),source:value.source,sourceLabel:text(value.sourceLabel??'','source label',160,true),entryOrderId:text(value.entryOrderId??'','entry order ID',80,true),exitOrderId:text(value.exitOrderId??'','exit order ID',80,true)};
 }
 function executionValues(t){return [t.firm.toLowerCase(),t.account.toLowerCase(),t.symbol,t.expiration,t.optionType,t.position,t.strike,t.quantity,t.multiplier,t.entryAt,t.exitAt,t.entryPrice,t.exitPrice];}
-export function tradeIdentity(t){return JSON.stringify([...executionValues(t),t.entryOrderId,t.exitOrderId]);}
+function distinctExecutions(a,b){return a.entryExecutionId&&b.entryExecutionId&&(a.entryExecutionId!==b.entryExecutionId||a.exitExecutionId&&b.exitExecutionId&&a.exitExecutionId!==b.exitExecutionId);}
+export function tradeIdentity(t){return JSON.stringify([...executionValues(t),t.entryOrderId,t.exitOrderId,t.entryExecutionId||'',t.exitExecutionId||'']);}
 export function validateJournal(value){
   if(!value||value.version!==1||!Array.isArray(value.trades)||value.trades.length>2000)fail('The journal supports up to 2,000 trade records.');
   const ids=new Set(),trades=value.trades.map(validateTrade);
@@ -59,7 +61,7 @@ export function parseJournalImport(raw){
 export function planJournalImport(existing,incoming){
   const identities=new Set(existing.map(tradeIdentity)),ids=new Map(existing.map(t=>[t.id,tradeIdentity(t)])),values=new Map(),added=[];let duplicates=0;
   const register=t=>{const key=JSON.stringify(executionValues(t));values.set(key,[...(values.get(key)||[]),t]);};existing.forEach(register);
-  for(const trade of incoming){const key=tradeIdentity(trade);if(ids.has(trade.id)&&ids.get(trade.id)!==key)fail('An imported trade ID already exists with different values. Edit the saved trade instead.');if(identities.has(key)){duplicates++;continue;}const same=values.get(JSON.stringify(executionValues(trade)))||[];if(same.some(t=>!t.entryOrderId||!t.exitOrderId||!trade.entryOrderId||!trade.exitOrderId))fail('A record already matches these executions, but order IDs differ or are missing. Review its order IDs before importing or adding another record.');identities.add(key);ids.set(trade.id,key);register(trade);added.push(trade);}
+  for(const trade of incoming){const key=tradeIdentity(trade);if(ids.has(trade.id)&&ids.get(trade.id)!==key)fail('An imported trade ID already exists with different values. Edit the saved trade instead.');if(identities.has(key)){duplicates++;continue;}const same=values.get(JSON.stringify(executionValues(trade)))||[];if(same.some(t=>!distinctExecutions(t,trade)&&(!t.entryOrderId||!t.exitOrderId||!trade.entryOrderId||!trade.exitOrderId)))fail('A record already matches these executions, but order IDs differ or are missing. Review its order IDs before importing or adding another record.');identities.add(key);ids.set(trade.id,key);register(trade);added.push(trade);}
   return {added,duplicates};
 }
 export const roundMoney=value=>Math.round((value+Math.sign(value)*Number.EPSILON)*100)/100;

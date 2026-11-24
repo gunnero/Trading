@@ -12,6 +12,7 @@ import { openWorkspaceStore, workspaceMiddleware } from './workspace.mjs';
 import {openAuthStore,authMiddleware,authConfig} from './auth.mjs';
 import {createSentimentConnection} from './sentiment-connection.mjs';
 import {createNlbConnection} from './nlb-connection.mjs';
+import {createIbkrJournal} from './ibkr-journal.mjs';
 import {journalDraftsMiddleware} from './journal-drafts.mjs';
 import {createPortfolioService} from './portfolio.mjs';
 const root=fileURLToPath(new URL('../dist/client/',import.meta.url));
@@ -25,6 +26,7 @@ const sentimentConnection=createSentimentConnection(account);
 const store=openWorkspaceStore(),workspace=workspaceMiddleware(store),feeds=feedMiddleware(cachedFeedService({sentimentApi:sentimentConnection.get})),markets=marketDataMiddleware(),companies=companyMiddleware(),earnings=earningsMiddleware();
 const nlb=createNlbConnection(dirname(store.filename));
 const portfolios=createPortfolioService(account,dirname(store.filename),{background:process.env.NODE_ENV!=='test',workspace:()=>store.read().data});
+const ibkrJournal=createIbkrJournal(account,{background:process.env.NODE_ENV!=='test'});
 const journalDrafts=journalDraftsMiddleware(dirname(store.filename));
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.woff':'font/woff','.woff2':'font/woff2','.png':'image/png'};
 async function assets(req,res){
@@ -43,10 +45,10 @@ async function assets(req,res){
 }
 const server=createServer(async(req,res)=>{
   try{
-    await auth(req,res,()=>sentimentConnection.middleware(req,res,()=>workspace(req,res,()=>nlb.middleware(req,res,()=>portfolios.middleware(req,res,()=>journalDrafts(req,res,()=>markets(req,res,()=>companies(req,res,()=>earnings(req,res,()=>feeds(req,res,()=>assets(req,res)))))))))));
+    await auth(req,res,()=>ibkrJournal.middleware(req,res,()=>sentimentConnection.middleware(req,res,()=>workspace(req,res,()=>nlb.middleware(req,res,()=>portfolios.middleware(req,res,()=>journalDrafts(req,res,()=>markets(req,res,()=>companies(req,res,()=>earnings(req,res,()=>feeds(req,res,()=>assets(req,res))))))))))));
   }catch{if(!res.headersSent)res.writeHead(500);res.end('Request failed.');}
 });
 server.requestTimeout=15000;server.headersTimeout=10000;
 server.listen(port,'127.0.0.1',()=>console.log(`Trading Desk: http://127.0.0.1:${port} (saved workspace enabled)`));
-function close(){server.close(async()=>{await nlb.close();portfolios.close();store.close();account.close();process.exit(0);});setTimeout(()=>process.exit(1),5000).unref();}
+function close(){ibkrJournal.close();server.close(async()=>{await nlb.close();portfolios.close();store.close();account.close();process.exit(0);});setTimeout(()=>process.exit(1),5000).unref();}
 process.on('SIGINT',close);process.on('SIGTERM',close);

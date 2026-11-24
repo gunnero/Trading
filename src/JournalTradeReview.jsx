@@ -58,13 +58,13 @@ export default function JournalTradeReview({trade,replay,form,edit,view,onView,o
         </fieldset>}
         {error&&<p role="alert">{error}</p>}
         <footer><span role="status" className={!dirty&&workspaceStatus==='saved'?'green':''}>{!dirty&&workspaceStatus==='saved'&&<CheckCircle size={16}/>} {dirty?'Unsaved edits':workspaceStatus==='saved'?'Saved':workspaceStatus==='error'||workspaceStatus==='conflict'?'Workspace needs attention':'Saving workspace…'}</span>
-          {dirty&&<button type="button" className="button primary" onClick={save}>Save trade</button>}
+          {dirty&&<button type="button" className="button primary" disabled={workspaceStatus==='saving'} onClick={save}>Save trade</button>}
         </footer>
-        {!details&&<button type="button" className="text-button review-edit" onClick={onEdit}><NotePencil size={15}/>Edit execution details</button>}
+        {!details&&onEdit&&<button type="button" className="text-button review-edit" onClick={onEdit}><NotePencil size={15}/>Edit execution details</button>}
       </aside>
     </div>
     <section className="review-fills"><header><h3>Executions <small>(saved journal)</small></h3>
-      {details&&<button type="button" className="button outline" onClick={onEdit}><NotePencil size={15}/>Edit execution details</button>}</header>
+      {details&&onEdit&&<button type="button" className="button outline" onClick={onEdit}><NotePencil size={15}/>Edit execution details</button>}</header>
       {details&&<dl className="review-contract-facts">
         <div><dt>Option contract</dt><dd>{contract}</dd></div>
         <div><dt>Expiration</dt><dd>{trade.expiration}</dd></div>

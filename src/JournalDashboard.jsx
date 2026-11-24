@@ -100,7 +100,7 @@ export function JournalAnalysis({stats,calendarStats,month,onMonth,day,onDay}){
   </div>;
 }
 
-export function JournalResults({trades,stats,hasTrades,onOpen,onAdd}){
+export function JournalResults({trades,stats,hasTrades,onOpen,onAdd,addLabel}){
   const {zoneLabel,formatLabel,journalStamp,clockDate,clockTime}=useDisplayTime(),[ascending,setAscending]=useState(false);
   const rows=[...trades].sort((a,b)=>(ascending?1:-1)*(a.exitAt||a.entryAt).localeCompare(b.exitAt||b.entryAt));
   const sortButton=<button onClick={()=>setAscending(!ascending)}>Date {ascending?<ArrowUp/>:<ArrowDown/>}</button>;
@@ -124,7 +124,7 @@ export function JournalResults({trades,stats,hasTrades,onOpen,onAdd}){
         <td className="jt-row-actions"><button onClick={()=>onOpen(t,'chart')}><Play/>Replay</button><button onClick={()=>onOpen(t,'details')}><FileText/>Notes</button></td>
       </tr>;
     })}</tbody></table></div>:<div className="jt-empty"><Clock/><strong>{hasTrades?'No trades match these filters.':'No trades recorded yet.'}</strong>
-      <button className="text-button" onClick={onAdd}><Plus size={15}/>{hasTrades?'Add a trade':'Add your first trade'}</button></div>}
+      <button className="text-button" onClick={onAdd}><Plus size={15}/>{addLabel||(hasTrades?'Add a trade':'Add your first trade')}</button></div>}
     {rows.length>0&&<details className="jt-additional"><summary>Trade statistics</summary><p>{stats.wins} gross wins · {stats.losses} losses · {stats.breakeven} flat · {stats.open} open</p>
       <p>Gross profit factor {stats.profitFactor===null?'—':stats.profitFactor.toFixed(2)} · Average hold {duration(stats.averageHold)}</p></details>}
   </section>;
