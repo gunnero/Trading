@@ -12,6 +12,7 @@
     "test:data": "node --test tests/briefing.test.mjs tests/sentiment.test.mjs tests/sentiment-connection.test.mjs tests/news-images.test.mjs tests/market-session.test.mjs tests/market-data.test.mjs tests/extended-market.test.mjs tests/indicators.test.mjs tests/zone-roles.test.mjs tests/retests.test.mjs tests/company-data.test.mjs",
     "test:interaction": "node scripts/qa-runner.mjs interaction",
     "test:briefing": "node scripts/qa-runner.mjs briefing",
+    "test:desk-assistant": "node --test tests/desk-assistant.test.mjs && node scripts/desk-assistant-qa.mjs",
     "test:market-groups": "node --test tests/market-context.test.mjs && node scripts/market-groups-qa.mjs",
     "test:context": "node scripts/qa-runner.mjs context",
     "test:indicators": "node scripts/qa-runner.mjs indicators",

@@ -1,0 +1,41 @@
+@layer base {
+  .desk-ai-page { min-width: 0; }
+  .desk-ai-content { max-width: 1050px; margin-inline: auto; display: grid; gap: 16px; }
+  .desk-ai-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .desk-ai-card { min-width: 0; padding: 18px; border: 1px solid var(--border); background: var(--surface); border-radius: 10px; overflow-wrap: anywhere; scroll-margin-block-start: 18px; }
+  .desk-ai-card > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; justify-content: space-between; margin-bottom: 8px; }
+  .desk-ai-card h2 { margin: 0; font-size: 16px; font-weight: 650; color: var(--text); }
+  .desk-ai-card h2 svg, .desk-ai-muted svg { vertical-align: text-bottom; }
+  .desk-ai-card p { margin: 8px 0 0; line-height: 1.55; }
+  .desk-ai-card ul { display: grid; list-style: none; padding: 0; margin: 10px 0 0; }
+  .desk-ai-card li { display: grid; gap: 4px; padding-block: 10px; border-top: 1px solid var(--border); }
+  .desk-ai-card li:last-child { padding-bottom: 0; }
+  .desk-ai-card li span, .desk-ai-attribution { color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .desk-ai-card a { color: var(--primary); }
+  .desk-ai-card a svg { vertical-align: -2px; }
+  .desk-ai-attribution, .desk-ai-suggestions, .desk-ai-action, .desk-ai-citations { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .desk-ai-link { font-size: 12px; font-weight: 600; }
+  .desk-ai-muted { color: var(--muted); font-size: 13px; }
+  .desk-ai-warning { color: var(--amber); }
+  .desk-ai-composer { display: grid; gap: 12px; }
+  .desk-ai-composer > label { font-size: 15px; font-weight: 650; }
+  .desk-ai-composer textarea { width: 100%; resize: vertical; padding: 12px; min-height: 84px; border: 1px solid var(--border); }
+  .desk-ai-ask-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+  .desk-ai-checkbox { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+  .desk-ai-suggestions { padding-top: 12px; border-top: 1px solid var(--border); }
+  .desk-ai-suggestions button { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--panel); text-align: start; font-size: 12px; cursor: pointer; }
+  .desk-ai-suggestions button:hover { border-color: var(--accent-border); background: var(--panel-hover); }
+  .desk-ai-session { display: flex; align-items: flex-start; gap: 14px; background: var(--panel); }
+  .desk-ai-session-icon { flex: none; padding: 10px; border-radius: 8px; background: var(--selection); color: var(--primary); line-height: 0; }
+  .desk-ai-session h2 { margin-top: 4px; font-size: 21px; }
+  .desk-ai-model { border-color: var(--accent-border); }
+  .desk-ai-model h2 svg { color: var(--primary); }
+  .desk-ai-model-text { white-space: pre-wrap; }
+  .desk-ai-citations { margin-top: 10px; }
+  .desk-ai-results { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+  .desk-ai-results > p { margin: 0; }
+  .desk-ai-question { font-size: 16px; font-weight: 650; }
+  @media (max-width: 820px) {
+    .desk-ai-sources { grid-template-columns: minmax(0, 1fr); }
+  }
+}

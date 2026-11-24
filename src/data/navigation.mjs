@@ -1,5 +1,5 @@
 const aliases={briefing:'markets/calendar',earnings:'markets/earnings',news:'markets/news',insights:'portfolio/insights',activity:'portfolio/activity',review:'journal/review',transfers:'settings/transfers',watchlist:'settings/watchlist'};
-const roots=new Set(['overview','levels','markets','portfolio','journal','sentiment','settings']);
+const roots=new Set(['overview','levels','markets','portfolio','journal','sentiment','settings','ask']);
 
 export function canonicalRoute(value=''){
   const route=value.replace(/^#/,''),root=route.split(/[/?]/)[0];
@@ -10,10 +10,10 @@ export function canonicalRoute(value=''){
 }
 export function routeView(route){
   const [root,tab]=canonicalRoute(route).split('/');
-  if(root==='markets')return ({calendar:'briefing',earnings:'earnings',news:'news'})[tab]||'briefing';
+  if(root==='markets')return ({calendar:'briefing',earnings:'earnings',news:'news',session:'daily-briefing'})[tab]||'briefing';
   if(root==='portfolio'&&['insights','activity'].includes(tab))return tab;
   return root;
 }
 export function routeGroup(route){const root=canonicalRoute(route).split('/')[0];return root==='levels'?'overview':root;}
-export const marketTabs=[{id:'briefing',title:'Economic Calendar',route:'markets/calendar'},{id:'earnings',title:'Earnings',route:'markets/earnings'},{id:'news',title:'News',route:'markets/news'}];
+export const marketTabs=[{id:'briefing',title:'Economic Calendar',route:'markets/calendar'},{id:'earnings',title:'Earnings',route:'markets/earnings'},{id:'news',title:'News',route:'markets/news'},{id:'daily-briefing',title:'Daily briefing',route:'markets/session'}];
 export const portfolioTabs=[{id:'portfolio',title:'Accounts',route:'portfolio'},{id:'insights',title:'Insights',route:'portfolio/insights'},{id:'activity',title:'Activity & alerts',route:'portfolio/activity'}];

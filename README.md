@@ -55,6 +55,12 @@ All pages use one shared compact header with a title, short description and page
 
 ## External sources
 
+**Ask DESK** is in the sidebar. Use it to look up economic releases, earnings, recent headlines, sentiment, quotes, saved levels and tagged journal entries. Holdings earnings uses verified U.S. listings from saved portfolio snapshots. The **Daily Session Briefing** opens from Overview or Markets and refreshes every ten minutes while visible. It shows source coverage, observation times and links without requiring OpenAI.
+
+OpenAI summaries are optional. Configure the server's `OPENAI_API_KEY` using a dedicated Platform project key. Local development also accepts this variable from the ignored `.env.local` file. Restart the server after configuration. Ask DESK requires selecting **Use OpenAI to summarize** and the briefing requires clicking **Summarize with OpenAI**. Those actions send the question and selected market data or displayed levels to the Responses API. Holdings and journal lookups stay in the app. No model requests run in the background.
+
+The server uses GPT-6.2 Sol with bounded input and output. It validates source references and tracks an estimated $20 monthly limit for calls made by DESK in its private database. This limit is independent of the Platform project's balance. Matching AI briefings can be reused for fifteen minutes. Run `npm run test:desk-assistant` after building to verify both workflows with isolated data and a simulated OpenAI response.
+
 `server/feeds.mjs` validates and normalizes fixed provider endpoints. `server/index.mjs` serves the APIs in the standalone runtime; `server/vite-feeds.mjs` attaches them to Vite dev and preview. There is no arbitrary-URL proxy. The optional Oanor credential is sent only by the server to its fixed HTTPS API host.
 
 | Source | Behavior | Limits |

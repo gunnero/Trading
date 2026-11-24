@@ -3,8 +3,8 @@ import { createReadStream, existsSync } from 'node:fs';
 import { stat, realpath } from 'node:fs/promises';
 import { resolve, extname, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { marketDataMiddleware } from './market-data.mjs';
-import {earningsMiddleware} from './earnings.mjs';
+import { defaultMarketService, marketDataMiddleware } from './market-data.mjs';
+import {createEarningsService,earningsMiddleware} from './earnings.mjs';
 import { companyMiddleware } from './company-data.mjs';
 import { feedMiddleware } from './feeds.mjs';
 import { cachedFeedService } from './briefing-cache.mjs';
@@ -15,6 +15,7 @@ import {createNlbConnection} from './nlb-connection.mjs';
 import {createIbkrJournal} from './ibkr-journal.mjs';
 import {journalDraftsMiddleware} from './journal-drafts.mjs';
 import {createPortfolioService} from './portfolio.mjs';
+import {createDeskAssistant} from './desk-assistant.mjs';
 const root=fileURLToPath(new URL('../dist/client/',import.meta.url));
 if(!existsSync(resolve(root,'index.html')))throw new Error('Build the app before starting it: npm run build');
 const port=Number(process.env.OPENING_BELL_PORT || 4173);
@@ -23,9 +24,13 @@ const account=openAuthStore(),config=authConfig();
 if(config.secure&&(!account.owner().password||!account.owner().totp)){account.close();throw Error('Activate the owner account and enable two-step verification locally before enabling public mode.');}
 const auth=authMiddleware(account,{config});
 const sentimentConnection=createSentimentConnection(account);
-const store=openWorkspaceStore(),workspace=workspaceMiddleware(store),feeds=feedMiddleware(cachedFeedService({sentimentApi:sentimentConnection.get})),markets=marketDataMiddleware(),companies=companyMiddleware(),earnings=earningsMiddleware();
+const store=openWorkspaceStore(),workspace=workspaceMiddleware(store);
+const feedService=cachedFeedService({sentimentApi:sentimentConnection.get});
+const earningsService=createEarningsService({cachePath:new URL('../.cache/earnings.json',import.meta.url).pathname,onError:(error,date)=>console.warn(`Earnings ${date}: ${error.message}`)});
+const feeds=feedMiddleware(feedService),markets=marketDataMiddleware(),companies=companyMiddleware(),earnings=earningsMiddleware(earningsService);
 const nlb=createNlbConnection(dirname(store.filename));
 const portfolios=createPortfolioService(account,dirname(store.filename),{background:process.env.NODE_ENV!=='test',workspace:()=>store.read().data});
+const assistant=createDeskAssistant({workspace:()=>store.read().data,feeds:feedService,earnings:earningsService,market:defaultMarketService(),accounts:()=>portfolios.read().data.accounts,db:account.db});
 const ibkrJournal=createIbkrJournal(account,{background:process.env.NODE_ENV!=='test'});
 const journalDrafts=journalDraftsMiddleware(dirname(store.filename));
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8','.woff':'font/woff','.woff2':'font/woff2','.png':'image/png'};
@@ -45,7 +50,9 @@ async function assets(req,res){
 }
 const server=createServer(async(req,res)=>{
   try{
-    await auth(req,res,()=>ibkrJournal.middleware(req,res,()=>sentimentConnection.middleware(req,res,()=>workspace(req,res,()=>nlb.middleware(req,res,()=>portfolios.middleware(req,res,()=>journalDrafts(req,res,()=>markets(req,res,()=>companies(req,res,()=>earnings(req,res,()=>feeds(req,res,()=>assets(req,res))))))))))));
+    const handlers=[assistant,ibkrJournal.middleware,sentimentConnection.middleware,workspace,nlb.middleware,portfolios.middleware,journalDrafts,markets,companies,earnings,feeds,assets];
+    const dispatch=index=>handlers[index](req,res,()=>dispatch(index+1));
+    await auth(req,res,()=>dispatch(0));
   }catch{if(!res.headersSent)res.writeHead(500);res.end('Request failed.');}
 });
 server.requestTimeout=15000;server.headersTimeout=10000;

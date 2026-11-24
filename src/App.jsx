@@ -4,6 +4,8 @@ const PortfolioInsights=React.lazy(()=>import('./PortfolioInsights'));
 const PortfolioActivity=React.lazy(()=>import('./PortfolioActivity'));
 import TransfersNet from './TransfersNet';
 import {PageHeader,PageNavigation} from './PageHeader';
+import {ChatCircleText} from '@phosphor-icons/react';
+import {AskDeskPage,DailyBriefing} from './DeskAssistant';
 import {canonicalRoute,routeView,routeGroup,marketTabs,portfolioTabs} from './data/navigation.mjs';
 import {useDisplayTime} from './DisplayTime';
 import {DisplayTimeProvider} from './DisplayTime';
@@ -52,7 +54,7 @@ import {SettingsWatchlist} from './SettingsWatchlist';
 import {DrawingProvider} from './ChartDrawings';
 import {ChartSettingsProvider,ChartHeader,ChartLevels,useSavedTimeframe} from './ChartSettings';
 
-const sections = [{id:'overview',title:'Overview',icon:SquaresFour},{id:'markets',title:'Markets',icon:CalendarBlank},{id:'portfolio',title:'Portfolio Manager',icon:Briefcase},{id:'journal',title:'Journal',icon:Notebook},{id:'sentiment',title:'Fear & Greed',icon:Gauge},{id:'settings',title:'Settings',icon:Gear}];
+const sections = [{id:'overview',title:'Overview',icon:SquaresFour},{id:'markets',title:'Markets',icon:CalendarBlank},{id:'portfolio',title:'Portfolio Manager',icon:Briefcase},{id:'journal',title:'Journal',icon:Notebook},{id:'ask',title:'Ask DESK',icon:ChatCircleText},{id:'sentiment',title:'Fear & Greed',icon:Gauge},{id:'settings',title:'Settings',icon:Gear}];
 const currentRoute=()=>canonicalRoute(window.location.hash.slice(1));
 const groupLabels = { STOCKS: 'Stocks', 'DEPOSITARY RECEIPT': 'Depositary receipts', FUND: 'Funds', FUTURES: 'Futures', CRYPTO: 'Crypto' };
 function Status({ text, tone }) { return <span className={`status ${tone || toneFor(text)}`}>{text}</span>; }
@@ -136,7 +138,7 @@ function SessionDesk({workspace}) {
   const symbol=['QQQ','SPY'].includes(focus)?focus:selectedStock?.symbol;
   const marketKey=['QQQ','SPY'].includes(focus)?focus:selectedStock?quoteKey(selectedStock):null;
   const [timeframe,setTimeframe]=useSavedTimeframe(marketKey,{primary:true});
-  const quotes=useMarketQuotes(watchlist,watchlistOpen||section==='overview',[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['insights','activity','portfolio','transfers','settings','journal','review','earnings','sentiment','levels','briefing'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
+  const quotes=useMarketQuotes(watchlist,watchlistOpen||section==='overview',[marketKey,['instrument','level-setup'].includes(dialog)&&selectedEntry?quoteKey(selectedEntry):null,...contextGroups.flatMap(group=>group.items.map(item=>item.key))],(watchlistOpen||!['insights','activity','portfolio','transfers','settings','journal','review','earnings','sentiment','levels','briefing','daily-briefing','ask'].includes(section)||['earnings','levels'].includes(section)&&['instrument','level-setup'].includes(dialog)));
   const chart=useMarketChart(marketKey,timeframe,section==='overview'&&!gridActive);
   const quoteResult=quotes[marketKey],quote=quoteResult?.quote;
   const setup=scan.byKey[marketKey]||{stage:scan.status==='loading'?'loading':symbol?'no-levels':'waiting-break',timeframe:setupInterval};
@@ -218,7 +220,7 @@ function SessionDesk({workspace}) {
         {!user.mfaEnabled&&<div className="account-security-banner"><LockKey size={17}/><span>Protect your desk with two-step verification.</span><button className="text-button" onClick={()=>navigate('settings/account')}>Set up security <CaretRight size={15}/></button></div>}
 
         {section === 'overview' && <>
-          <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session." actions={<button className="button primary" onClick={()=>navigate('levels')}><SlidersHorizontal size={18}/>Key levels</button>}/>
+          <PageHeader title="Overview" description="Market context, your levels and setups for the U.S. session." actions={<><button className="button secondary" onClick={()=>navigate('markets/session')}><CalendarBlank size={18}/>Daily briefing</button><button className="button primary" onClick={()=>navigate('levels')}><SlidersHorizontal size={18}/>Key levels</button></>}/>
           <div className="page-market-context">{marketContext}</div>
           {quote && instrument && !matchedDate && <div className="notice"><WarningCircle size={20}/><span>{awaitingSessionQuote(sourceDate,quote)?`Today's levels are ready. Waiting for today's ${symbol} price; Yahoo's last regular-session quote is from ${formatDate(quote.sessionDate)}. No new level import is needed.`:<>{instrument.carriedForward?'Carried-forward levels':'Levels'} dated {formatDate(sourceDate)}; {symbol} quote session {formatDate(quote.sessionDate)}. The chart remains available; zone comparisons are paused until dates match.</>}</span></div>}
           <FocusTabs focus={focus} onFocus={setFocus} quotes={quotes} qqqRoles={qqqRoles} spyRoles={spyRoles} sheet={sheet} scan={scan} customEntry={customEntry}/>
@@ -239,6 +241,8 @@ function SessionDesk({workspace}) {
           <WatchlistActivity watchlist={watchlist} sheet={currentSheet} quotes={quotes} onInspect={inspect} onViewAll={() => navigate('settings/watchlist')}/>
         </>}
         {section === 'briefing' && <EconomicCalendar briefing={briefing}/>}
+        {section === 'daily-briefing' && <DailyBriefing/>}
+        {section === 'ask' && <AskDeskPage/>}
         {section === 'portfolio' && <React.Suspense fallback={<p role="status">Loading portfolios…</p>}><PortfolioManager onUseCustom={openCustomListing} route={route} onNavigate={navigate} sheet={sheet} watchlist={watchlist} setupInterval={setupInterval}/></React.Suspense>}
         {section === 'insights' && <React.Suspense fallback={<p role="status">Loading insights…</p>}><PortfolioInsights watchlist={watchlist} tab={['alerts','reports','monitor','allocation','performance','calendar','annual'].includes(route.split('/')[2])?route.split('/')[2]:'exposure'} onTab={tab=>navigate(`insights/${tab}`)} onJournal={()=>navigate('journal/broker')}/></React.Suspense>}
         {section === 'activity' && <React.Suspense fallback={<p role="status">Loading activity…</p>}><PortfolioActivity notifications={notifications} watchlist={watchlist}/></React.Suspense>}
